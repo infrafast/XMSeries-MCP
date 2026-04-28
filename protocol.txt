@@ -1,0 +1,72 @@
+// BEHRINGER PROTOCOL IMPLEMENTATION { OSCXR,OSCX32M32 }
+PROGMEM const char* VOIDCOMMAND_STRING[MAX_OSC_PROTOCOL]           = {"",              ""};
+//SIDE COMMAND
+PROGMEM const char* CHLEVELCOMMAND_STRING[MAX_OSC_PROTOCOL]        = {"/ch/%02d/mix/%02d/level",   "/ch/%02d/mix/%02d/level"};   // level of channel xx on bus yy     7,8,9,10 are FX bus
+PROGMEM const char* FXBUSCOMMAND_STRING[MAX_OSC_PROTOCOL]          = {"/rtn/%d/mix/%02d/level",    "/fxrtn/%02d/mix/%02d/level"};   
+PROGMEM const char* CHLRLEVELCOMMAND_STRING[MAX_OSC_PROTOCOL]      = {"/ch/%02d/mix/fader",        "/ch/%02d/mix/fader"};   // level of channel xx on main LR
+PROGMEM const char* MONITORLEVELCOMMAND_STRING[MAX_OSC_PROTOCOL]   = {"/bus/%i/mix/fader",         "/bus/%02d/mix/fader"};    // level of monitor  x
+PROGMEM const char* MAINLRLEVELCOMMAND_STRING[MAX_OSC_PROTOCOL]    = {"/lr/mix/fader",             "/main/st/mix/fader"};
+PROGMEM const char* FXMAINLEVELCOMMAND_STRING[MAX_OSC_PROTOCOL]    = {"/rtn/%i/mix/fader",          "/fxrtn/%02d/mix/fader"};
+PROGMEM const char* AUXLEVELBUSCOMMAND_STRING[MAX_OSC_PROTOCOL]    = {"/rtn/aux/mix/%02d/level",   "/auxin/%02d/mix/%02d/level"};   // level of aux bus yy     7,8,9,10 are FX bus
+PROGMEM const char* AUXLEVELMAINCOMMAND_STRING[MAX_OSC_PROTOCOL]   = {"/rtn/aux/mix/fader",        "/auxin/%02d/mix/fader"};   // level of aux bus yy     7,8,9,10 are FX bus
+PROGMEM const char* FXDELAYCOMMAND_STRING[MAX_OSC_PROTOCOL]        = {"/fx/%d/par/01",             "/fx/%1d/par/01"};                 // set parameter 01 = tap delay on FX %i
+PROGMEM const char* CHGAINCOMMAND_STRING[MAX_OSC_PROTOCOL]         = {"/headamp/%02d/gain",        "/ch/%02d/preamp/trim"};         // gain Received: adress=/headamp/12/gain iValue=-1 fValue=0.305556 sValue=192.168.178.44 sValue2=XR18
+PROGMEM const char* CHTRIMCOMMAND_STRING[MAX_OSC_PROTOCOL]         = {"/ch/%02d/preamp/rtntrim",   "/ch/%02d/preamp/trim"};         
+PROGMEM const char* CHMAINCOMMAND_STRING[MAX_OSC_PROTOCOL]         = {"/ch/%02d/mix/fader",        "/ch/%02d/mix/fader"};         
+PROGMEM const char* CHEQLEVELCOMMAND_STRING[MAX_OSC_PROTOCOL]      = {"/ch/%02d/eq/%d/g",           "/ch/%02d/eq/%d/g"};         
+PROGMEM const char* BUSEQLEVELCOMMAND_STRING[MAX_OSC_PROTOCOL]     = {"/bus/%d/eq/%d/g",           "/bus/%02d/eq/%d/g"};         
+PROGMEM const char* DCALEVELCOMMAND_STRING[MAX_OSC_PROTOCOL]       = {"/dca/%d/fader",             "/dca/%d/fader"};         
+
+//TAP COMMAND
+PROGMEM const char* MAINMUTECOMMAND_STRING[MAX_OSC_PROTOCOL]       = {"/lr/mix/on",                "/main/st/mix/on"};             // main mute command on master
+PROGMEM const char* FXMUTEFRCOMMAND_STRING[MAX_OSC_PROTOCOL]       = {"/rtn/%i/mix/on",            "/fxrtn/%02d/mix/on"};             // fx mute on master
+PROGMEM const char* FXMUTEBUSCOMMAND_STRING[MAX_OSC_PROTOCOL]      = {"/rtn/%i/mix/on",            "/fxrtn/%02d/mix/%02d/on"};             // fx mute on bus
+PROGMEM const char* CHMUTEBUSCOMMAND_STRING[MAX_OSC_PROTOCOL]      = {"/ch/%02d/mix/on",           "/ch/%02d/mix/%02d/on"};              // channel mute
+PROGMEM const char* MONITORMUTECOMMAND_STRING[MAX_OSC_PROTOCOL]    = {"/bus/%i/mix/on",            "/bus/%02d/mix/on"};    // level of monitor  x
+PROGMEM const char* AUXMUTEBUSCOMMAND_STRING[MAX_OSC_PROTOCOL]     = {"/rtn/aux/mix/on",           "/auxin/%02d/mix/%02d/on"};              // aux mute
+PROGMEM const char* AUXMUTELRCOMMAND_STRING[MAX_OSC_PROTOCOL]      = {"/rtn/aux/mix/on",           "/auxin/%02d/mix/on"};              // aux mute
+PROGMEM const char* CHMUTEFRCOMMAND_STRING[MAX_OSC_PROTOCOL]       = {"/ch/%02d/mix/on",           "/ch/%02d/mix/on"};
+PROGMEM const char* CHEQCOMMUTECOMMAND_STRING[MAX_OSC_PROTOCOL]    = {"/ch/%02d/eq/on",            "/ch/%02d/eq/on"};         
+PROGMEM const char* BUSEQCOMMUTECOMMAND_STRING[MAX_OSC_PROTOCOL]   = {"/bus/%d/eq/on",             "/bus/%02d/eq/on"};         
+PROGMEM const char* DCAMUTECOMMAND_STRING[MAX_OSC_PROTOCOL]        = {"/dca/%d/on",                "/dca/%d/on"};         
+
+// EXCEPTION FOR EQ HANDLING. AS COMMANDS ARE THE SAME FOR X32 and XAIR, THE DIFFERENTIATOR HERE IS THE HEAD WHICH IS EITHER /ch or /bus this is used by the EQSlotPreAction and pass as the first %s
+PROGMEM const char* EQSETFREQCOMMAND_STRING      = "/%s/%s/eq/%d/f";
+PROGMEM const char* EQLOWCUTENABLE_STRING       = "/%s/%s/preamp/hpon";
+PROGMEM const char* EQSETMODECOMMAND_STRING      ="/%s/%s/eq/%d/type";
+PROGMEM const char* EQQUALBAND_STRING           = "/%s/%s/eq/%d/q";
+
+//UTILITY METADATA SLOT COMMAND
+PROGMEM const char* CHMETERCOMMAND_STRING[MAX_OSC_PROTOCOL]        = {"/meters/0",                 "/meters/6"};         
+
+#define METER_SUBSCRIBER_IDENTIFIER "/batch%i"
+
+// SCREEN PLAYER COMMANDS
+PROGMEM const char* USBFNAMECOMMAND_STRING[MAX_OSC_PROTOCOL]       = {"/-stat/usb/%03d/name",      "/-usb/dir/%03d/name"};
+PROGMEM const char* USBFTYPECOMMAND_STRING[MAX_OSC_PROTOCOL]       = {"/-stat/usb/%03d/type",      "/-usb/dir/%03d/type"};
+PROGMEM const char* USBMOUNTEDCOMMAND_STRING[MAX_OSC_PROTOCOL]     = {"/-stat/usbmounted",         "/-stat/usbmounted"};
+PROGMEM const char* USBPATHCOMMAND_STRING[MAX_OSC_PROTOCOL]        = {"/-stat/usb/path",           "/-usb/path"};         // USB path identification
+PROGMEM const char* USBSELECT_STRING      [MAX_OSC_PROTOCOL]       = {"",                          "/-action/recselect"};         // USB path change directory
+PROGMEM const char* USBCOUNTCOMMAND_STRING[MAX_OSC_PROTOCOL]       = {"/-stat/usb/count",          "/-usb/dir/maxpos"};
+PROGMEM const char* TAPESTATECOMMAND_STRING[MAX_OSC_PROTOCOL]      = {"/-stat/tape/state",         "/-stat/tape/state"};    // /-action/playtrack
+PROGMEM const char* TAPERTIMECOMMAND_STRING[MAX_OSC_PROTOCOL]      = {"/-stat/tape/rtime",         "/-stat/tape/rtime"};       //remaining player time
+PROGMEM const char* TAPEETIMECOMMAND_STRING[MAX_OSC_PROTOCOL]      = {"/-stat/tape/etime",         "/-stat/tape/etime"};       //elpased player time
+PROGMEM const char* TAPEFILECOMMAND_STRING[MAX_OSC_PROTOCOL]       = {"/-stat/tape/file",          "/-usb/title"};         // USB file identification
+PROGMEM const char* USBFILEINDEXCOMMAND_STRING[MAX_OSC_PROTOCOL]   = {"",                          "/-usb/dir/dirpos"};         // Current directory entry number
+
+//SCREEN SNAPSHOT COMMANDS
+PROGMEM const char* SNAPNAMECOMMAND_STRING[MAX_OSC_PROTOCOL]       = {"/-snap/%02d/name",          "/-show/showfile/scene/%03d/name"};         //snaphost name
+PROGMEM const char* CURRENTSNAPNAMECOMMAND_STRING[MAX_OSC_PROTOCOL]= {"/-snapstore/name",          "/-show/showfile/show/name"};         // current snaphost name // /-show/prepos/current;
+PROGMEM const char* SNAPINDEXCOMMAND_STRING[MAX_OSC_PROTOCOL]      = {"/-snap/index",              "/-show/prepos/current"};         // GET current snaphost ID
+PROGMEM const char* SNAPLOADCOMMAND_STRING[MAX_OSC_PROTOCOL]       = {"/-snap/load",               "/-action/goscene"};         // load snaphost from index
+PROGMEM const char* SNAPSAVECOMMAND_STRING[MAX_OSC_PROTOCOL]       = {"/-snap/save",               "/save"};         // load snaphost from index
+
+//PARSE COMMANDS = SSCANF and SYNCDATA
+PROGMEM const char* LRCONFIGCOMMAND_STRING[MAX_OSC_PROTOCOL]       = {"/lr/config/%s",             "/main/st/config/%s"};
+PROGMEM const char* FXCONFIGCOMMAND_STRING[MAX_OSC_PROTOCOL]       = {"/rtn/%d/config/%s",         "/fxrtn/%02d/config/%s"};
+PROGMEM const char* AUXCONFIGCOMMAND_STRING[MAX_OSC_PROTOCOL]      = {"/rtn/aux/config/%s",        "/auxin/%02d/config/%s"};
+PROGMEM const char* CHCONFIGCOMMAND_STRING[MAX_OSC_PROTOCOL]       = {"/ch/%02d/config/%s",        "/ch/%02d/config/%s"};         //
+PROGMEM const char* BUSCONFIGCOMMAND_STRING[MAX_OSC_PROTOCOL]      = {"/bus/%d/config/%s",         "/bus/%02d/config/%s"};
+PROGMEM const char* DCACONFIGCOMMAND_STRING[MAX_OSC_PROTOCOL]      = {"/dca/%d/config/%s",         "/dca/%d/config/%s"};
+PROGMEM const char* FXPARAMCOMMAND_STRING[MAX_OSC_PROTOCOL]        = {"/fx/%d/%s",                 "/fx/%d/%s"};         // chekfx type
+PROGMEM const char* MACRONAMECLASS_STRING[MAX_OSC_PROTOCOL]        = {"macroName%d",                 "macroName%d"};         // chekfx type
