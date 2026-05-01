@@ -14,7 +14,7 @@ curl https://api.openai.com/v1/responses \
   -d @- <<JSON
 {
   "model": "${OPENAI_MODEL}",
-  "input": "Connecte-toi à la console ${CONSOLE_PROTOCOL} sur ${CONSOLE_HOST}:${CONSOLE_PORT} puis lis le volume du main LR.",
+  "input": "lis le volume du main LR.",
   "tools": [
     {
       "type": "mcp",
