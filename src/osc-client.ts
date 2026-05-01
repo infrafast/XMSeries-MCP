@@ -196,6 +196,13 @@ export class OSCClient {
         this.osc.send(message);
     }
 
+    /*
+    sendRaw : sendCommand est privé dans le dépôt actuel. Le client OSC existe déjà et envoie les commandes UDP vers la console.
+    */
+    async sendRaw(address: string, args?: any[]): Promise<void> {
+        this.sendCommand(address, args);
+    }    
+
     private async sendAndReceive(address: string, args?: any[]): Promise<any> {
         return new Promise((resolve, reject) => {
             this.responseCallbacks.set(address, resolve);
@@ -320,6 +327,7 @@ export class OSCClient {
     async setBusLink(pair: string, linked: boolean): Promise<void> {
         this.sendCommand(`/config/buslink/${pair}`, [linked ? 1 : 0]);
     }
+    
 
     // Read a block-level input routing assignment (8-ch group).
     async getRoutingBlockIn(block: string): Promise<{ raw: number; label: string } | null> {
