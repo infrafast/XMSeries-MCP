@@ -118,16 +118,20 @@ export function decodeUserOutSource(n: number): string {
     return `UNKNOWN(${n}) — see X32 OSC spec, not fully verified`;
 }
 
+export type OSCProtocol = "OSCX32M32" | "OSCXR";
+
 export class OSCClient {
     private osc: any;
     private host: string;
     private port: number;
     private responseCallbacks: Map<string, (value: any) => void> = new Map();
     private isConnected: boolean = false;
+    private protocol: OSCProtocol;
 
-    constructor(host: string, port: number) {
+    constructor(host: string, port: number, protocol: OSCProtocol = "OSCX32M32") {
         this.host = host;
         this.port = port;
+        this.protocol = protocol;
 
         // Create OSC instance with UDP plugin
         const plugin = new (OSC as any).DatagramPlugin({
@@ -218,6 +222,11 @@ export class OSCClient {
         });
     }
 
+
+
+    private getMainStereoPath(): string {
+        return this.protocol === "OSCXR" ? "/lr" : "/main/st";
+    }
     private getChannelPath(channel: number): string {
         return `/ch/${channel.toString().padStart(2, "0")}`;
     }
@@ -551,19 +560,19 @@ export class OSCClient {
     // ========== Main Mix ==========
 
     async setMainFader(level: number): Promise<void> {
-        this.sendCommand("/main/st/mix/fader", [level]);
+        this.sendCommand(`${this.getMainStereoPath()}/mix/fader`, [level]);
     }
 
     async getMainFader(): Promise<number> {
-        return await this.sendAndReceive("/main/st/mix/fader");
+        return await this.sendAndReceive(`${this.getMainStereoPath()}/mix/fader`);
     }
 
     async muteMain(mute: boolean): Promise<void> {
-        this.sendCommand("/main/st/mix/on", [mute ? 0 : 1]);
+        this.sendCommand(`${this.getMainStereoPath()}/mix/on`, [mute ? 0 : 1]);
     }
 
     async setMainPan(pan: number): Promise<void> {
-        const path = "/main/st/mix/pan";
+        const path = `${this.getMainStereoPath()}/mix/pan`;
         const mixerPan = (pan + 1) / 2;
         this.sendCommand(path, [mixerPan]);
     }
@@ -838,18 +847,18 @@ export class OSCClient {
     async getMainStrip(): Promise<any> {
         const result: any = { type: "main_stereo" };
 
-        result.fader = await this.safeRead("/main/st/mix/fader");
-        result.on = (await this.safeRead("/main/st/mix/on")) === 1;
-        result.pan = await this.safeRead("/main/st/mix/pan");
+        result.fader = await this.safeRead(`${this.getMainStereoPath()}/mix/fader`);
+        result.on = (await this.safeRead(`${this.getMainStereoPath()}/mix/on`)) === 1;
+        result.pan = await this.safeRead(`${this.getMainStereoPath()}/mix/pan`);
 
-        const eqData = await this.readEQBands("/main/st", 6);
+        const eqData = await this.readEQBands(this.getMainStereoPath(), 6);
         result.eqOn = eqData.eqOn;
         result.eq = eqData.eq;
 
         // Dynamics
-        result.dynOn = (await this.safeRead("/main/st/dyn/on")) === 1;
-        result.dynThr = await this.safeRead("/main/st/dyn/thr");
-        result.dynRatio = await this.safeRead("/main/st/dyn/ratio");
+        result.dynOn = (await this.safeRead(`${this.getMainStereoPath()}/dyn/on`)) === 1;
+        result.dynThr = await this.safeRead(`${this.getMainStereoPath()}/dyn/thr`);
+        result.dynRatio = await this.safeRead(`${this.getMainStereoPath()}/dyn/ratio`);
 
         // Mono bus
         result.mono = {
@@ -954,8 +963,8 @@ export class OSCClient {
 
         // Main
         overview.main = {
-            fader: await this.safeRead("/main/st/mix/fader"),
-            on: (await this.safeRead("/main/st/mix/on")) === 1,
+            fader: await this.safeRead(`${this.getMainStereoPath()}/mix/fader`),
+            on: (await this.safeRead(`${this.getMainStereoPath()}/mix/on`)) === 1,
             monoFader: await this.safeRead("/main/m/mix/fader"),
             monoOn: (await this.safeRead("/main/m/mix/on")) === 1,
         };
