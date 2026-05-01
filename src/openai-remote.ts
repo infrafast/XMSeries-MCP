@@ -11,13 +11,14 @@ import {
   Tool,
   isInitializeRequest,
 } from "@modelcontextprotocol/sdk/types.js";
-import { OSCClient } from "./osc-client.js";
+import { OSCClient, OSCProtocol } from "./osc-client.js";
 
 const OSC_HOST = process.env.OSC_HOST || "192.168.0.1";
 const OSC_PORT = parseInt(process.env.OSC_PORT || "10023", 10);
 const HTTP_PORT = parseInt(process.env.HTTP_PORT || "8787", 10);
+const OSC_PROTOCOL = (process.env.OSC_PROTOCOL || "OSCX32M32") as OSCProtocol;
 
-const osc = new OSCClient(OSC_HOST, OSC_PORT);
+const osc = new OSCClient(OSC_HOST, OSC_PORT, OSC_PROTOCOL);
 
 const TOOLS: Tool[] = [
   {
@@ -128,7 +129,7 @@ app.use(express.json());
 const transports: Record<string, StreamableHTTPServerTransport> = {};
 
 app.get("/health", (_req, res) => {
-  res.json({ ok: true, oscHost: OSC_HOST, oscPort: OSC_PORT });
+  res.json({ ok: true, oscHost: OSC_HOST, oscPort: OSC_PORT, oscProtocol: OSC_PROTOCOL });
 });
 
 app.all("/mcp", async (req, res) => {
@@ -172,7 +173,7 @@ async function main() {
     console.error(`X32 OpenAI MCP running`);
     console.error(`Local: http://127.0.0.1:${HTTP_PORT}/mcp`);
     console.error(`Health: http://127.0.0.1:${HTTP_PORT}/health`);
-    console.error(`OSC: ${OSC_HOST}:${OSC_PORT}`);
+    console.error(`OSC: ${OSC_HOST}:${OSC_PORT} (${OSC_PROTOCOL})`);
   });
 }
 
