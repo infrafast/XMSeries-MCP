@@ -35,7 +35,8 @@ Claude Desktop is the official desktop application from Anthropic that supports 
       "env": {
         "OSC_HOST": "192.168.1.70",
         "OSC_PORT": "10023",
-        "OSC_PROTOCOL": "OSCX32M32"
+        "OSC_PROTOCOL": "OSCX32M32",
+        "MCP_PROMPT_FILE": "/Users/ts/Documents/PlatformIO/Projects/XMSeries-MCP/PROMPT.md"
       }
     }
   }
@@ -47,6 +48,7 @@ Claude Desktop is the official desktop application from Anthropic that supports 
    - Update `OSC_HOST` with your mixer's IP address
    - Update `OSC_PORT` if your mixer uses a different OSC port (default is 10023)
    - Update `OSC_PROTOCOL` if needed (`OSCX32M32` for X32/M32, `OSCXR` for XAir/XR-compatible mixers; default is `OSCX32M32`)
+   - Optionally set `MCP_PROMPT_FILE` to an absolute custom prompt path. If omitted, the server exposes `PROMPT.md`.
 
 4. **Restart Claude Desktop** completely (quit and reopen)
 
@@ -61,7 +63,7 @@ Once configured, you can use natural language commands in Claude Desktop:
 
 ### System Prompt (Optional)
 
-For better results, you can add a system prompt. See `PROMPT.md` for an example system prompt you can use.
+For better results, inject the server-provided prompt into the agent context. The server exposes `PROMPT.md` as MCP prompt `xmseries_mixer_assistant`, MCP resource `xmseries://prompt/system`, and fallback tool `osc_get_agent_prompt`. The agent/client is responsible for fetching it and applying it as instructions; MCP cannot force system-prompt injection from the server side.
 
 ## Cline (VS Code Extension)
 
@@ -180,7 +182,7 @@ Most MCP-compatible agents use a similar configuration format. The basic structu
 - **Absolute paths**: Always use absolute paths, not relative paths
 - **Node.js required**: Ensure Node.js is installed and accessible in your PATH
 - **Built project**: Make sure you've run `npm run build` before using the server
-- **Environment variables**: Set `OSC_HOST` and `OSC_PORT` to match your mixer. Optionally set `OSC_PROTOCOL` to `OSCX32M32` or `OSCXR`; the default is `OSCX32M32`.
+- **Environment variables**: Set `OSC_HOST` and `OSC_PORT` to match your mixer. Optionally set `OSC_PROTOCOL` to `OSCX32M32` or `OSCXR`; the default is `OSCX32M32`. Optionally set `MCP_PROMPT_FILE` to expose a custom prompt file to the agent.
 - **OSCXR coverage**: `OSCXR` uses the XAir/XR paths currently mapped in `PROTOCOL.md`: channel fader/mute/name, EQ gain/on, channel sends to bus level, bus fader/mute/name, main LR, FX return, aux return, DCA, headamp gain, and scenes. Source-to-bus level operations are mapped where equivalent. Bus-specific source mutes that would become global XR mutes return `Unsupported for OSCXR: ...` instead of silently muting the whole source.
 - **After code changes**: Run `npm run build` before restarting the MCP client, because stdio configurations usually launch `dist/index.js`.
 - **Smoke tests**: `npm test` runs protocol-aware checks in default `OSCX32M32`; set `OSC_PROTOCOL=OSCXR` to run the XR-compatible smoke path.

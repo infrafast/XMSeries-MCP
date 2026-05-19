@@ -43,7 +43,8 @@ Copy the contents from `claude_desktop_config.json` in this repository, or add t
       "env": {
         "OSC_HOST": "192.168.1.70",
         "OSC_PORT": "10023",
-        "OSC_PROTOCOL": "OSCX32M32"
+        "OSC_PROTOCOL": "OSCX32M32",
+        "MCP_PROMPT_FILE": "/Users/ts/Documents/PlatformIO/Projects/XMSeries-MCP/PROMPT.md"
       }
     }
   }
@@ -55,6 +56,9 @@ Copy the contents from `claude_desktop_config.json` in this repository, or add t
 - Replace `192.168.1.70` with your mixer's actual IP address
 - The default OSC port is `10023` (usually doesn't need to be changed)
 - `OSC_PROTOCOL` is optional. Use `OSCX32M32` for X32/M32, or `OSCXR` for XAir/XR-compatible mixers. If omitted, the server defaults to `OSCX32M32`.
+- `MCP_PROMPT_FILE` is optional. It points to the prompt the server exposes to the agent; if omitted, the repository `PROMPT.md` is used.
+
+The prompt is exposed as MCP prompt `xmseries_mixer_assistant`, resource `xmseries://prompt/system`, and fallback tool `osc_get_agent_prompt`. Your agent/client still has to fetch it and inject it into the LLM context.
 
 `OSCXR` support is intentionally partial and follows `PROTOCOL.md`. Supported XR command families are: channel fader/mute/name, EQ gain/on, channel sends to bus level, bus fader/mute/name, main LR, FX return, aux return, DCA, headamp gain, and scenes. Source-to-bus levels are mapped when they are semantically equivalent; bus-specific source mutes that would become global XR mutes return `Unsupported for OSCXR: ...` rather than timing out or muting too much.
 

@@ -22,7 +22,7 @@ Target behavior:
 - **`PROTOCOL.md`**: Side-by-side protocol mapping between `{ OSCXR, OSCX32M32 }` with command string templates.
 - **Docs** (`README.md`, `INSTALLATION.md`, `QUICKSTART.md`, `TESTING.md`): setup now documents host, port, and optional protocol selection.
 
-The stdio MCP entry point now reads `OSC_PROTOCOL` from the environment and passes it into `OSCClient`. If omitted, the server defaults to `OSCX32M32`.
+The stdio MCP entry point now reads `OSC_PROTOCOL` from the environment and passes it into `OSCClient`. If omitted, the server defaults to `OSCX32M32`. It also reads optional `MCP_PROMPT_FILE` to expose a prompt file to the host agent; when omitted, it uses `PROMPT.md`.
 
 ---
 
@@ -92,7 +92,7 @@ This can impact `getXXXX`/`setXXXX` APIs where method signatures currently assum
 
 ### 4.1 `src/index.ts` impact
 
-- Environment/config parsing for `OSC_PROTOCOL` is implemented in `src/index.ts`.
+- Environment/config parsing for `OSC_PROTOCOL` and optional `MCP_PROMPT_FILE` is implemented in `src/index.ts`.
 - Accepted values are validated (`OSCX32M32`, `OSCXR`) and default safely to current behavior.
 - The selected protocol is passed into the `OSCClient` constructor.
 - The selected protocol is exposed in server startup logs and mixer status/diagnostics outputs.
@@ -142,7 +142,7 @@ The tool catalog is extensive and currently X32-centric in description and assum
 
 ### 4.4 Documentation impact
 
-Docs now include `OSC_PROTOCOL` in the main stdio configuration examples and describe accepted values/default behavior.
+Docs now include `OSC_PROTOCOL` and optional `MCP_PROMPT_FILE` in the main stdio configuration examples and describe accepted values/default behavior.
 
 Updated files:
 - `README.md`

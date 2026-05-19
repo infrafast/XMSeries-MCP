@@ -69,14 +69,15 @@ Add this configuration (update the IP address and path):
       "env": {
         "OSC_HOST": "192.168.1.70",
         "OSC_PORT": "10023",
-        "OSC_PROTOCOL": "OSCX32M32"
+        "OSC_PROTOCOL": "OSCX32M32",
+        "MCP_PROMPT_FILE": "/Users/ts/Documents/PlatformIO/Projects/XMSeries-MCP/PROMPT.md"
       }
     }
   }
 }
 ```
 
-`OSC_PROTOCOL` is optional. Accepted values are `OSCX32M32` and `OSCXR`; when omitted, the server uses `OSCX32M32`.
+`OSC_PROTOCOL` is optional. Accepted values are `OSCX32M32` and `OSCXR`; when omitted, the server uses `OSCX32M32`. `MCP_PROMPT_FILE` is optional and defaults to the repository `PROMPT.md`; set it to an absolute path if your agent should load a customized prompt.
 
 `OSCX32M32` is the full/default mode. `OSCXR` enables the XAir/XR paths currently mapped in `PROTOCOL.md`; unsupported or not-yet-mapped tools fail fast with `Unsupported for OSCXR: ...` instead of timing out.
 
@@ -140,8 +141,15 @@ Once configured, you can use natural language commands like:
 - Protocol: UDP
 - Default Port: 10023
 - Address protocol selector: `OSC_PROTOCOL` (`OSCX32M32` by default, or `OSCXR`)
+- Agent prompt file selector: `MCP_PROMPT_FILE` (optional; defaults to `PROMPT.md`)
 - Bidirectional communication with mixer
 - Automatic connection keep-alive (/xremote every 9 seconds)
+
+### Agent Prompt Exposure:
+- Prompt name: `xmseries_mixer_assistant` via MCP `prompts/list` and `prompts/get`
+- Resource URI: `xmseries://prompt/system` via MCP `resources/list` and `resources/read`
+- Fallback tool: `osc_get_agent_prompt` for clients that expose only tools
+- The MCP host/agent is responsible for reading this content and injecting it into the LLM context; the server only exposes it.
 
 ### OSCXR Coverage:
 - Supported: channel fader/mute/name, EQ gain/on, channel sends to bus level, bus fader/mute/name, main LR, FX return, aux return, DCA, headamp gain, scenes

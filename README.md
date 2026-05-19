@@ -37,7 +37,8 @@ Add to your Claude Desktop config (`%APPDATA%\Claude\claude_desktop_config.json`
       "env": {
         "OSC_HOST": "192.168.1.70",
         "OSC_PORT": "10023",
-        "OSC_PROTOCOL": "OSCX32M32"
+        "OSC_PROTOCOL": "OSCX32M32",
+        "MCP_PROMPT_FILE": "/Users/ts/Documents/PlatformIO/Projects/XMSeries-MCP/PROMPT.md"
       }
     }
   }
@@ -46,7 +47,7 @@ Add to your Claude Desktop config (`%APPDATA%\Claude\claude_desktop_config.json`
 
 Replace the IP with your mixer's (on the X32: `Setup` -> `Network`). Restart Claude Desktop.
 
-`OSC_PROTOCOL` is optional. Use `OSCX32M32` for Behringer X32 / Midas M32 consoles, or `OSCXR` for XAir/XR-compatible addressing. If omitted, the server defaults to `OSCX32M32`.
+`OSC_PROTOCOL` is optional. Use `OSCX32M32` for Behringer X32 / Midas M32 consoles, or `OSCXR` for XAir/XR-compatible addressing. If omitted, the server defaults to `OSCX32M32`. `MCP_PROMPT_FILE` is also optional; it lets you point the server at a custom prompt file. If omitted, the server exposes the repository `PROMPT.md`.
 
 ### Protocol support
 
@@ -74,6 +75,12 @@ Call `osc_get_routing_overview` first for any routing work. It shows both layers
 **4. OSC types are strict.** X32 silently drops messages where the type tag doesn't match. `/config/color`, `/config/icon`, `/config/chlink/*`, scene recall, mute-group, and solo switches all require int (`,i`). When using `osc_custom_command`, pass `osctype: "int"` if you're not sure the value will be sent as an int.
 
 **5. Channel links are per-pair, not a bitmask.** `/config/chlink/1-2`, `/config/chlink/3-4`, etc. — each returns 0 or 1. Use `osc_get_channel_links` to see all 16 pairs at once.
+
+## Agent prompt
+
+At startup, the server exposes the recommended agent instructions from `PROMPT.md` in three MCP-compatible ways: prompt `xmseries_mixer_assistant`, resource `xmseries://prompt/system`, and fallback tool `osc_get_agent_prompt`. The MCP client or host agent must still decide to fetch and inject that content into the LLM context; the server cannot force system-prompt injection by itself.
+
+For a custom prompt, set `MCP_PROMPT_FILE` in the MCP server `env` to an absolute path.
 
 ## Example prompts
 

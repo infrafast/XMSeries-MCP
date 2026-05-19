@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { exec, spawn } from "child_process";
+import { readFile } from "fs/promises";
 import { promisify } from "util";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -8,7 +9,11 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
     CallToolRequestSchema,
+    GetPromptRequestSchema,
     ListToolsRequestSchema,
+    ListPromptsRequestSchema,
+    ListResourcesRequestSchema,
+    ReadResourceRequestSchema,
     Tool,
 } from "@modelcontextprotocol/sdk/types.js";
 import { OSCClient, OSCProtocol } from "./osc-client.js";
@@ -21,6 +26,15 @@ const __dirname = path.dirname(__filename);
 const OSC_HOST = process.env.OSC_HOST || "192.168.1.17";
 const OSC_PORT = parseInt(process.env.OSC_PORT || "10023");
 const OSC_PROTOCOL = parseOscProtocol(process.env.OSC_PROTOCOL);
+const PROMPT_RESOURCE_URI = "xmseries://prompt/system";
+const PROMPT_NAME = "xmseries_mixer_assistant";
+const PROMPT_FILE = process.env.MCP_PROMPT_FILE
+    ? path.resolve(process.env.MCP_PROMPT_FILE)
+    : path.resolve(__dirname, "..", "PROMPT.md");
+
+async function readAgentPrompt(): Promise<string> {
+    return await readFile(PROMPT_FILE, "utf8");
+}
 
 // Initialize OSC client
 const osc = new OSCClient(OSC_HOST, OSC_PORT, OSC_PROTOCOL);
@@ -37,6 +51,15 @@ let emulatorPid: number | null = null;
 
 // Define available tools
 const TOOLS: Tool[] = [
+    // ========== Agent Guidance ==========
+    {
+        name: "osc_get_agent_prompt",
+        description: "Return the recommended system prompt for agents using this OSC MCP server. Use it to inject mixer-specific aliases, safety rules, ranges, and OSCXR/OSCX32M32 guidance into the LLM context when the host agent supports that workflow.",
+        inputSchema: {
+            type: "object",
+            properties: {},
+        },
+    },
     // ========== Channel Controls ==========
     {
         name: "osc_set_fader",
@@ -1540,9 +1563,76 @@ const server = new Server(
     {
         capabilities: {
             tools: {},
+            prompts: {},
+            resources: {},
         },
     }
 );
+
+// Expose PROMPT.md as both a prompt and a resource. The MCP host/agent decides
+// whether to inject it into the LLM context.
+server.setRequestHandler(ListPromptsRequestSchema, async () => {
+    return {
+        prompts: [
+            {
+                name: PROMPT_NAME,
+                title: "XMSeries Mixer Assistant",
+                description: "Recommended system prompt for agents controlling mixers through this OSC MCP server.",
+            },
+        ],
+    };
+});
+
+server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+    if (request.params.name !== PROMPT_NAME) {
+        throw new Error(`Unknown prompt: ${request.params.name}`);
+    }
+
+    const prompt = await readAgentPrompt();
+    return {
+        description: "Recommended system prompt for agents controlling mixers through this OSC MCP server.",
+        messages: [
+            {
+                role: "user",
+                content: {
+                    type: "text",
+                    text: prompt,
+                },
+            },
+        ],
+    };
+});
+
+server.setRequestHandler(ListResourcesRequestSchema, async () => {
+    return {
+        resources: [
+            {
+                uri: PROMPT_RESOURCE_URI,
+                name: "XMSeries MCP Agent Prompt",
+                title: "XMSeries Mixer Assistant Prompt",
+                description: "Contents of PROMPT.md for agents that inject MCP resources into model instructions.",
+                mimeType: "text/markdown",
+            },
+        ],
+    };
+});
+
+server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+    if (request.params.uri !== PROMPT_RESOURCE_URI) {
+        throw new Error(`Unknown resource: ${request.params.uri}`);
+    }
+
+    const prompt = await readAgentPrompt();
+    return {
+        contents: [
+            {
+                uri: PROMPT_RESOURCE_URI,
+                mimeType: "text/markdown",
+                text: prompt,
+            },
+        ],
+    };
+});
 
 // Handle tool listing
 server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -1555,6 +1645,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     try {
         switch (name) {
+            case "osc_get_agent_prompt": {
+                const prompt = await readAgentPrompt();
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: prompt,
+                        },
+                    ],
+                };
+            }
+
             // ========== Channel Controls ==========
             case "osc_set_fader": {
                 const { channel, level } = args as { channel: number; level: number };
