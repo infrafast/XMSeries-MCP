@@ -259,8 +259,12 @@ export class OSCClient {
         return `/headamp/${index.toString().padStart(width, "0")}`;
     }
 
+    private getSceneIndex(scene: number): number {
+        return this.protocol === "OSCXR" ? scene : scene - 1;
+    }
+
     private getSceneNamePath(scene: number): string {
-        const index = scene - 1;
+        const index = this.getSceneIndex(scene);
         return this.protocol === "OSCXR"
             ? `/-snap/${index.toString().padStart(2, "0")}/name`
             : `/-show/showfile/scene/${index.toString().padStart(3, "0")}/name`;
@@ -732,12 +736,12 @@ export class OSCClient {
 
     async recallScene(scene: number): Promise<void> {
         const path = this.getSceneLoadPath();
-        this.sendCommand(path, [scene - 1]); // Mixer scenes are 0-indexed
+        this.sendCommand(path, [this.getSceneIndex(scene)]);
     }
 
     async saveScene(scene: number, name?: string): Promise<void> {
         const path = this.getSceneSavePath();
-        this.sendCommand(path, [scene - 1]);
+        this.sendCommand(path, [this.getSceneIndex(scene)]);
         if (name) {
             const namePath = this.getSceneNamePath(scene);
             this.sendCommand(namePath, [name]);

@@ -3,20 +3,31 @@
 /**
  * Test script to verify OSC connection
  * Run with: node test-connection.js
+ * example:
+ * OSC_HOST=192.168.0.16 OSC_PORT=10024 OSC_PROTOCOL=OSCXR npm test
+ * OSC_HOST=192.168.0.1 OSC_PORT=10023 OSC_PROTOCOL=OSCX32M32 npm test
  */
 
 import { OSCClient } from "./dist/osc-client.js";
 
 const OSC_HOST = process.env.OSC_HOST || "192.168.0.16";
 const OSC_PORT = parseInt(process.env.OSC_PORT || "10024");
+const OSC_PROTOCOL = parseOscProtocol(process.env.OSC_PROTOCOL);
 
 console.log("🎚️  OSC Connection Test");
 console.log("=".repeat(50));
 console.log(`Host: ${OSC_HOST}`);
 console.log(`Port: ${OSC_PORT}`);
+console.log(`Protocol: ${OSC_PROTOCOL}`);
 console.log("=".repeat(50));
 
-const osc = new OSCClient(OSC_HOST, OSC_PORT);
+const osc = new OSCClient(OSC_HOST, OSC_PORT, OSC_PROTOCOL);
+
+function parseOscProtocol(value) {
+    if (!value) return "OSCX32M32";
+    if (value === "OSCX32M32" || value === "OSCXR") return value;
+    throw new Error(`Invalid OSC_PROTOCOL "${value}". Expected "OSCX32M32" or "OSCXR".`);
+}
 
 async function test() {
     try {
@@ -36,6 +47,9 @@ async function test() {
         } catch (error) {
             console.log("⚠️  Could not get fader level (this is normal if the mixer doesn't respond to queries)");
         }
+
+        console.log(`\n🧪 Running ${OSC_PROTOCOL} protocol smoke tests...`);
+        await runProtocolSmokeTests();
 
         console.log("\n✅ All tests completed!");
         console.log("\n💡 Your mixer is ready to use with Claude Desktop!");
@@ -58,6 +72,43 @@ async function test() {
     } finally {
         osc.close();
         process.exit(0);
+    }
+}
+
+async function runProtocolSmokeTests() {
+    const checks = [
+        ["Main LR fader", () => osc.getMainFader()],
+        ["Channel 1 name", () => osc.getChannelName(1)],
+        ["Bus 1 fader", () => osc.getBusFader(1)],
+        ["FX return 1 on", () => osc.getEffectOn(1)],
+        ["Headamp 1", () => osc.getHeadamp(1)],
+        ["Scene 1 name", () => osc.getSceneName(1)],
+    ];
+
+    if (OSC_PROTOCOL === "OSCXR") {
+        checks.push(["Aux return fader", () => osc.getAuxFader(1)]);
+    }
+
+    for (const [label, fn] of checks) {
+        try {
+            const value = await fn();
+            console.log(`✅ ${label}: ${JSON.stringify(value)}`);
+        } catch (error) {
+            console.log(`⚠️  ${label}: ${error.message}`);
+        }
+    }
+
+    if (OSC_PROTOCOL === "OSCXR") {
+        try {
+            await osc.getConsoleOverview();
+            console.log("⚠️  Expected getConsoleOverview to be unsupported in OSCXR, but it returned.");
+        } catch (error) {
+            if (error.message.includes("Unsupported for OSCXR")) {
+                console.log(`✅ Unsupported guard: ${error.message}`);
+            } else {
+                console.log(`⚠️  Unexpected OSCXR guard error: ${error.message}`);
+            }
+        }
     }
 }
 

@@ -41,17 +41,23 @@ Add or update the configuration:
 
 Use `OSC_PROTOCOL: "OSCXR"` when testing against an XR/XAir-compatible target. Rebuild with `npm run build` after changing TypeScript sources, because MCP stdio normally runs `dist/index.js`.
 
-In XR mode, start with supported smoke tests such as main fader/mute, channel fader/mute/name, channel EQ gain/on, send-to-bus level, bus fader/mute/name, FX return mute/name, aux return fader, DCA fader/mute/name, headamp gain, and scene name/recall/save. Tools not covered by `PROTOCOL.md` should return `Unsupported for OSCXR: ...`.
+In XR mode, start with supported smoke tests such as main fader/mute, channel fader/mute/name, channel EQ gain/on, send-to-bus level, bus fader/mute/name, FX return mute/name, aux return fader, DCA fader/mute/name, headamp gain, and scene name/recall/save. XR snapshots are addressed 1-based, so scene 1 reads `/-snap/01/name`. Tools not covered by `PROTOCOL.md` should return `Unsupported for OSCXR: ...`.
 
 ## Running Tests
 
-You can run the connection test script to verify connectivity to the emulator:
+You can run the connection test script to verify connectivity to the emulator or mixer:
 
 ```bash
 npm test
 ```
 
-This will attempt to connect to the X32 mixer (or emulator) at the configured address and perform basic operations.
+To test an XR/XAir-compatible console with the OSCXR path mapping:
+
+```bash
+OSC_HOST=192.168.0.16 OSC_PORT=10024 OSC_PROTOCOL=OSCXR npm test
+```
+
+This will attempt to connect to the configured mixer and perform protocol-aware smoke tests. In `OSCXR`, it also checks that an unsupported X32-only aggregate returns `Unsupported for OSCXR: ...` instead of timing out.
 
 ## Manual Testing
 
