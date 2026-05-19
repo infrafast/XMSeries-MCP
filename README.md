@@ -1,6 +1,6 @@
-# x32-mcp-server
+# XMSeries-MCP
 
-A Model Context Protocol (MCP) server that gives Claude direct control of a Behringer X32 / Midas M32 via OSC. Point Claude Desktop at this server and your mixer, and Claude can read and write just about any parameter the console exposes — faders, EQ, dynamics, routing, scenes, FX chain, the whole console.
+A Model Context Protocol (MCP) server that gives Claude direct control of Behringer/Midas mixers via OSC. The default and most complete mode targets Behringer X32 / Midas M32 consoles; an optional `OSCXR` mode adds partial XAir/XR-compatible addressing for the command families mapped in `PROTOCOL.md`.
 
 This is a rewrite/fork of [anteriovieira/osc-mcp-server](https://github.com/anteriovieira/osc-mcp-server) with substantially expanded coverage and several bug fixes verified against live hardware (firmware 2.07+).
 
@@ -18,11 +18,10 @@ This is a rewrite/fork of [anteriovieira/osc-mcp-server](https://github.com/ante
 
 ## Setup
 
-**Prereqs:** Node 18+, Claude Desktop, an X32 on your network with OSC enabled (default port 10023).
+**Prereqs:** Node 18+, Claude Desktop, and a supported mixer on your network with OSC enabled. X32/M32 uses `OSCX32M32` by default; XAir/XR-compatible mixers can use `OSCXR` for the currently mapped subset.
 
 ```bash
-git clone https://github.com/elisha-rudenkov/x32-mcp-server
-cd x32-mcp-server
+cd /Users/ts/Documents/PlatformIO/Projects/XMSeries-MCP
 npm install
 npm run build
 ```
@@ -34,7 +33,7 @@ Add to your Claude Desktop config (`%APPDATA%\Claude\claude_desktop_config.json`
   "mcpServers": {
     "osc": {
       "command": "node",
-      "args": ["C:\\path\\to\\x32-mcp-server\\dist\\index.js"],
+      "args": ["C:\\path\\to\\XMSeries-MCP\\dist\\index.js"],
       "env": {
         "OSC_HOST": "192.168.1.70",
         "OSC_PORT": "10023",
@@ -49,11 +48,17 @@ Replace the IP with your mixer's (on the X32: `Setup` -> `Network`). Restart Cla
 
 `OSC_PROTOCOL` is optional. Use `OSCX32M32` for Behringer X32 / Midas M32 consoles, or `OSCXR` for XAir/XR-compatible addressing. If omitted, the server defaults to `OSCX32M32`.
 
+### Protocol support
+
+`OSCX32M32` is the complete/default mode. `OSCXR` is now partially effective for the command families currently mapped in `PROTOCOL.md`: channel fader/mute/name, EQ gain/on, channel sends to bus level, bus fader/mute/name, main LR, FX return, aux return via `/rtn/aux`, DCA fader/mute/name, headamp gain, and scenes.
+
+When `OSC_PROTOCOL` is `OSCXR`, commands that are still X32-only or not yet mapped return an explicit `Unsupported for OSCXR: ...` error instead of waiting for an OSC timeout. This includes routing/user routing, matrices, console overview, full FX chain, colors/icons, gate/compressor, pan, EQ frequency/Q/type, and other features not covered by `PROTOCOL.md` yet.
+
 > **Windows MSIX note:** if you installed Claude Desktop from the Microsoft Store, the config path is `%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\claude_desktop_config.json`, not the standard `%APPDATA%\Claude\` path.
 
 ## Things worth knowing before you use it
 
-A few X32 quirks that will bite you if you don't know them. The tool descriptions try to flag each one, but here they are up front:
+A few X32/M32 quirks that will bite you if you do not know them. These mostly apply to the default `OSCX32M32` mode. In `OSCXR` mode, unsupported X32-only tools fail fast with `Unsupported for OSCXR: ...`.
 
 **1. Routing: block-level vs. per-channel (firmware 4.0+).** On modern X32 firmware, inputs have two layers:
 

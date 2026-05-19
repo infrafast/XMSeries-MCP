@@ -30,7 +30,7 @@ Claude Desktop is the official desktop application from Anthropic that supports 
     "osc": {
       "command": "node",
       "args": [
-        "/path/to/osc-mcp/dist/index.js"
+        "/Users/ts/Documents/PlatformIO/Projects/XMSeries-MCP/dist/index.js"
       ],
       "env": {
         "OSC_HOST": "192.168.1.70",
@@ -43,7 +43,7 @@ Claude Desktop is the official desktop application from Anthropic that supports 
 ```
 
 3. **Replace the path** with your actual project path:
-   - Update `/path/to/osc-mcp/dist/index.js` to your actual path
+   - Update `/Users/ts/Documents/PlatformIO/Projects/XMSeries-MCP/dist/index.js` to your actual path
    - Update `OSC_HOST` with your mixer's IP address
    - Update `OSC_PORT` if your mixer uses a different OSC port (default is 10023)
    - Update `OSC_PROTOCOL` if needed (`OSCX32M32` for X32/M32, `OSCXR` for XAir/XR-compatible mixers; default is `OSCX32M32`)
@@ -72,7 +72,7 @@ Cline is a VS Code extension that brings AI assistance with MCP support.
 1. Install the Cline extension from the VS Code marketplace
 2. Install the OSC MCP server dependencies:
    ```bash
-   cd /path/to/osc-mcp
+   cd /Users/ts/Documents/PlatformIO/Projects/XMSeries-MCP
    npm install
    npm run build
    ```
@@ -89,7 +89,7 @@ Cline is a VS Code extension that brings AI assistance with MCP support.
     "osc": {
       "command": "node",
       "args": [
-        "/path/to/osc-mcp/dist/index.js"
+        "/Users/ts/Documents/PlatformIO/Projects/XMSeries-MCP/dist/index.js"
       ],
       "env": {
         "OSC_HOST": "192.168.1.70",
@@ -116,7 +116,7 @@ Continue is an open-source autocomplete and chat tool for VS Code with MCP suppo
 1. Install Continue from the VS Code marketplace
 2. Build the OSC MCP server:
    ```bash
-   cd /path/to/osc-mcp
+   cd /Users/ts/Documents/PlatformIO/Projects/XMSeries-MCP
    npm install
    npm run build
    ```
@@ -133,7 +133,7 @@ Continue is an open-source autocomplete and chat tool for VS Code with MCP suppo
     "osc": {
       "command": "node",
       "args": [
-        "/path/to/osc-mcp/dist/index.js"
+        "/Users/ts/Documents/PlatformIO/Projects/XMSeries-MCP/dist/index.js"
       ],
       "env": {
         "OSC_HOST": "192.168.1.70",
@@ -163,7 +163,7 @@ Most MCP-compatible agents use a similar configuration format. The basic structu
     "osc": {
       "command": "node",
       "args": [
-        "/absolute/path/to/osc-mcp/dist/index.js"
+        "/Users/ts/Documents/PlatformIO/Projects/XMSeries-MCP/dist/index.js"
       ],
       "env": {
         "OSC_HOST": "YOUR_MIXER_IP",
@@ -181,13 +181,15 @@ Most MCP-compatible agents use a similar configuration format. The basic structu
 - **Node.js required**: Ensure Node.js is installed and accessible in your PATH
 - **Built project**: Make sure you've run `npm run build` before using the server
 - **Environment variables**: Set `OSC_HOST` and `OSC_PORT` to match your mixer. Optionally set `OSC_PROTOCOL` to `OSCX32M32` or `OSCXR`; the default is `OSCX32M32`.
+- **OSCXR coverage**: `OSCXR` uses the XAir/XR paths currently mapped in `PROTOCOL.md`: channel fader/mute/name, EQ gain/on, channel sends to bus level, bus fader/mute/name, main LR, FX return, aux return, DCA, headamp gain, and scenes. Unsupported or X32-only tools return `Unsupported for OSCXR: ...` instead of timing out.
+- **After code changes**: Run `npm run build` before restarting the MCP client, because stdio configurations usually launch `dist/index.js`.
 
 ## Testing Your Configuration
 
 ### 1. Verify the Server Builds
 
 ```bash
-cd /path/to/osc-mcp
+cd /Users/ts/Documents/PlatformIO/Projects/XMSeries-MCP
 npm run build
 ```
 
@@ -294,7 +296,7 @@ If you need to control multiple mixers, you can configure multiple MCP servers:
   "mcpServers": {
     "osc-main": {
       "command": "node",
-      "args": ["/path/to/osc-mcp/dist/index.js"],
+      "args": ["/Users/ts/Documents/PlatformIO/Projects/XMSeries-MCP/dist/index.js"],
       "env": {
         "OSC_HOST": "192.168.1.70",
         "OSC_PORT": "10023",
@@ -303,7 +305,7 @@ If you need to control multiple mixers, you can configure multiple MCP servers:
     },
     "osc-monitor": {
       "command": "node",
-      "args": ["/path/to/osc-mcp/dist/index.js"],
+      "args": ["/Users/ts/Documents/PlatformIO/Projects/XMSeries-MCP/dist/index.js"],
       "env": {
         "OSC_HOST": "192.168.1.71",
         "OSC_PORT": "10023",
@@ -323,7 +325,7 @@ If Node.js is not in your PATH, specify the full path:
   "mcpServers": {
     "osc": {
       "command": "/usr/local/bin/node",
-      "args": ["/path/to/osc-mcp/dist/index.js"],
+      "args": ["/Users/ts/Documents/PlatformIO/Projects/XMSeries-MCP/dist/index.js"],
       "env": {
         "OSC_HOST": "192.168.1.70",
         "OSC_PORT": "10023",
@@ -343,7 +345,7 @@ To enable debug logging, add `NODE_ENV=development`:
   "mcpServers": {
     "osc": {
       "command": "node",
-      "args": ["/path/to/osc-mcp/dist/index.js"],
+      "args": ["/Users/ts/Documents/PlatformIO/Projects/XMSeries-MCP/dist/index.js"],
       "env": {
         "OSC_HOST": "192.168.1.70",
         "OSC_PORT": "10023",

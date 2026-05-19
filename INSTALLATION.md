@@ -2,12 +2,12 @@
 
 ## ✅ What's Been Created
 
-A complete MCP (Model Context Protocol) server for controlling the Behringer X32 digital mixer through Claude Desktop using natural language commands.
+A complete MCP (Model Context Protocol) server for controlling Behringer/Midas digital mixers through Claude Desktop using natural language commands. `OSCX32M32` is the default and most complete mode; `OSCXR` enables the currently mapped XAir/XR-compatible command subset.
 
 ## 📁 Project Structure
 
 ```
-osc-mcp/
+XMSeries-MCP/
 ├── src/
 │   ├── index.ts           # Main MCP server
 │   ├── osc-client.ts      # OSC client
@@ -64,7 +64,7 @@ Add this configuration (update the IP address and path):
     "osc": {
       "command": "node",
       "args": [
-        "/path/to/osc-mcp/dist/index.js"
+        "/Users/ts/Documents/PlatformIO/Projects/XMSeries-MCP/dist/index.js"
       ],
       "env": {
         "OSC_HOST": "192.168.1.70",
@@ -78,6 +78,8 @@ Add this configuration (update the IP address and path):
 
 `OSC_PROTOCOL` is optional. Accepted values are `OSCX32M32` and `OSCXR`; when omitted, the server uses `OSCX32M32`.
 
+`OSCX32M32` is the full/default mode. `OSCXR` enables the XAir/XR paths currently mapped in `PROTOCOL.md`; unsupported or not-yet-mapped tools fail fast with `Unsupported for OSCXR: ...` instead of timing out.
+
 ### Step 3: Restart Claude Desktop
 
 Completely quit and restart Claude Desktop.
@@ -87,7 +89,7 @@ Completely quit and restart Claude Desktop.
 Before configuring Claude, you can test the connection:
 
 ```bash
-cd /path/to/osc-mcp
+cd /Users/ts/Documents/PlatformIO/Projects/XMSeries-MCP
 npm test
 ```
 
@@ -141,12 +143,17 @@ Once configured, you can use natural language commands like:
 - Bidirectional communication with mixer
 - Automatic connection keep-alive (/xremote every 9 seconds)
 
+### OSCXR Coverage:
+- Supported: channel fader/mute/name, EQ gain/on, channel sends to bus level, bus fader/mute/name, main LR, FX return, aux return, DCA, headamp gain, scenes
+- Explicitly unsupported until mapped: routing/user routing, matrices, console overview, full FX chain, colors/icons, gate/compressor, pan, EQ frequency/Q/type
+
 ### Supported Mixer Models:
 - Behringer X32
 - Behringer X32 Compact
 - Behringer X32 Producer
 - Behringer X32 Rack
 - Midas M32 (compatible)
+- XAir/XR-compatible mixers through partial `OSCXR` support, limited to the mapped commands listed above
 
 ## 📚 Documentation Files
 

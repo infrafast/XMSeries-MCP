@@ -1,4 +1,4 @@
-# Repository Analysis & Pre-Analysis for Multi-Protocol Support (OSCX32M32 + OSCXR)
+# Repository Analysis & Implementation Notes for Multi-Protocol Support (OSCX32M32 + OSCXR)
 
 ## 1) Scope of this analysis
 
@@ -6,12 +6,12 @@ This document summarizes:
 
 1. The current repository architecture and responsibilities.
 2. How OSC addressing is currently implemented.
-3. A pre-analysis of adding a third runtime parameter (`protocol`) in addition to mixer IP/port.
+3. The implemented third runtime parameter (`protocol`) in addition to mixer IP/port.
 4. Expected impacts to command addressing and method signatures, especially where X32/M32 and XAir (XR) differ in path format and argument arity.
 
-Requested target behavior:
+Target behavior:
 - Existing mode: `OSCX32M32` (X32/M32-compatible addresses).
-- New mode: `OSCXR` (XAir-compatible addresses), as described in `PROTOCOL.md`.
+- Partial mode: `OSCXR` (XAir-compatible addresses), as described in `PROTOCOL.md`.
 
 ---
 
@@ -95,11 +95,17 @@ This can impact `getXXXX`/`setXXXX` APIs where method signatures currently assum
 - Environment/config parsing for `OSC_PROTOCOL` is implemented in `src/index.ts`.
 - Accepted values are validated (`OSCX32M32`, `OSCXR`) and default safely to current behavior.
 - The selected protocol is passed into the `OSCClient` constructor.
-- Optionally expose protocol in server startup log and status/diagnostics tool outputs.
+- The selected protocol is exposed in server startup logs and mixer status/diagnostics outputs.
 
 ### 4.2 `src/osc-client.ts` impact
 
 This file will be the primary change surface.
+
+Current implementation status:
+- Protocol-aware path helpers are implemented for main LR, bus, aux return, FX return, headamp, and scenes.
+- `OSCX32M32` remains the complete/default mode.
+- `OSCXR` is effective for these mapped command families: channel fader/mute/name, EQ gain/on, channel sends to bus level, bus fader/mute/name, main LR, FX return, aux return, DCA, headamp gain, and scenes.
+- Features not mapped for XR now fail fast with `Unsupported for OSCXR: ...` rather than waiting for OSC timeouts.
 
 #### A) Path construction layer
 
@@ -153,6 +159,8 @@ They now include:
 Remaining documentation work for the broader multi-protocol effort:
 - add a compatibility matrix (supported/partial/not supported by protocol),
 - document individual tool limitations where XR behavior still differs.
+
+Initial XR limitations are now documented in the setup guides. A more detailed per-tool matrix is still recommended.
 
 ---
 
@@ -211,13 +219,14 @@ Below are key mismatch classes observed in the provided mapping file.
 2. **Centralize command path generation**
    - Create a protocol mapping layer (object or helper methods) in `OSCClient`.
    - Replace inline literals for all protocol-divergent commands.
+   - **Partially done** for paths covered by `PROTOCOL.md`.
 
 3. **Normalize method interfaces where possible**
    - Keep MCP tool contracts stable.
    - Internally adapt to 1-index/2-index command forms by protocol.
 
 4. **Add capability guards**
-   - Where no XR equivalent exists, return explicit “unsupported for OSCXR” errors.
+   - Where no XR equivalent exists, return explicit “unsupported for OSCXR” errors. **Done for known X32-only/not-yet-mapped calls.**
 
 5. **Migrate high-value command families first**
    - Main bus (`/lr` vs `/main/st`)
@@ -240,7 +249,7 @@ Below are key mismatch classes observed in the provided mapping file.
 - All mismatched commands identified from `PROTOCOL.md` are either:
   - implemented with protocol mapping, or
   - explicitly documented as not supported for one mode.
-- Documentation updated with protocol parameter and compatibility matrix.
+- Documentation updated with protocol parameter and initial XR support notes; detailed compatibility matrix still pending.
 
 ---
 
@@ -248,4 +257,4 @@ Below are key mismatch classes observed in the provided mapping file.
 
 The repository is currently structured well for extension (single OSC client abstraction + MCP tool layer), but it is still effectively single-protocol in implementation because many OSC paths are hardcoded to X32-style conventions.
 
-Adding `OSCXR` is feasible with moderate effort if done through a centralized protocol mapping layer and with explicit handling for path/arity differences. The most critical technical challenge is not just path renaming, but harmonizing method semantics where one protocol uses an extra index and the other does not.
+`OSCXR` is now partially effective through protocol-aware path helpers and explicit unsupported guards. Further work should continue through the same centralized mapping approach, because the remaining challenge is not just path renaming, but harmonizing method semantics where one protocol uses an extra index and the other does not.

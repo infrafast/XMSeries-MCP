@@ -1,13 +1,15 @@
-# Quick Start Guide - OSC MCP Server for Claude Desktop
+# Quick Start Guide - XMSeries MCP Server for Claude Desktop
 
 ## Installation Steps
 
-### 1. Find Your Mixer IP Address
+### 1. Find Your Mixer IP Address And Protocol
 
 On your mixer:
 1. Press the **SETUP** button
 2. Navigate to **Network** settings
 3. Note the IP address (e.g., `192.168.1.70`)
+
+Use `OSCX32M32` for X32/M32 consoles, or `OSCXR` for the currently mapped XAir/XR-compatible command subset.
 
 ### 2. Configure Claude Desktop
 
@@ -36,7 +38,7 @@ Copy the contents from `claude_desktop_config.json` in this repository, or add t
     "osc": {
       "command": "node",
       "args": [
-        "/path/to/osc-mcp/dist/index.js"
+        "/Users/ts/Documents/PlatformIO/Projects/XMSeries-MCP/dist/index.js"
       ],
       "env": {
         "OSC_HOST": "192.168.1.70",
@@ -49,10 +51,12 @@ Copy the contents from `claude_desktop_config.json` in this repository, or add t
 ```
 
 **Important**: 
-- Replace `/path/to/osc-mcp/dist/index.js` with the actual path to your installation
+- Replace `/Users/ts/Documents/PlatformIO/Projects/XMSeries-MCP/dist/index.js` with the actual path to your installation
 - Replace `192.168.1.70` with your mixer's actual IP address
 - The default OSC port is `10023` (usually doesn't need to be changed)
 - `OSC_PROTOCOL` is optional. Use `OSCX32M32` for X32/M32, or `OSCXR` for XAir/XR-compatible mixers. If omitted, the server defaults to `OSCX32M32`.
+
+`OSCXR` support is intentionally partial and follows `PROTOCOL.md`. Supported XR command families are: channel fader/mute/name, EQ gain/on, channel sends to bus level, bus fader/mute/name, main LR, FX return, aux return, DCA, headamp gain, and scenes. Tools that are not covered return `Unsupported for OSCXR: ...` rather than timing out.
 
 ### 4. Restart Claude Desktop
 

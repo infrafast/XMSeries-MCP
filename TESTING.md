@@ -27,7 +27,7 @@ Add or update the configuration:
     "osc": {
       "command": "node",
       "args": [
-        "/path/to/osc-mcp/dist/index.js"
+        "/Users/ts/Documents/PlatformIO/Projects/XMSeries-MCP/dist/index.js"
       ],
       "env": {
         "OSC_HOST": "127.0.0.1", // Or the IP of your emulator
@@ -39,7 +39,9 @@ Add or update the configuration:
 }
 ```
 
-Use `OSC_PROTOCOL: "OSCXR"` when testing against an XR/XAir-compatible target.
+Use `OSC_PROTOCOL: "OSCXR"` when testing against an XR/XAir-compatible target. Rebuild with `npm run build` after changing TypeScript sources, because MCP stdio normally runs `dist/index.js`.
+
+In XR mode, start with supported smoke tests such as main fader/mute, channel fader/mute/name, channel EQ gain/on, send-to-bus level, bus fader/mute/name, FX return mute/name, aux return fader, DCA fader/mute/name, headamp gain, and scene name/recall/save. Tools not covered by `PROTOCOL.md` should return `Unsupported for OSCXR: ...`.
 
 ## Running Tests
 
