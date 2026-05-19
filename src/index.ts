@@ -11,7 +11,7 @@ import {
     ListToolsRequestSchema,
     Tool,
 } from "@modelcontextprotocol/sdk/types.js";
-import { OSCClient } from "./osc-client.js";
+import { OSCClient, OSCProtocol } from "./osc-client.js";
 
 const execAsync = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
@@ -20,9 +20,16 @@ const __dirname = path.dirname(__filename);
 // Default OSC configuration
 const OSC_HOST = process.env.OSC_HOST || "192.168.1.17";
 const OSC_PORT = parseInt(process.env.OSC_PORT || "10023");
+const OSC_PROTOCOL = parseOscProtocol(process.env.OSC_PROTOCOL);
 
 // Initialize OSC client
-const osc = new OSCClient(OSC_HOST, OSC_PORT);
+const osc = new OSCClient(OSC_HOST, OSC_PORT, OSC_PROTOCOL);
+
+function parseOscProtocol(value?: string): OSCProtocol {
+    if (!value) return "OSCX32M32";
+    if (value === "OSCX32M32" || value === "OSCXR") return value;
+    throw new Error(`Invalid OSC_PROTOCOL "${value}". Expected "OSCX32M32" or "OSCXR".`);
+}
 
 // Emulator process management
 let emulatorProcess: ReturnType<typeof spawn> | null = null;
