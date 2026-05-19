@@ -93,7 +93,7 @@ cd /Users/ts/Documents/PlatformIO/Projects/XMSeries-MCP
 npm test
 ```
 
-This will verify that your computer can communicate with the mixer.
+This will verify that your computer can communicate with the mixer. The same test script is protocol-aware: it uses `OSCX32M32` by default, or `OSCXR` when `OSC_PROTOCOL=OSCXR` is provided.
 
 ## 💬 Example Usage in Claude Desktop
 
@@ -145,7 +145,7 @@ Once configured, you can use natural language commands like:
 
 ### OSCXR Coverage:
 - Supported: channel fader/mute/name, EQ gain/on, channel sends to bus level, bus fader/mute/name, main LR, FX return, aux return, DCA, headamp gain, scenes
-- Explicitly unsupported until mapped: routing/user routing, matrices, console overview, full FX chain, colors/icons, gate/compressor, pan, EQ frequency/Q/type
+- Explicitly unsupported until mapped or not losslessly representable: routing/user routing, matrices, console overview, full FX chain, colors/icons, gate/compressor, pan, EQ frequency/Q/type, and XR bus-specific source mutes that would otherwise become global source mutes
 
 ### Supported Mixer Models:
 - Behringer X32

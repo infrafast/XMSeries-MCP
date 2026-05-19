@@ -87,6 +87,8 @@ async function runProtocolSmokeTests() {
 
     if (OSC_PROTOCOL === "OSCXR") {
         checks.push(["Aux return fader", () => osc.getAuxFader(1)]);
+        checks.push(["FX return 1 to bus 1 level", () => osc.getFxToBus(1, 1)]);
+        checks.push(["Aux return to bus 1 level", () => osc.getAuxToBus(1, 1)]);
     }
 
     for (const [label, fn] of checks) {
@@ -99,14 +101,21 @@ async function runProtocolSmokeTests() {
     }
 
     if (OSC_PROTOCOL === "OSCXR") {
-        try {
-            await osc.getConsoleOverview();
-            console.log("⚠️  Expected getConsoleOverview to be unsupported in OSCXR, but it returned.");
-        } catch (error) {
-            if (error.message.includes("Unsupported for OSCXR")) {
-                console.log(`✅ Unsupported guard: ${error.message}`);
-            } else {
-                console.log(`⚠️  Unexpected OSCXR guard error: ${error.message}`);
+        const guardChecks = [
+            ["Console overview unsupported guard", () => osc.getConsoleOverview()],
+            ["Channel-to-bus mute semantic guard", () => osc.muteChannelToBus(1, 1, true)],
+        ];
+
+        for (const [label, fn] of guardChecks) {
+            try {
+                await fn();
+                console.log(`⚠️  Expected ${label} to be unsupported in OSCXR, but it returned.`);
+            } catch (error) {
+                if (error.message.includes("Unsupported for OSCXR")) {
+                    console.log(`✅ ${label}: ${error.message}`);
+                } else {
+                    console.log(`⚠️  Unexpected ${label} error: ${error.message}`);
+                }
             }
         }
     }

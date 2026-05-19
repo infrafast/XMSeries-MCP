@@ -802,6 +802,95 @@ const TOOLS: Tool[] = [
         },
     },
     {
+        name: "osc_mute_channel_to_bus",
+        description: "Mute/unmute a channel send to a specific bus. In OSCXR this is unsupported because XR exposes only whole-channel mute, not bus-specific channel mute.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                channel: { type: "number", description: "Channel number (1-32)", minimum: 1, maximum: 32 },
+                bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
+                mute: { type: "boolean", description: "True to mute, false to unmute" },
+            },
+            required: ["channel", "bus", "mute"],
+        },
+    },
+    {
+        name: "osc_send_fx_to_bus",
+        description: "Set the send level from an FX return to a mix bus",
+        inputSchema: {
+            type: "object",
+            properties: {
+                effect: { type: "number", description: "FX return/effect number (1-8)", minimum: 1, maximum: 8 },
+                bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
+                level: { type: "number", description: "Send level (0.0 to 1.0)", minimum: 0, maximum: 1 },
+            },
+            required: ["effect", "bus", "level"],
+        },
+    },
+    {
+        name: "osc_get_fx_to_bus",
+        description: "Get the send level from an FX return to a mix bus",
+        inputSchema: {
+            type: "object",
+            properties: {
+                effect: { type: "number", description: "FX return/effect number (1-8)", minimum: 1, maximum: 8 },
+                bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
+            },
+            required: ["effect", "bus"],
+        },
+    },
+    {
+        name: "osc_mute_fx_to_bus",
+        description: "Mute/unmute an FX return send to a specific bus. In OSCXR this is unsupported because XR exposes only whole-FX-return mute, not bus-specific FX mute.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                effect: { type: "number", description: "FX return/effect number (1-8)", minimum: 1, maximum: 8 },
+                bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
+                mute: { type: "boolean", description: "True to mute, false to unmute" },
+            },
+            required: ["effect", "bus", "mute"],
+        },
+    },
+    {
+        name: "osc_send_aux_to_bus",
+        description: "Set the send level from an aux return to a mix bus. In OSCXR the aux return is a singleton; use aux 1.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                aux: { type: "number", description: "Aux return number (X32: 1-6; OSCXR: use 1 for /rtn/aux)", minimum: 1, maximum: 6 },
+                bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
+                level: { type: "number", description: "Send level (0.0 to 1.0)", minimum: 0, maximum: 1 },
+            },
+            required: ["aux", "bus", "level"],
+        },
+    },
+    {
+        name: "osc_get_aux_to_bus",
+        description: "Get the send level from an aux return to a mix bus. In OSCXR the aux return is a singleton; use aux 1.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                aux: { type: "number", description: "Aux return number (X32: 1-6; OSCXR: use 1 for /rtn/aux)", minimum: 1, maximum: 6 },
+                bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
+            },
+            required: ["aux", "bus"],
+        },
+    },
+    {
+        name: "osc_mute_aux_to_bus",
+        description: "Mute/unmute an aux return send to a specific bus. In OSCXR this is unsupported because XR exposes only whole-aux-return mute, not bus-specific aux mute.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                aux: { type: "number", description: "Aux return number (1-6)", minimum: 1, maximum: 6 },
+                bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
+                mute: { type: "boolean", description: "True to mute, false to unmute" },
+            },
+            required: ["aux", "bus", "mute"],
+        },
+    },
+    {
         name: "osc_send_to_aux",
         description: "Set the send level from a channel to an aux output",
         inputSchema: {
@@ -1974,6 +2063,62 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                             text: `Channel ${channel} send to bus ${bus} is at ${(level * 100).toFixed(1)}%`,
                         },
                     ],
+                };
+            }
+
+            case "osc_mute_channel_to_bus": {
+                const { channel, bus, mute } = args as { channel: number; bus: number; mute: boolean };
+                await osc.muteChannelToBus(channel, bus, mute);
+                return {
+                    content: [{ type: "text", text: `${mute ? "Muted" : "Unmuted"} channel ${channel} send to bus ${bus}` }],
+                };
+            }
+
+            case "osc_send_fx_to_bus": {
+                const { effect, bus, level } = args as { effect: number; bus: number; level: number };
+                await osc.sendFxToBus(effect, bus, level);
+                return {
+                    content: [{ type: "text", text: `Set FX return ${effect} send to bus ${bus} at ${(level * 100).toFixed(1)}%` }],
+                };
+            }
+
+            case "osc_get_fx_to_bus": {
+                const { effect, bus } = args as { effect: number; bus: number };
+                const level = await osc.getFxToBus(effect, bus);
+                return {
+                    content: [{ type: "text", text: `FX return ${effect} send to bus ${bus} is at ${(level * 100).toFixed(1)}%` }],
+                };
+            }
+
+            case "osc_mute_fx_to_bus": {
+                const { effect, bus, mute } = args as { effect: number; bus: number; mute: boolean };
+                await osc.muteFxToBus(effect, bus, mute);
+                return {
+                    content: [{ type: "text", text: `${mute ? "Muted" : "Unmuted"} FX return ${effect} send to bus ${bus}` }],
+                };
+            }
+
+            case "osc_send_aux_to_bus": {
+                const { aux, bus, level } = args as { aux: number; bus: number; level: number };
+                await osc.sendAuxToBus(aux, bus, level);
+                return {
+                    content: [{ type: "text", text: `Set aux return ${aux} send to bus ${bus} at ${(level * 100).toFixed(1)}%` }],
+                };
+            }
+
+            case "osc_get_aux_to_bus": {
+                const { aux, bus } = args as { aux: number; bus: number };
+                const level = await osc.getAuxToBus(aux, bus);
+                return {
+                    content: [{ type: "text", text: `Aux return ${aux} send to bus ${bus} is at ${(level * 100).toFixed(1)}%` }],
+                };
+            }
+
+            case "osc_mute_aux_to_bus": {
+                const { aux, bus, mute } = args as { aux: number; bus: number; mute: boolean };
+                await osc.muteAuxToBus(aux, bus, mute);
+                return {
+                    content: [{ type: "text", text: `${mute ? "Muted" : "Unmuted"} aux return ${aux} send to bus ${bus}` }],
                 };
             }
 

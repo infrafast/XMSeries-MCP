@@ -254,6 +254,47 @@ export class OSCClient {
             : `/fxrtn/${effect.toString().padStart(2, "0")}`;
     }
 
+    private getBusSendSegment(bus: number): string {
+        return bus.toString().padStart(2, "0");
+    }
+
+    private getAuxBusPath(aux: number, bus: number): string {
+        if (this.protocol === "OSCXR") {
+            if (aux !== 1) {
+                this.unsupportedForXR("Indexed aux inputs are not mapped; OSCXR exposes the aux return as /rtn/aux.");
+            }
+            return `/rtn/aux/mix/${this.getBusSendSegment(bus)}`;
+        }
+        return `/auxin/${aux.toString().padStart(2, "0")}/mix/${this.getBusSendSegment(bus)}`;
+    }
+
+    private getChannelBusMutePath(channel: number, bus: number): string {
+        if (this.protocol === "OSCXR") {
+            this.unsupportedForXR(
+                `Channel-to-bus mute is not losslessly supported: OSCXR exposes /ch/${channel.toString().padStart(2, "0")}/mix/on as whole-channel mute, not bus ${bus} mute. Use osc_mute_channel for the global channel mute.`,
+            );
+        }
+        return `${this.getChannelPath(channel)}/mix/${this.getBusSendSegment(bus)}/on`;
+    }
+
+    private getFxBusMutePath(effect: number, bus: number): string {
+        if (this.protocol === "OSCXR") {
+            this.unsupportedForXR(
+                `FX-return-to-bus mute is not losslessly supported: OSCXR exposes /rtn/${effect}/mix/on as whole-return mute, not bus ${bus} mute. Use osc_set_effect_on for the global FX return mute.`,
+            );
+        }
+        return `${this.getFxReturnPath(effect)}/mix/${this.getBusSendSegment(bus)}/on`;
+    }
+
+    private getAuxBusMutePath(aux: number, bus: number): string {
+        if (this.protocol === "OSCXR") {
+            this.unsupportedForXR(
+                `Aux-return-to-bus mute is not losslessly supported: OSCXR exposes /rtn/aux/mix/on as whole-aux-return mute, not bus ${bus} mute. Use osc_mute_aux with aux 1 for the global aux return mute.`,
+            );
+        }
+        return `${this.getAuxBusPath(aux, bus)}/on`;
+    }
+
     private getHeadampPath(index: number): string {
         const width = this.protocol === "OSCXR" ? 2 : 3;
         return `/headamp/${index.toString().padStart(width, "0")}`;
@@ -619,13 +660,48 @@ export class OSCClient {
     // ========== Sends ==========
 
     async sendToBus(channel: number, bus: number, level: number): Promise<void> {
-        const path = `${this.getChannelPath(channel)}/mix/${bus.toString().padStart(2, "0")}/level`;
+        const path = `${this.getChannelPath(channel)}/mix/${this.getBusSendSegment(bus)}/level`;
         this.sendCommand(path, [level]);
     }
 
     async getSendToBus(channel: number, bus: number): Promise<number> {
-        const path = `${this.getChannelPath(channel)}/mix/${bus.toString().padStart(2, "0")}/level`;
+        const path = `${this.getChannelPath(channel)}/mix/${this.getBusSendSegment(bus)}/level`;
         return await this.sendAndReceive(path);
+    }
+
+    async muteChannelToBus(channel: number, bus: number, mute: boolean): Promise<void> {
+        const path = this.getChannelBusMutePath(channel, bus);
+        this.sendCommand(path, [mute ? 0 : 1]);
+    }
+
+    async sendFxToBus(effect: number, bus: number, level: number): Promise<void> {
+        const path = `${this.getFxReturnPath(effect)}/mix/${this.getBusSendSegment(bus)}/level`;
+        this.sendCommand(path, [level]);
+    }
+
+    async getFxToBus(effect: number, bus: number): Promise<number> {
+        const path = `${this.getFxReturnPath(effect)}/mix/${this.getBusSendSegment(bus)}/level`;
+        return await this.sendAndReceive(path);
+    }
+
+    async muteFxToBus(effect: number, bus: number, mute: boolean): Promise<void> {
+        const path = this.getFxBusMutePath(effect, bus);
+        this.sendCommand(path, [mute ? 0 : 1]);
+    }
+
+    async sendAuxToBus(aux: number, bus: number, level: number): Promise<void> {
+        const path = `${this.getAuxBusPath(aux, bus)}/level`;
+        this.sendCommand(path, [level]);
+    }
+
+    async getAuxToBus(aux: number, bus: number): Promise<number> {
+        const path = `${this.getAuxBusPath(aux, bus)}/level`;
+        return await this.sendAndReceive(path);
+    }
+
+    async muteAuxToBus(aux: number, bus: number, mute: boolean): Promise<void> {
+        const path = this.getAuxBusMutePath(aux, bus);
+        this.sendCommand(path, [mute ? 0 : 1]);
     }
 
     async sendToAux(channel: number, aux: number, level: number): Promise<void> {

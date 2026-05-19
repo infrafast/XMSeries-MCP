@@ -181,8 +181,9 @@ Most MCP-compatible agents use a similar configuration format. The basic structu
 - **Node.js required**: Ensure Node.js is installed and accessible in your PATH
 - **Built project**: Make sure you've run `npm run build` before using the server
 - **Environment variables**: Set `OSC_HOST` and `OSC_PORT` to match your mixer. Optionally set `OSC_PROTOCOL` to `OSCX32M32` or `OSCXR`; the default is `OSCX32M32`.
-- **OSCXR coverage**: `OSCXR` uses the XAir/XR paths currently mapped in `PROTOCOL.md`: channel fader/mute/name, EQ gain/on, channel sends to bus level, bus fader/mute/name, main LR, FX return, aux return, DCA, headamp gain, and scenes. Unsupported or X32-only tools return `Unsupported for OSCXR: ...` instead of timing out.
+- **OSCXR coverage**: `OSCXR` uses the XAir/XR paths currently mapped in `PROTOCOL.md`: channel fader/mute/name, EQ gain/on, channel sends to bus level, bus fader/mute/name, main LR, FX return, aux return, DCA, headamp gain, and scenes. Source-to-bus level operations are mapped where equivalent. Bus-specific source mutes that would become global XR mutes return `Unsupported for OSCXR: ...` instead of silently muting the whole source.
 - **After code changes**: Run `npm run build` before restarting the MCP client, because stdio configurations usually launch `dist/index.js`.
+- **Smoke tests**: `npm test` runs protocol-aware checks in default `OSCX32M32`; set `OSC_PROTOCOL=OSCXR` to run the XR-compatible smoke path.
 
 ## Testing Your Configuration
 

@@ -104,8 +104,8 @@ This file will be the primary change surface.
 Current implementation status:
 - Protocol-aware path helpers are implemented for main LR, bus, aux return, FX return, headamp, and scenes.
 - `OSCX32M32` remains the complete/default mode.
-- `OSCXR` is effective for these mapped command families: channel fader/mute/name, EQ gain/on, channel sends to bus level, bus fader/mute/name, main LR, FX return, aux return, DCA, headamp gain, and scenes.
-- Features not mapped for XR now fail fast with `Unsupported for OSCXR: ...` rather than waiting for OSC timeouts.
+- `OSCXR` is effective for these mapped command families: channel fader/mute/name, EQ gain/on, channel sends to bus level, bus fader/mute/name, main LR, FX return, aux return, DCA, headamp gain, and scenes. Source-to-bus levels for channel/FX/aux are mapped where they are semantically equivalent.
+- Features not mapped for XR now fail fast with `Unsupported for OSCXR: ...` rather than waiting for OSC timeouts. Bus-specific source mutes whose XR equivalent is global-only also fail fast to avoid lossy behavior.
 
 #### A) Path construction layer
 
@@ -126,7 +126,7 @@ Some methods may need protocol-specific parameter handling. Two non-mutually-exc
 2. **Expose protocol-specific variants** (fallback):
    - Only for commands where behavior cannot be losslessly unified.
 
-Given your note (some commands use 2 params on X32 vs 1 on XR), `sendToBus`/`getSendToBus`-like methods and related set/get functions should be explicitly reviewed for argument model differences.
+Arity differences have been reviewed for the mapped `%` templates in `PROTOCOL.md`. Level operations with equivalent semantics are implemented for channel/FX/aux source-to-bus sends. Bus-specific mutes where XR only exposes a global source mute are guarded with `Unsupported for OSCXR: ...` rather than translated silently.
 
 #### C) Read aggregation methods
 
@@ -224,6 +224,7 @@ Below are key mismatch classes observed in the provided mapping file.
 3. **Normalize method interfaces where possible**
    - Keep MCP tool contracts stable.
    - Internally adapt to 1-index/2-index command forms by protocol.
+   - **Done for mapped source-to-bus level operations; guarded for lossy bus-specific mutes in OSCXR.**
 
 4. **Add capability guards**
    - Where no XR equivalent exists, return explicit “unsupported for OSCXR” errors. **Done for known X32-only/not-yet-mapped calls.**
@@ -237,7 +238,7 @@ Below are key mismatch classes observed in the provided mapping file.
 6. **Regression checklist**
    - Build passes.
    - Static checks for remaining hardcoded protocol-specific literals.
-   - Runtime smoke tests in both protocol modes.
+   - Runtime smoke tests in both protocol modes. **Done via `test-connection.js` (`npm test` for `OSCX32M32`, `OSC_PROTOCOL=OSCXR npm test` for XR).**
 
 ---
 
