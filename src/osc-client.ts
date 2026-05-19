@@ -227,16 +227,61 @@ export class OSCClient {
     private getMainStereoPath(): string {
         return this.protocol === "OSCXR" ? "/lr" : "/main/st";
     }
+
     private getChannelPath(channel: number): string {
         return `/ch/${channel.toString().padStart(2, "0")}`;
     }
 
     private getBusPath(bus: number): string {
-        return `/bus/${bus.toString().padStart(2, "0")}`;
+        return this.protocol === "OSCXR"
+            ? `/bus/${bus}`
+            : `/bus/${bus.toString().padStart(2, "0")}`;
     }
 
     private getAuxPath(aux: number): string {
-        return `/aux/${aux.toString().padStart(2, "0")}`;
+        if (this.protocol === "OSCXR") {
+            if (aux !== 1) {
+                this.unsupportedForXR("Indexed aux inputs are not mapped; OSCXR exposes the aux return as /rtn/aux.");
+            }
+            return "/rtn/aux";
+        }
+        return `/auxin/${aux.toString().padStart(2, "0")}`;
+    }
+
+    private getFxReturnPath(effect: number): string {
+        return this.protocol === "OSCXR"
+            ? `/rtn/${effect}`
+            : `/fxrtn/${effect.toString().padStart(2, "0")}`;
+    }
+
+    private getHeadampPath(index: number): string {
+        const width = this.protocol === "OSCXR" ? 2 : 3;
+        return `/headamp/${index.toString().padStart(width, "0")}`;
+    }
+
+    private getSceneNamePath(scene: number): string {
+        const index = scene - 1;
+        return this.protocol === "OSCXR"
+            ? `/-snap/${index.toString().padStart(2, "0")}/name`
+            : `/-show/showfile/scene/${index.toString().padStart(3, "0")}/name`;
+    }
+
+    private getSceneLoadPath(): string {
+        return this.protocol === "OSCXR" ? "/-snap/load" : "/-action/goscene";
+    }
+
+    private getSceneSavePath(): string {
+        return this.protocol === "OSCXR" ? "/-snap/save" : "/save";
+    }
+
+    private unsupportedForXR(detail: string): never {
+        throw new Error(`Unsupported for OSCXR: ${detail}`);
+    }
+
+    private requireX32(feature: string): void {
+        if (this.protocol === "OSCXR") {
+            this.unsupportedForXR(`${feature} is not mapped in PROTOCOL.md yet.`);
+        }
     }
 
     // ========== Channel Controls ==========
@@ -264,6 +309,7 @@ export class OSCClient {
     }
 
     async setPan(channel: number, pan: number): Promise<void> {
+        this.requireX32("Channel pan");
         const path = `${this.getChannelPath(channel)}/mix/pan`;
         // Convert -1 to 1 range to 0 to 1 range (0 = left, 0.5 = center, 1 = right)
         const mixerPan = (pan + 1) / 2;
@@ -271,6 +317,7 @@ export class OSCClient {
     }
 
     async getPan(channel: number): Promise<number> {
+        this.requireX32("Channel pan");
         const path = `${this.getChannelPath(channel)}/mix/pan`;
         const value = await this.sendAndReceive(path);
         // Convert 0-1 range to -1 to 1 range
@@ -288,21 +335,25 @@ export class OSCClient {
     }
 
     async setChannelColor(channel: number, color: number): Promise<void> {
+        this.requireX32("Channel color");
         const path = `${this.getChannelPath(channel)}/config/color`;
         this.sendCommand(path, [color]);
     }
 
     async getChannelColor(channel: number): Promise<number> {
+        this.requireX32("Channel color");
         const path = `${this.getChannelPath(channel)}/config/color`;
         return await this.sendAndReceive(path);
     }
 
     async setChannelIcon(channel: number, icon: number): Promise<void> {
+        this.requireX32("Channel icon");
         const path = `${this.getChannelPath(channel)}/config/icon`;
         this.sendCommand(path, [icon]);
     }
 
     async getChannelIcon(channel: number): Promise<number> {
+        this.requireX32("Channel icon");
         const path = `${this.getChannelPath(channel)}/config/icon`;
         return await this.sendAndReceive(path);
     }
@@ -310,6 +361,7 @@ export class OSCClient {
     // Channel linking is per-pair. Addresses: /config/chlink/1-2, 3-4, ... 31-32.
     // Each returns int 0 (unlinked) or 1 (linked).
     async getChannelLinks(): Promise<Array<{ pair: string; linked: boolean }>> {
+        this.requireX32("Channel links");
         const result: Array<{ pair: string; linked: boolean }> = [];
         for (let i = 1; i <= 31; i += 2) {
             const pair = `${i}-${i + 1}`;
@@ -320,10 +372,12 @@ export class OSCClient {
     }
 
     async setChannelLink(pair: string, linked: boolean): Promise<void> {
+        this.requireX32("Channel links");
         this.sendCommand(`/config/chlink/${pair}`, [linked ? 1 : 0]);
     }
 
     async getBusLinks(): Promise<Array<{ pair: string; linked: boolean }>> {
+        this.requireX32("Bus links");
         const result: Array<{ pair: string; linked: boolean }> = [];
         for (let i = 1; i <= 15; i += 2) {
             const pair = `${i}-${i + 1}`;
@@ -334,12 +388,14 @@ export class OSCClient {
     }
 
     async setBusLink(pair: string, linked: boolean): Promise<void> {
+        this.requireX32("Bus links");
         this.sendCommand(`/config/buslink/${pair}`, [linked ? 1 : 0]);
     }
     
 
     // Read a block-level input routing assignment (8-ch group).
     async getRoutingBlockIn(block: string): Promise<{ raw: number; label: string } | null> {
+        this.requireX32("Block routing");
         const raw = await this.safeRead(`/config/routing/IN/${block}`);
         if (raw === null) return null;
         return { raw, label: decodeBlockInSource(raw) };
@@ -362,31 +418,37 @@ export class OSCClient {
     }
 
     async getEQFrequency(channel: number, band: number): Promise<number> {
+        this.requireX32("Channel EQ frequency");
         const path = `${this.getChannelPath(channel)}/eq/${band}/f`;
         return await this.sendAndReceive(path);
     }
 
     async setEQFrequency(channel: number, band: number, frequency: number): Promise<void> {
+        this.requireX32("Channel EQ frequency");
         const path = `${this.getChannelPath(channel)}/eq/${band}/f`;
         this.sendCommand(path, [frequency]);
     }
 
     async getEQQ(channel: number, band: number): Promise<number> {
+        this.requireX32("Channel EQ Q");
         const path = `${this.getChannelPath(channel)}/eq/${band}/q`;
         return await this.sendAndReceive(path);
     }
 
     async setEQQ(channel: number, band: number, q: number): Promise<void> {
+        this.requireX32("Channel EQ Q");
         const path = `${this.getChannelPath(channel)}/eq/${band}/q`;
         this.sendCommand(path, [q]);
     }
 
     async getEQType(channel: number, band: number): Promise<number> {
+        this.requireX32("Channel EQ type");
         const path = `${this.getChannelPath(channel)}/eq/${band}/type`;
         return await this.sendAndReceive(path);
     }
 
     async setEQType(channel: number, band: number, type: number): Promise<void> {
+        this.requireX32("Channel EQ type");
         const path = `${this.getChannelPath(channel)}/eq/${band}/type`;
         this.sendCommand(path, [type]);
     }
@@ -405,6 +467,7 @@ export class OSCClient {
     // ========== Dynamics Controls ==========
 
     async setGate(channel: number, threshold: number): Promise<void> {
+        this.requireX32("Channel gate");
         const path = `${this.getChannelPath(channel)}/gate/thr`;
         // Convert dB to mixer range
         const mixerThreshold = (threshold + 80) / 80; // -80dB to 0dB mapped to 0-1
@@ -412,32 +475,38 @@ export class OSCClient {
     }
 
     async getGate(channel: number): Promise<number> {
+        this.requireX32("Channel gate");
         const path = `${this.getChannelPath(channel)}/gate/thr`;
         const value = await this.sendAndReceive(path);
         return value * 80 - 80;
     }
 
     async setGateRange(channel: number, range: number): Promise<void> {
+        this.requireX32("Channel gate");
         const path = `${this.getChannelPath(channel)}/gate/range`;
         this.sendCommand(path, [range]);
     }
 
     async setGateAttack(channel: number, attack: number): Promise<void> {
+        this.requireX32("Channel gate");
         const path = `${this.getChannelPath(channel)}/gate/attack`;
         this.sendCommand(path, [attack]);
     }
 
     async setGateHold(channel: number, hold: number): Promise<void> {
+        this.requireX32("Channel gate");
         const path = `${this.getChannelPath(channel)}/gate/hold`;
         this.sendCommand(path, [hold]);
     }
 
     async setGateRelease(channel: number, release: number): Promise<void> {
+        this.requireX32("Channel gate");
         const path = `${this.getChannelPath(channel)}/gate/release`;
         this.sendCommand(path, [release]);
     }
 
     async setGateOn(channel: number, on: boolean): Promise<void> {
+        this.requireX32("Channel gate");
         const path = `${this.getChannelPath(channel)}/gate/on`;
         this.sendCommand(path, [on ? 1 : 0]);
     }
@@ -447,6 +516,7 @@ export class OSCClient {
         threshold: number,
         ratio: number
     ): Promise<void> {
+        this.requireX32("Channel compressor");
         const thrPath = `${this.getChannelPath(channel)}/dyn/thr`;
         const ratioPath = `${this.getChannelPath(channel)}/dyn/ratio`;
 
@@ -460,26 +530,31 @@ export class OSCClient {
     }
 
     async setCompressorAttack(channel: number, attack: number): Promise<void> {
+        this.requireX32("Channel compressor");
         const path = `${this.getChannelPath(channel)}/dyn/attack`;
         this.sendCommand(path, [attack]);
     }
 
     async setCompressorRelease(channel: number, release: number): Promise<void> {
+        this.requireX32("Channel compressor");
         const path = `${this.getChannelPath(channel)}/dyn/release`;
         this.sendCommand(path, [release]);
     }
 
     async setCompressorKnee(channel: number, knee: number): Promise<void> {
+        this.requireX32("Channel compressor");
         const path = `${this.getChannelPath(channel)}/dyn/knee`;
         this.sendCommand(path, [knee]);
     }
 
     async setCompressorGain(channel: number, gain: number): Promise<void> {
+        this.requireX32("Channel compressor");
         const path = `${this.getChannelPath(channel)}/dyn/gain`;
         this.sendCommand(path, [gain]);
     }
 
     async setCompressorOn(channel: number, on: boolean): Promise<void> {
+        this.requireX32("Channel compressor");
         const path = `${this.getChannelPath(channel)}/dyn/on`;
         this.sendCommand(path, [on ? 1 : 0]);
     }
@@ -502,6 +577,7 @@ export class OSCClient {
     }
 
     async setBusPan(bus: number, pan: number): Promise<void> {
+        this.requireX32("Bus pan");
         const path = `${this.getBusPath(bus)}/mix/pan`;
         const mixerPan = (pan + 1) / 2;
         this.sendCommand(path, [mixerPan]);
@@ -530,6 +606,7 @@ export class OSCClient {
     }
 
     async setAuxPan(aux: number, pan: number): Promise<void> {
+        this.requireX32("Aux pan");
         const path = `${this.getAuxPath(aux)}/mix/pan`;
         const mixerPan = (pan + 1) / 2;
         this.sendCommand(path, [mixerPan]);
@@ -548,11 +625,13 @@ export class OSCClient {
     }
 
     async sendToAux(channel: number, aux: number, level: number): Promise<void> {
+        this.requireX32("Channel sends to aux");
         const path = `${this.getChannelPath(channel)}/mix/${(aux + 15).toString().padStart(2, "0")}/level`;
         this.sendCommand(path, [level]);
     }
 
     async setSendPrePost(channel: number, bus: number, pre: boolean): Promise<void> {
+        this.requireX32("Send pre/post");
         const path = `${this.getChannelPath(channel)}/mix/${bus.toString().padStart(2, "0")}/preamp`;
         this.sendCommand(path, [pre ? 1 : 0]);
     }
@@ -572,6 +651,7 @@ export class OSCClient {
     }
 
     async setMainPan(pan: number): Promise<void> {
+        this.requireX32("Main pan");
         const path = `${this.getMainStereoPath()}/mix/pan`;
         const mixerPan = (pan + 1) / 2;
         this.sendCommand(path, [mixerPan]);
@@ -580,11 +660,13 @@ export class OSCClient {
     // ========== Matrix ==========
 
     async setMatrixFader(matrix: number, level: number): Promise<void> {
+        this.requireX32("Matrix controls");
         const path = `/mtx/${matrix.toString().padStart(2, "0")}/mix/fader`;
         this.sendCommand(path, [level]);
     }
 
     async muteMatrix(matrix: number, mute: boolean): Promise<void> {
+        this.requireX32("Matrix controls");
         const path = `/mtx/${matrix.toString().padStart(2, "0")}/mix/on`;
         this.sendCommand(path, [mute ? 0 : 1]);
     }
@@ -596,6 +678,7 @@ export class OSCClient {
     }
 
     async getEffectType(effect: number): Promise<number> {
+        this.requireX32("Effect type");
         return await this.sendAndReceive(`${this.getFxPath(effect)}/type`);
     }
 
@@ -606,33 +689,41 @@ export class OSCClient {
 
     async setEffectOn(effect: number, on: boolean): Promise<void> {
         // Rewired: mute/unmute the corresponding FX return channel
-        const fxrPath = `/fxrtn/${effect.toString().padStart(2, "0")}/mix/on`;
+        const fxrPath = `${this.getFxReturnPath(effect)}/mix/on`;
         this.sendCommand(fxrPath, [on ? 1 : 0]);
     }
 
     async getEffectOn(effect: number): Promise<boolean> {
         // Rewired: read the FX return channel mute state
-        const fxrPath = `/fxrtn/${effect.toString().padStart(2, "0")}/mix/on`;
+        const fxrPath = `${this.getFxReturnPath(effect)}/mix/on`;
         const value = await this.sendAndReceive(fxrPath);
         return value === 1;
     }
 
     async setEffectParam(effect: number, param: number, value: number): Promise<void> {
+        if (this.protocol === "OSCXR" && param !== 1) {
+            this.unsupportedForXR("Only FX parameter 1 is mapped in PROTOCOL.md.");
+        }
         this.sendCommand(`${this.getFxPath(effect)}/par/${param.toString().padStart(2, "0")}`, [value]);
     }
 
     async getEffectParam(effect: number, param: number): Promise<number> {
+        if (this.protocol === "OSCXR" && param !== 1) {
+            this.unsupportedForXR("Only FX parameter 1 is mapped in PROTOCOL.md.");
+        }
         return await this.sendAndReceive(`${this.getFxPath(effect)}/par/${param.toString().padStart(2, "0")}`);
     }
 
     // ========== Routing ==========
 
     async setChannelSource(channel: number, source: number): Promise<void> {
+        this.requireX32("Channel source");
         const path = `${this.getChannelPath(channel)}/config/source`;
         this.sendCommand(path, [source]);
     }
 
     async getChannelSource(channel: number): Promise<number> {
+        this.requireX32("Channel source");
         const path = `${this.getChannelPath(channel)}/config/source`;
         return await this.sendAndReceive(path);
     }
@@ -640,21 +731,21 @@ export class OSCClient {
     // ========== Scenes ==========
 
     async recallScene(scene: number): Promise<void> {
-        const path = `/-snap/load`;
+        const path = this.getSceneLoadPath();
         this.sendCommand(path, [scene - 1]); // Mixer scenes are 0-indexed
     }
 
     async saveScene(scene: number, name?: string): Promise<void> {
-        const path = `/-snap/store`;
+        const path = this.getSceneSavePath();
         this.sendCommand(path, [scene - 1]);
         if (name) {
-            const namePath = `/-snap/${(scene - 1).toString().padStart(3, "0")}/name`;
+            const namePath = this.getSceneNamePath(scene);
             this.sendCommand(namePath, [name]);
         }
     }
 
     async getSceneName(scene: number): Promise<string> {
-        const path = `/-snap/${(scene - 1).toString().padStart(3, "0")}/name`;
+        const path = this.getSceneNamePath(scene);
         return await this.sendAndReceive(path);
     }
 
@@ -678,6 +769,7 @@ export class OSCClient {
                 connected: true,
                 host: this.host,
                 port: this.port,
+                protocol: this.protocol,
                 info,
                 status,
             };
@@ -686,6 +778,7 @@ export class OSCClient {
                 connected: false,
                 host: this.host,
                 port: this.port,
+                protocol: this.protocol,
                 error: error instanceof Error ? error.message : String(error),
             };
         }
@@ -701,13 +794,16 @@ export class OSCClient {
         const eqOn = await this.safeRead(`${path}/eq/on`);
         const eq: any[] = [];
         for (let b = 1; b <= bands; b++) {
-            eq.push({
+            const band: any = {
                 band: b,
                 gain: await this.safeRead(`${path}/eq/${b}/g`),
-                freq: await this.safeRead(`${path}/eq/${b}/f`),
-                q: await this.safeRead(`${path}/eq/${b}/q`),
-                type: await this.safeRead(`${path}/eq/${b}/type`),
-            });
+            };
+            if (this.protocol !== "OSCXR") {
+                band.freq = await this.safeRead(`${path}/eq/${b}/f`);
+                band.q = await this.safeRead(`${path}/eq/${b}/q`);
+                band.type = await this.safeRead(`${path}/eq/${b}/type`);
+            }
+            eq.push(band);
         }
         return { eqOn: eqOn === 1, eq };
     }
@@ -719,21 +815,39 @@ export class OSCClient {
         result.name = await this.safeRead(`${path}/config/name`);
         result.fader = await this.safeRead(`${path}/mix/fader`);
         result.on = (await this.safeRead(`${path}/mix/on`)) === 1;
-        result.pan = await this.safeRead(`${path}/mix/pan`);
-        result.color = await this.safeRead(`${path}/config/color`);
-        result.source = await this.safeRead(`${path}/config/source`);
-
-        // Headamp (preamp gain + phantom)
-        const src = result.source;
-        if (src !== null && src >= 0 && src < 64) {
-            result.headampGain = await this.safeRead(`/headamp/${src.toString().padStart(3, "0")}/gain`);
-            result.headampPhantom = await this.safeRead(`/headamp/${src.toString().padStart(3, "0")}/phantom`);
-        }
 
         // EQ (4-band)
         const eqData = await this.readEQBands(path, 4);
         result.eqOn = eqData.eqOn;
         result.eq = eqData.eq;
+
+        if (this.protocol === "OSCXR") {
+            result.headampGain = await this.safeRead(`${this.getHeadampPath(channel)}/gain`);
+            result.unsupportedFields = ["pan", "color", "icon", "source", "gate", "compressor", "sendPan", "sendType"];
+        } else {
+            result.pan = await this.safeRead(`${path}/mix/pan`);
+            result.color = await this.safeRead(`${path}/config/color`);
+            result.source = await this.safeRead(`${path}/config/source`);
+
+            // Headamp (preamp gain + phantom)
+            const src = result.source;
+            if (src !== null && src >= 0 && src < 64) {
+                result.headampGain = await this.safeRead(`${this.getHeadampPath(src)}/gain`);
+                result.headampPhantom = await this.safeRead(`${this.getHeadampPath(src)}/phantom`);
+            }
+        }
+
+        if (this.protocol === "OSCXR") {
+            result.sends = [];
+            for (let b = 1; b <= 16; b++) {
+                const sendPath = `${path}/mix/${b.toString().padStart(2, "0")}`;
+                result.sends.push({
+                    bus: b,
+                    level: await this.safeRead(`${sendPath}/level`),
+                });
+            }
+            return result;
+        }
 
         // Gate (full)
         result.gateOn = (await this.safeRead(`${path}/gate/on`)) === 1;
@@ -774,12 +888,18 @@ export class OSCClient {
         result.name = await this.safeRead(`${path}/config/name`);
         result.fader = await this.safeRead(`${path}/mix/fader`);
         result.on = (await this.safeRead(`${path}/mix/on`)) === 1;
-        result.pan = await this.safeRead(`${path}/mix/pan`);
-        result.color = await this.safeRead(`${path}/config/color`);
 
         const eqData = await this.readEQBands(path, 4);
         result.eqOn = eqData.eqOn;
         result.eq = eqData.eq;
+
+        if (this.protocol === "OSCXR") {
+            result.unsupportedFields = ["pan", "color", "compressor"];
+            return result;
+        }
+
+        result.pan = await this.safeRead(`${path}/mix/pan`);
+        result.color = await this.safeRead(`${path}/config/color`);
 
         // Dynamics
         result.dynOn = (await this.safeRead(`${path}/dyn/on`)) === 1;
@@ -790,12 +910,16 @@ export class OSCClient {
     }
 
     async getAuxStrip(aux: number): Promise<any> {
-        const path = `/auxin/${aux.toString().padStart(2, "0")}`;
+        const path = this.getAuxPath(aux);
         const result: any = { aux };
 
         result.name = await this.safeRead(`${path}/config/name`);
         result.fader = await this.safeRead(`${path}/mix/fader`);
         result.on = (await this.safeRead(`${path}/mix/on`)) === 1;
+        if (this.protocol === "OSCXR") {
+            result.unsupportedFields = ["pan", "color", "source"];
+            return result;
+        }
         result.pan = await this.safeRead(`${path}/mix/pan`);
         result.color = await this.safeRead(`${path}/config/color`);
         result.source = await this.safeRead(`${path}/config/source`);
@@ -804,12 +928,16 @@ export class OSCClient {
     }
 
     async getFxReturnStrip(fxr: number): Promise<any> {
-        const path = `/fxrtn/${fxr.toString().padStart(2, "0")}`;
+        const path = this.getFxReturnPath(fxr);
         const result: any = { fxReturn: fxr };
 
         result.name = await this.safeRead(`${path}/config/name`);
         result.fader = await this.safeRead(`${path}/mix/fader`);
         result.on = (await this.safeRead(`${path}/mix/on`)) === 1;
+        if (this.protocol === "OSCXR") {
+            result.unsupportedFields = ["pan", "color"];
+            return result;
+        }
         result.pan = await this.safeRead(`${path}/mix/pan`);
         result.color = await this.safeRead(`${path}/config/color`);
 
@@ -817,6 +945,7 @@ export class OSCClient {
     }
 
     async getMatrixStrip(mtx: number): Promise<any> {
+        this.requireX32("Matrix strip");
         const path = `/mtx/${mtx.toString().padStart(2, "0")}`;
         const result: any = { matrix: mtx };
 
@@ -839,6 +968,10 @@ export class OSCClient {
         result.name = await this.safeRead(`${path}/config/name`);
         result.fader = await this.safeRead(`${path}/fader`);
         result.on = (await this.safeRead(`${path}/on`)) === 1;
+        if (this.protocol === "OSCXR") {
+            result.unsupportedFields = ["color"];
+            return result;
+        }
         result.color = await this.safeRead(`${path}/config/color`);
 
         return result;
@@ -847,8 +980,13 @@ export class OSCClient {
     async getMainStrip(): Promise<any> {
         const result: any = { type: "main_stereo" };
 
+        result.name = await this.safeRead(`${this.getMainStereoPath()}/config/name`);
         result.fader = await this.safeRead(`${this.getMainStereoPath()}/mix/fader`);
         result.on = (await this.safeRead(`${this.getMainStereoPath()}/mix/on`)) === 1;
+        if (this.protocol === "OSCXR") {
+            result.unsupportedFields = ["pan", "mainEq", "compressor", "mono"];
+            return result;
+        }
         result.pan = await this.safeRead(`${this.getMainStereoPath()}/mix/pan`);
 
         const eqData = await this.readEQBands(this.getMainStereoPath(), 6);
@@ -870,7 +1008,14 @@ export class OSCClient {
     }
 
     async getHeadamp(index: number): Promise<any> {
-        const path = `/headamp/${index.toString().padStart(3, "0")}`;
+        const path = this.getHeadampPath(index);
+        if (this.protocol === "OSCXR") {
+            return {
+                index,
+                gain: await this.safeRead(`${path}/gain`),
+                unsupportedFields: ["phantom"],
+            };
+        }
         return {
             index,
             gain: await this.safeRead(`${path}/gain`),
@@ -879,6 +1024,9 @@ export class OSCClient {
     }
 
     async getConsoleOverview(): Promise<any> {
+        if (this.protocol === "OSCXR") {
+            this.unsupportedForXR("Console overview needs model-specific channel/bus limits before it can avoid large timeout-heavy reads.");
+        }
         const overview: any = {};
 
         // All 32 channels - name, fader, mute only for speed
@@ -973,6 +1121,7 @@ export class OSCClient {
     }
 
     async getRouting(): Promise<any> {
+        this.requireX32("Routing overview");
         const routing: any = {};
 
         // FX source assignments (FX 1-4 are stereo insert, 5-8 are dual mono)
@@ -1042,6 +1191,7 @@ export class OSCClient {
      * If an input block shows "User In 25-32", per-channel patches live in userIn[24..31].
      */
     async getRoutingOverview(): Promise<any> {
+        this.requireX32("Routing overview");
         const routing = await this.getRouting();
         const userRouting = await this.getUserRouting();
         return {
@@ -1057,6 +1207,7 @@ export class OSCClient {
     }
 
     async getUserRouting(): Promise<any> {
+        this.requireX32("User routing");
         const userRouting: any = { userIn: [], userOut: [] };
 
         for (let slot = 1; slot <= 32; slot++) {
@@ -1084,29 +1235,36 @@ export class OSCClient {
      * Set a User In slot's source. Accepts either a raw int (0..168) or a label like "Card 1", "Local 27", "AES50A 5", "OFF".
      */
     async setUserRoutingIn(slot: number, source: number | string): Promise<void> {
+        this.requireX32("User routing");
         const code = encodeUserInSource(source);
         const path = `/config/userrout/in/${slot.toString().padStart(2, "0")}`;
         this.sendCommand(path, [code]);
     }
 
     async getUserRoutingIn(slot: number): Promise<{ source: number; sourceLabel: string }> {
+        this.requireX32("User routing");
         const path = `/config/userrout/in/${slot.toString().padStart(2, "0")}`;
         const source = await this.sendAndReceive(path);
         return { source, sourceLabel: decodeUserInSource(source) };
     }
 
     async setUserRoutingOut(slot: number, source: number): Promise<void> {
+        this.requireX32("User routing");
         const path = `/config/userrout/out/${slot.toString().padStart(2, "0")}`;
         this.sendCommand(path, [source]);
     }
 
     async getUserRoutingOut(slot: number): Promise<{ source: number; sourceLabel: string }> {
+        this.requireX32("User routing");
         const path = `/config/userrout/out/${slot.toString().padStart(2, "0")}`;
         const source = await this.sendAndReceive(path);
         return { source, sourceLabel: decodeUserOutSource(source) };
     }
 
     async getFullFxChain(): Promise<any[]> {
+        if (this.protocol === "OSCXR") {
+            this.unsupportedForXR("Full FX chain includes source assignment fields not mapped in PROTOCOL.md yet; use osc_get_all_effects and osc_get_fxreturn_strip.");
+        }
         // For each FX slot: type, source assignment, params, and FX return state
         const chains: any[] = [];
         for (let fx = 1; fx <= 8; fx++) {
@@ -1143,6 +1301,17 @@ export class OSCClient {
         const effects: any[] = [];
         for (let fx = 1; fx <= 8; fx++) {
             const slot: any = { slot: fx };
+            if (this.protocol === "OSCXR") {
+                try {
+                    const val = await this.getEffectParam(fx, 1);
+                    slot.params = [{ param: 1, value: val }];
+                } catch {
+                    slot.params = [{ param: 1, value: null }];
+                }
+                slot.unsupportedFields = ["type", "params2To16"];
+                effects.push(slot);
+                continue;
+            }
             try { slot.type = await this.getEffectType(fx); } catch { slot.type = null; }
             slot.params = [];
             for (let p = 1; p <= 8; p++) {

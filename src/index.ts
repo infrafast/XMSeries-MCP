@@ -2704,7 +2704,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 // Start server
 async function main() {
     console.error("Starting OSC MCP Server...");
-    console.error(`Connecting to OSC device at ${OSC_HOST}:${OSC_PORT}`);
+    console.error(`Connecting to OSC device at ${OSC_HOST}:${OSC_PORT} (${OSC_PROTOCOL})`);
 
     await osc.connect();
 
