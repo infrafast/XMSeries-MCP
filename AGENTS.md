@@ -34,7 +34,8 @@ Claude Desktop is the official desktop application from Anthropic that supports 
       ],
       "env": {
         "OSC_HOST": "192.168.1.70",
-        "OSC_PORT": "10023"
+        "OSC_PORT": "10023",
+        "OSC_PROTOCOL": "OSCX32M32"
       }
     }
   }
@@ -45,6 +46,7 @@ Claude Desktop is the official desktop application from Anthropic that supports 
    - Update `/path/to/osc-mcp/dist/index.js` to your actual path
    - Update `OSC_HOST` with your mixer's IP address
    - Update `OSC_PORT` if your mixer uses a different OSC port (default is 10023)
+   - Update `OSC_PROTOCOL` if needed (`OSCX32M32` for X32/M32, `OSCXR` for XAir/XR-compatible mixers; default is `OSCX32M32`)
 
 4. **Restart Claude Desktop** completely (quit and reopen)
 
@@ -91,7 +93,8 @@ Cline is a VS Code extension that brings AI assistance with MCP support.
       ],
       "env": {
         "OSC_HOST": "192.168.1.70",
-        "OSC_PORT": "10023"
+        "OSC_PORT": "10023",
+        "OSC_PROTOCOL": "OSCX32M32"
       }
     }
   }
@@ -134,7 +137,8 @@ Continue is an open-source autocomplete and chat tool for VS Code with MCP suppo
       ],
       "env": {
         "OSC_HOST": "192.168.1.70",
-        "OSC_PORT": "10023"
+        "OSC_PORT": "10023",
+        "OSC_PROTOCOL": "OSCX32M32"
       }
     }
   }
@@ -163,7 +167,8 @@ Most MCP-compatible agents use a similar configuration format. The basic structu
       ],
       "env": {
         "OSC_HOST": "YOUR_MIXER_IP",
-        "OSC_PORT": "10023"
+        "OSC_PORT": "10023",
+        "OSC_PROTOCOL": "OSCX32M32"
       }
     }
   }
@@ -175,7 +180,7 @@ Most MCP-compatible agents use a similar configuration format. The basic structu
 - **Absolute paths**: Always use absolute paths, not relative paths
 - **Node.js required**: Ensure Node.js is installed and accessible in your PATH
 - **Built project**: Make sure you've run `npm run build` before using the server
-- **Environment variables**: Set `OSC_HOST` and `OSC_PORT` to match your mixer
+- **Environment variables**: Set `OSC_HOST` and `OSC_PORT` to match your mixer. Optionally set `OSC_PROTOCOL` to `OSCX32M32` or `OSCXR`; the default is `OSCX32M32`.
 
 ## Testing Your Configuration
 
@@ -292,7 +297,8 @@ If you need to control multiple mixers, you can configure multiple MCP servers:
       "args": ["/path/to/osc-mcp/dist/index.js"],
       "env": {
         "OSC_HOST": "192.168.1.70",
-        "OSC_PORT": "10023"
+        "OSC_PORT": "10023",
+        "OSC_PROTOCOL": "OSCX32M32"
       }
     },
     "osc-monitor": {
@@ -300,7 +306,8 @@ If you need to control multiple mixers, you can configure multiple MCP servers:
       "args": ["/path/to/osc-mcp/dist/index.js"],
       "env": {
         "OSC_HOST": "192.168.1.71",
-        "OSC_PORT": "10023"
+        "OSC_PORT": "10023",
+        "OSC_PROTOCOL": "OSCXR"
       }
     }
   }
@@ -319,7 +326,8 @@ If Node.js is not in your PATH, specify the full path:
       "args": ["/path/to/osc-mcp/dist/index.js"],
       "env": {
         "OSC_HOST": "192.168.1.70",
-        "OSC_PORT": "10023"
+        "OSC_PORT": "10023",
+        "OSC_PROTOCOL": "OSCX32M32"
       }
     }
   }
@@ -339,6 +347,7 @@ To enable debug logging, add `NODE_ENV=development`:
       "env": {
         "OSC_HOST": "192.168.1.70",
         "OSC_PORT": "10023",
+        "OSC_PROTOCOL": "OSCX32M32",
         "NODE_ENV": "development"
       }
     }
@@ -368,4 +377,3 @@ If you encounter issues:
 ## Contributing
 
 If you've successfully configured the OSC MCP server with another agent not listed here, please consider contributing your configuration to this documentation!
-

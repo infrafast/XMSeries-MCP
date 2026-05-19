@@ -40,7 +40,8 @@ Copy the contents from `claude_desktop_config.json` in this repository, or add t
       ],
       "env": {
         "OSC_HOST": "192.168.1.70",
-        "OSC_PORT": "10023"
+        "OSC_PORT": "10023",
+        "OSC_PROTOCOL": "OSCX32M32"
       }
     }
   }
@@ -51,6 +52,7 @@ Copy the contents from `claude_desktop_config.json` in this repository, or add t
 - Replace `/path/to/osc-mcp/dist/index.js` with the actual path to your installation
 - Replace `192.168.1.70` with your mixer's actual IP address
 - The default OSC port is `10023` (usually doesn't need to be changed)
+- `OSC_PROTOCOL` is optional. Use `OSCX32M32` for X32/M32, or `OSCXR` for XAir/XR-compatible mixers. If omitted, the server defaults to `OSCX32M32`.
 
 ### 4. Restart Claude Desktop
 

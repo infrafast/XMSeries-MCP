@@ -68,12 +68,15 @@ Add this configuration (update the IP address and path):
       ],
       "env": {
         "OSC_HOST": "192.168.1.70",
-        "OSC_PORT": "10023"
+        "OSC_PORT": "10023",
+        "OSC_PROTOCOL": "OSCX32M32"
       }
     }
   }
 }
 ```
+
+`OSC_PROTOCOL` is optional. Accepted values are `OSCX32M32` and `OSCXR`; when omitted, the server uses `OSCX32M32`.
 
 ### Step 3: Restart Claude Desktop
 
@@ -134,6 +137,7 @@ Once configured, you can use natural language commands like:
 ### OSC Communication:
 - Protocol: UDP
 - Default Port: 10023
+- Address protocol selector: `OSC_PROTOCOL` (`OSCX32M32` by default, or `OSCXR`)
 - Bidirectional communication with mixer
 - Automatic connection keep-alive (/xremote every 9 seconds)
 
@@ -245,7 +249,8 @@ If you don't have a physical mixer, you can use the Patrick Maillot's X32 Emulat
    ```json
    "env": {
      "OSC_HOST": "127.0.0.1",
-     "OSC_PORT": "10023"
+     "OSC_PORT": "10023",
+     "OSC_PROTOCOL": "OSCX32M32"
    }
    ```
 

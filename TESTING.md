@@ -31,12 +31,15 @@ Add or update the configuration:
       ],
       "env": {
         "OSC_HOST": "127.0.0.1", // Or the IP of your emulator
-        "OSC_PORT": "10023"      // The port your emulator is listening on
+        "OSC_PORT": "10023",     // The port your emulator is listening on
+        "OSC_PROTOCOL": "OSCX32M32"
       }
     }
   }
 }
 ```
+
+Use `OSC_PROTOCOL: "OSCXR"` when testing against an XR/XAir-compatible target.
 
 ## Running Tests
 

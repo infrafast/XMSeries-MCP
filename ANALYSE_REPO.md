@@ -11,7 +11,7 @@ This document summarizes:
 
 Requested target behavior:
 - Existing mode: `OSCX32M32` (X32/M32-compatible addresses).
-- New mode: `OSCXR` (XAir-compatible addresses), as described in `protocol.txt`.
+- New mode: `OSCXR` (XAir-compatible addresses), as described in `PROTOCOL.md`.
 
 ---
 
@@ -19,10 +19,10 @@ Requested target behavior:
 
 - **`src/index.ts`**: MCP server entry point, tool definitions, and handler switch/case dispatch to OSC client methods.
 - **`src/osc-client.ts`**: Core OSC transport + all mixer read/write methods and path construction.
-- **`protocol.txt`**: Side-by-side protocol mapping between `{ OSCXR, OSCX32M32 }` with command string templates.
-- **Docs** (`README.md`, `INSTALLATION.md`, `QUICKSTART.md`, `TESTING.md`): setup assumes host+port only.
+- **`PROTOCOL.md`**: Side-by-side protocol mapping between `{ OSCXR, OSCX32M32 }` with command string templates.
+- **Docs** (`README.md`, `INSTALLATION.md`, `QUICKSTART.md`, `TESTING.md`): setup now documents host, port, and optional protocol selection.
 
-The current implementation initializes `OSCClient` with only host and port, and no protocol selector.
+The stdio MCP entry point now reads `OSC_PROTOCOL` from the environment and passes it into `OSCClient`. If omitted, the server defaults to `OSCX32M32`.
 
 ---
 
@@ -33,14 +33,16 @@ The current implementation initializes `OSCClient` with only host and port, and 
 `src/index.ts` currently reads:
 - `OSC_HOST`
 - `OSC_PORT`
+- `OSC_PROTOCOL`
 
 and constructs:
 
 ```ts
-const osc = new OSCClient(OSC_HOST, OSC_PORT);
+const OSC_PROTOCOL = parseOscProtocol(process.env.OSC_PROTOCOL);
+const osc = new OSCClient(OSC_HOST, OSC_PORT, OSC_PROTOCOL);
 ```
 
-No protocol discriminator is currently passed through configuration or constructor.
+`OSC_PROTOCOL` accepts `OSCX32M32` or `OSCXR`. Invalid values fail at startup with an explicit error.
 
 ### 3.2 Where protocol-specific assumptions already exist
 
@@ -51,13 +53,13 @@ No protocol discriminator is currently passed through configuration or construct
 
 Example you highlighted:
 - `muteMain()` currently writes `/main/st/mix/on`.
-- In `protocol.txt`, `MAINMUTECOMMAND_STRING` maps XR as `/lr/mix/on` and X32/M32 as `/main/st/mix/on`.
+- In `PROTOCOL.md`, `MAINMUTECOMMAND_STRING` maps XR as `/lr/mix/on` and X32/M32 as `/main/st/mix/on`.
 
 This confirms a direct path mismatch requiring protocol-aware resolution.
 
 ### 3.3 Methods likely to break or behave inconsistently on XR
 
-From `protocol.txt`, differences are not limited to path names; some include formatting and dimensionality changes, such as:
+From `PROTOCOL.md`, differences are not limited to path names; some include formatting and dimensionality changes, such as:
 
 - **Main LR path family**
   - XR: `/lr/...`
@@ -80,7 +82,7 @@ From `protocol.txt`, differences are not limited to path names; some include for
   - X32/M32: `/meters/6`
 
 - **Command arity differences** (important)
-  - Example patterns in `protocol.txt` show some XR commands are single-target while X32 variants include an extra index (e.g., bus-specific forms like `/.../mix/%02d/...`).
+  - Example patterns in `PROTOCOL.md` show some XR commands are single-target while X32 variants include an extra index (e.g., bus-specific forms like `/.../mix/%02d/...`).
 
 This can impact `getXXXX`/`setXXXX` APIs where method signatures currently assume one canonical parameter set.
 
@@ -90,9 +92,9 @@ This can impact `getXXXX`/`setXXXX` APIs where method signatures currently assum
 
 ### 4.1 `src/index.ts` impact
 
-- Add environment/config parsing for a protocol variable (suggested: `OSC_PROTOCOL`).
-- Validate accepted values (`OSCX32M32`, `OSCXR`) and default safely to current behavior.
-- Pass protocol into `OSCClient` constructor.
+- Environment/config parsing for `OSC_PROTOCOL` is implemented in `src/index.ts`.
+- Accepted values are validated (`OSCX32M32`, `OSCXR`) and default safely to current behavior.
+- The selected protocol is passed into the `OSCClient` constructor.
 - Optionally expose protocol in server startup log and status/diagnostics tool outputs.
 
 ### 4.2 `src/osc-client.ts` impact
@@ -134,23 +136,27 @@ The tool catalog is extensive and currently X32-centric in description and assum
 
 ### 4.4 Documentation impact
 
-Docs currently describe host/port setup only and position the project as X32/M32 focused.
+Docs now include `OSC_PROTOCOL` in the main stdio configuration examples and describe accepted values/default behavior.
 
-Need updates in:
+Updated files:
 - `README.md`
 - `INSTALLATION.md`
 - `QUICKSTART.md`
 - `TESTING.md`
+- `AGENTS.md`
 
-to include:
+They now include:
 - `OSC_PROTOCOL` variable,
 - accepted values,
-- examples per mixer family,
-- compatibility matrix (supported/partial/not supported by protocol).
+- examples/defaults for stdio MCP configuration.
+
+Remaining documentation work for the broader multi-protocol effort:
+- add a compatibility matrix (supported/partial/not supported by protocol),
+- document individual tool limitations where XR behavior still differs.
 
 ---
 
-## 5) Focused pre-analysis of protocol differences from `protocol.txt`
+## 5) Focused pre-analysis of protocol differences from `PROTOCOL.md`
 
 Below are key mismatch classes observed in the provided mapping file.
 
@@ -200,7 +206,7 @@ Below are key mismatch classes observed in the provided mapping file.
 
 1. **Introduce protocol enum + constructor parameter**
    - `type OSCProtocol = "OSCX32M32" | "OSCXR"`.
-   - Parse from `process.env.OSC_PROTOCOL` in `src/index.ts`.
+   - Parse from `process.env.OSC_PROTOCOL` in `src/index.ts`. **Done for the stdio server.**
 
 2. **Centralize command path generation**
    - Create a protocol mapping layer (object or helper methods) in `OSCClient`.
@@ -231,7 +237,7 @@ Below are key mismatch classes observed in the provided mapping file.
 - Config supports `OSC_PROTOCOL` with default preserving current behavior.
 - `muteMain`, `setMainFader`, `getMainFader`, and `getMainStrip` resolve correct main namespace per protocol.
 - At least one representative command each for FX return and aux return works in both modes.
-- All mismatched commands identified from `protocol.txt` are either:
+- All mismatched commands identified from `PROTOCOL.md` are either:
   - implemented with protocol mapping, or
   - explicitly documented as not supported for one mode.
 - Documentation updated with protocol parameter and compatibility matrix.

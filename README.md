@@ -37,14 +37,17 @@ Add to your Claude Desktop config (`%APPDATA%\Claude\claude_desktop_config.json`
       "args": ["C:\\path\\to\\x32-mcp-server\\dist\\index.js"],
       "env": {
         "OSC_HOST": "192.168.1.70",
-        "OSC_PORT": "10023"
+        "OSC_PORT": "10023",
+        "OSC_PROTOCOL": "OSCX32M32"
       }
     }
   }
 }
 ```
 
-Replace the IP with your mixer's (on the X32: `Setup` → `Network`). Restart Claude Desktop.
+Replace the IP with your mixer's (on the X32: `Setup` -> `Network`). Restart Claude Desktop.
+
+`OSC_PROTOCOL` is optional. Use `OSCX32M32` for Behringer X32 / Midas M32 consoles, or `OSCXR` for XAir/XR-compatible addressing. If omitted, the server defaults to `OSCX32M32`.
 
 > **Windows MSIX note:** if you installed Claude Desktop from the Microsoft Store, the config path is `%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\claude_desktop_config.json`, not the standard `%APPDATA%\Claude\` path.
 
