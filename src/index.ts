@@ -17,6 +17,7 @@ import {
     Tool,
 } from "@modelcontextprotocol/sdk/types.js";
 import { OSCClient, OSCProtocol } from "./osc-client.js";
+import { dbToFaderLevel, faderLevelToDb, formatDb } from "./level-table.js";
 
 const execAsync = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
@@ -39,6 +40,28 @@ async function readAgentPrompt(): Promise<string> {
 // Initialize OSC client
 const osc = new OSCClient(OSC_HOST, OSC_PORT, OSC_PROTOCOL);
 
+function levelDbPayload(result: ReturnType<typeof dbToFaderLevel>): string {
+    return JSON.stringify({
+        requestedDb: result.requestedDb,
+        level: result.level,
+        db: result.db,
+        dbLabel: formatDb(result.db),
+        tableIndex: result.index,
+        clipped: result.clipped,
+    });
+}
+
+function faderDbPayload(result: ReturnType<typeof faderLevelToDb>): string {
+    return JSON.stringify({
+        requestedLevel: result.requestedLevel,
+        level: result.level,
+        db: result.db,
+        dbLabel: formatDb(result.db),
+        tableIndex: result.index,
+        clipped: result.clipped,
+    });
+}
+
 function parseOscProtocol(value?: string): OSCProtocol {
     if (!value) return "OSCX32M32";
     if (value === "OSCX32M32" || value === "OSCXR") return value;
@@ -58,6 +81,39 @@ const TOOLS: Tool[] = [
         inputSchema: {
             type: "object",
             properties: {},
+        },
+    },
+    // ========== Level / dB Conversion ==========
+    {
+        name: "osc_db_to_fader_level",
+        description: "Convert a requested fader value in dB to the nearest normalized OSC fader level using the X32/M32 161-point pseudo-log Level table. Returns the normalized level, actual table dB, and table index.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                db: {
+                    type: "number",
+                    description: "Requested fader level in dB. Range is -87 dB to +10 dB; lower values map to -inf/0.0.",
+                    minimum: -120,
+                    maximum: 20,
+                },
+            },
+            required: ["db"],
+        },
+    },
+    {
+        name: "osc_fader_level_to_db",
+        description: "Convert a normalized OSC fader level (0.0 to 1.0) to the nearest dB value using the X32/M32 161-point pseudo-log Level table.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                level: {
+                    type: "number",
+                    description: "Normalized fader level (0.0 to 1.0)",
+                    minimum: 0,
+                    maximum: 1,
+                },
+            },
+            required: ["level"],
         },
     },
     // ========== Channel Controls ==========
@@ -84,8 +140,46 @@ const TOOLS: Tool[] = [
         },
     },
     {
+        name: "osc_set_fader_db",
+        description: "Set a channel fader by dB value. Converts dB to the nearest normalized OSC fader level using the X32/M32 161-point Level table.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                channel: {
+                    type: "number",
+                    description: "Channel number (1-32)",
+                    minimum: 1,
+                    maximum: 32,
+                },
+                db: {
+                    type: "number",
+                    description: "Requested fader level in dB (-87 to +10; lower values map to -inf)",
+                    minimum: -120,
+                    maximum: 20,
+                },
+            },
+            required: ["channel", "db"],
+        },
+    },
+    {
         name: "osc_get_fader",
         description: "Get the current fader level for a channel",
+        inputSchema: {
+            type: "object",
+            properties: {
+                channel: {
+                    type: "number",
+                    description: "Channel number (1-32)",
+                    minimum: 1,
+                    maximum: 32,
+                },
+            },
+            required: ["channel"],
+        },
+    },
+    {
+        name: "osc_get_fader_db",
+        description: "Get the current channel fader level as dB using the X32/M32 161-point Level table.",
         inputSchema: {
             type: "object",
             properties: {
@@ -615,8 +709,46 @@ const TOOLS: Tool[] = [
         },
     },
     {
+        name: "osc_set_bus_fader_db",
+        description: "Set a mix bus fader by dB value. Converts dB to the nearest normalized OSC fader level using the X32/M32 161-point Level table.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                bus: {
+                    type: "number",
+                    description: "Bus number (1-16)",
+                    minimum: 1,
+                    maximum: 16,
+                },
+                db: {
+                    type: "number",
+                    description: "Requested fader level in dB (-87 to +10; lower values map to -inf)",
+                    minimum: -120,
+                    maximum: 20,
+                },
+            },
+            required: ["bus", "db"],
+        },
+    },
+    {
         name: "osc_get_bus_fader",
         description: "Get the fader level for a mix bus",
+        inputSchema: {
+            type: "object",
+            properties: {
+                bus: {
+                    type: "number",
+                    description: "Bus number (1-16)",
+                    minimum: 1,
+                    maximum: 16,
+                },
+            },
+            required: ["bus"],
+        },
+    },
+    {
+        name: "osc_get_bus_fader_db",
+        description: "Get the current mix bus fader level as dB using the X32/M32 161-point Level table.",
         inputSchema: {
             type: "object",
             properties: {
@@ -716,6 +848,28 @@ const TOOLS: Tool[] = [
         },
     },
     {
+        name: "osc_set_aux_fader_db",
+        description: "Set an aux return fader by dB value. Converts dB to the nearest normalized OSC fader level using the X32/M32 161-point Level table.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                aux: {
+                    type: "number",
+                    description: "Aux number (X32: 1-6; OSCXR: use 1 for /rtn/aux)",
+                    minimum: 1,
+                    maximum: 6,
+                },
+                db: {
+                    type: "number",
+                    description: "Requested fader level in dB (-87 to +10; lower values map to -inf)",
+                    minimum: -120,
+                    maximum: 20,
+                },
+            },
+            required: ["aux", "db"],
+        },
+    },
+    {
         name: "osc_get_aux_fader",
         description: "Get the fader level for an aux output",
         inputSchema: {
@@ -724,6 +878,22 @@ const TOOLS: Tool[] = [
                 aux: {
                     type: "number",
                     description: "Aux number (1-6)",
+                    minimum: 1,
+                    maximum: 6,
+                },
+            },
+            required: ["aux"],
+        },
+    },
+    {
+        name: "osc_get_aux_fader_db",
+        description: "Get the current aux return fader level as dB using the X32/M32 161-point Level table.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                aux: {
+                    type: "number",
+                    description: "Aux number (X32: 1-6; OSCXR: use 1 for /rtn/aux)",
                     minimum: 1,
                     maximum: 6,
                 },
@@ -959,8 +1129,32 @@ const TOOLS: Tool[] = [
         },
     },
     {
+        name: "osc_set_main_fader_db",
+        description: "Set the main LR fader by dB value. Converts dB to the nearest normalized OSC fader level using the X32/M32 161-point Level table.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                db: {
+                    type: "number",
+                    description: "Requested fader level in dB (-87 to +10; lower values map to -inf)",
+                    minimum: -120,
+                    maximum: 20,
+                },
+            },
+            required: ["db"],
+        },
+    },
+    {
         name: "osc_get_main_fader",
         description: "Get the main LR fader level",
+        inputSchema: {
+            type: "object",
+            properties: {},
+        },
+    },
+    {
+        name: "osc_get_main_fader_db",
+        description: "Get the current main LR fader level as dB using the X32/M32 161-point Level table.",
         inputSchema: {
             type: "object",
             properties: {},
@@ -1017,6 +1211,44 @@ const TOOLS: Tool[] = [
                 },
             },
             required: ["matrix", "level"],
+        },
+    },
+    {
+        name: "osc_set_matrix_fader_db",
+        description: "Set a matrix fader by dB value. Converts dB to the nearest normalized OSC fader level using the X32/M32 161-point Level table. X32/M32 only; matrices are not mapped in OSCXR.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                matrix: {
+                    type: "number",
+                    description: "Matrix number (1-6)",
+                    minimum: 1,
+                    maximum: 6,
+                },
+                db: {
+                    type: "number",
+                    description: "Requested fader level in dB (-87 to +10; lower values map to -inf)",
+                    minimum: -120,
+                    maximum: 20,
+                },
+            },
+            required: ["matrix", "db"],
+        },
+    },
+    {
+        name: "osc_get_matrix_fader_db",
+        description: "Get the current matrix fader level as dB using the X32/M32 161-point Level table. X32/M32 only; matrices are not mapped in OSCXR.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                matrix: {
+                    type: "number",
+                    description: "Matrix number (1-6)",
+                    minimum: 1,
+                    maximum: 6,
+                },
+            },
+            required: ["matrix"],
         },
     },
     {
@@ -1657,6 +1889,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 };
             }
 
+            // ========== Level / dB Conversion ==========
+            case "osc_db_to_fader_level": {
+                const { db } = args as { db: number };
+                return {
+                    content: [{ type: "text", text: levelDbPayload(dbToFaderLevel(db)) }],
+                };
+            }
+
+            case "osc_fader_level_to_db": {
+                const { level } = args as { level: number };
+                return {
+                    content: [{ type: "text", text: faderDbPayload(faderLevelToDb(level)) }],
+                };
+            }
+
             // ========== Channel Controls ==========
             case "osc_set_fader": {
                 const { channel, level } = args as { channel: number; level: number };
@@ -1671,6 +1918,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 };
             }
 
+            case "osc_set_fader_db": {
+                const { channel, db } = args as { channel: number; db: number };
+                const converted = dbToFaderLevel(db);
+                await osc.setFader(channel, converted.level);
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Set channel ${channel} fader to ${formatDb(converted.db)} (level ${converted.level.toFixed(4)}, table index ${converted.index}${converted.clipped ? ", clipped" : ""})`,
+                        },
+                    ],
+                };
+            }
+
             case "osc_get_fader": {
                 const { channel } = args as { channel: number };
                 const level = await osc.getFader(channel);
@@ -1679,6 +1940,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                         {
                             type: "text",
                             text: `Channel ${channel} fader is at ${(level * 100).toFixed(1)}%`,
+                        },
+                    ],
+                };
+            }
+
+            case "osc_get_fader_db": {
+                const { channel } = args as { channel: number };
+                const level = await osc.getFader(channel);
+                const converted = faderLevelToDb(level);
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Channel ${channel} fader is ${formatDb(converted.db)} (level ${level.toFixed(4)}, nearest table index ${converted.index})`,
                         },
                     ],
                 };
@@ -2025,6 +2300,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 };
             }
 
+            case "osc_set_bus_fader_db": {
+                const { bus, db } = args as { bus: number; db: number };
+                const converted = dbToFaderLevel(db);
+                await osc.setBusFader(bus, converted.level);
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Set bus ${bus} fader to ${formatDb(converted.db)} (level ${converted.level.toFixed(4)}, table index ${converted.index}${converted.clipped ? ", clipped" : ""})`,
+                        },
+                    ],
+                };
+            }
+
             case "osc_get_bus_fader": {
                 const { bus } = args as { bus: number };
                 const level = await osc.getBusFader(bus);
@@ -2033,6 +2322,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                         {
                             type: "text",
                             text: `Bus ${bus} fader is at ${(level * 100).toFixed(1)}%`,
+                        },
+                    ],
+                };
+            }
+
+            case "osc_get_bus_fader_db": {
+                const { bus } = args as { bus: number };
+                const level = await osc.getBusFader(bus);
+                const converted = faderLevelToDb(level);
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Bus ${bus} fader is ${formatDb(converted.db)} (level ${level.toFixed(4)}, nearest table index ${converted.index})`,
                         },
                     ],
                 };
@@ -2093,6 +2396,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 };
             }
 
+            case "osc_set_aux_fader_db": {
+                const { aux, db } = args as { aux: number; db: number };
+                const converted = dbToFaderLevel(db);
+                await osc.setAuxFader(aux, converted.level);
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Set aux ${aux} fader to ${formatDb(converted.db)} (level ${converted.level.toFixed(4)}, table index ${converted.index}${converted.clipped ? ", clipped" : ""})`,
+                        },
+                    ],
+                };
+            }
+
             case "osc_get_aux_fader": {
                 const { aux } = args as { aux: number };
                 const level = await osc.getAuxFader(aux);
@@ -2101,6 +2418,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                         {
                             type: "text",
                             text: `Aux ${aux} fader is at ${(level * 100).toFixed(1)}%`,
+                        },
+                    ],
+                };
+            }
+
+            case "osc_get_aux_fader_db": {
+                const { aux } = args as { aux: number };
+                const level = await osc.getAuxFader(aux);
+                const converted = faderLevelToDb(level);
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Aux ${aux} fader is ${formatDb(converted.db)} (level ${level.toFixed(4)}, nearest table index ${converted.index})`,
                         },
                     ],
                 };
@@ -2255,6 +2586,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 };
             }
 
+            case "osc_set_main_fader_db": {
+                const { db } = args as { db: number };
+                const converted = dbToFaderLevel(db);
+                await osc.setMainFader(converted.level);
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Set main LR fader to ${formatDb(converted.db)} (level ${converted.level.toFixed(4)}, table index ${converted.index}${converted.clipped ? ", clipped" : ""})`,
+                        },
+                    ],
+                };
+            }
+
             case "osc_get_main_fader": {
                 const level = await osc.getMainFader();
                 return {
@@ -2262,6 +2607,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                         {
                             type: "text",
                             text: `Main LR fader is at ${(level * 100).toFixed(1)}%`,
+                        },
+                    ],
+                };
+            }
+
+            case "osc_get_main_fader_db": {
+                const level = await osc.getMainFader();
+                const converted = faderLevelToDb(level);
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Main LR fader is ${formatDb(converted.db)} (level ${level.toFixed(4)}, nearest table index ${converted.index})`,
                         },
                     ],
                 };
@@ -2307,6 +2665,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                         {
                             type: "text",
                             text: `Set matrix ${matrix} fader to ${(level * 100).toFixed(1)}%`,
+                        },
+                    ],
+                };
+            }
+
+            case "osc_set_matrix_fader_db": {
+                const { matrix, db } = args as { matrix: number; db: number };
+                const converted = dbToFaderLevel(db);
+                await osc.setMatrixFader(matrix, converted.level);
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Set matrix ${matrix} fader to ${formatDb(converted.db)} (level ${converted.level.toFixed(4)}, table index ${converted.index}${converted.clipped ? ", clipped" : ""})`,
+                        },
+                    ],
+                };
+            }
+
+            case "osc_get_matrix_fader_db": {
+                const { matrix } = args as { matrix: number };
+                const level = await osc.getMatrixFader(matrix);
+                const converted = faderLevelToDb(level);
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Matrix ${matrix} fader is ${formatDb(converted.db)} (level ${level.toFixed(4)}, nearest table index ${converted.index})`,
                         },
                     ],
                 };

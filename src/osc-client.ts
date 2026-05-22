@@ -745,6 +745,12 @@ export class OSCClient {
         this.sendCommand(path, [level]);
     }
 
+    async getMatrixFader(matrix: number): Promise<number> {
+        this.requireX32("Matrix controls");
+        const path = `/mtx/${matrix.toString().padStart(2, "0")}/mix/fader`;
+        return await this.sendAndReceive(path);
+    }
+
     async muteMatrix(matrix: number, mute: boolean): Promise<void> {
         this.requireX32("Matrix controls");
         const path = `/mtx/${matrix.toString().padStart(2, "0")}/mix/on`;
