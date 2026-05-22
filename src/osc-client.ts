@@ -131,12 +131,13 @@ export class OSCClient {
     private lastHealthError: string | null = null;
     private protocol: OSCProtocol;
     private debugOsc: boolean;
+    private oscCommandLog: string[] = [];
 
     constructor(host: string, port: number, protocol: OSCProtocol = "OSCX32M32") {
         this.host = host;
         this.port = port;
         this.protocol = protocol;
-        this.debugOsc = process.env.OSC_DEBUG === "1" || process.env.OSC_DEBUG?.toLowerCase() === "true";
+        this.debugOsc = process.env.DEBUG === "1" || process.env.DEBUG?.toLowerCase() === "true";
 
         // Create OSC instance with UDP plugin
         const plugin = new (OSC as any).DatagramPlugin({
@@ -210,16 +211,32 @@ export class OSCClient {
         }
 
         const message = new (OSC as any).Message(address, ...(args || []));
-        this.logOscCommand(address, args);
+        const trace = this.formatOscCommand(address, args);
+        this.logOscCommand(trace);
+        this.oscCommandLog.push(trace);
         this.osc.send(message);
     }
 
-    private logOscCommand(address: string, args?: any[]): void {
-        if (!this.debugOsc) return;
-
+    private formatOscCommand(address: string, args?: any[]): string {
         const mode = this.isWrite(args) ? "WRITE" : "READ";
         const payload = this.isWrite(args) ? ` args=${JSON.stringify(args)}` : "";
-        console.error(`[OSC ${mode}] ${this.protocol} ${this.host}:${this.port} ${address}${payload}`);
+        return `[OSC ${mode}] ${this.protocol} ${this.host}:${this.port} ${address}${payload}`;
+    }
+
+    private logOscCommand(trace: string): void {
+        if (!this.debugOsc) return;
+
+        console.error(trace);
+    }
+
+    clearOscCommandLog(): void {
+        this.oscCommandLog = [];
+    }
+
+    drainOscCommandLog(): string[] {
+        const commands = this.oscCommandLog;
+        this.oscCommandLog = [];
+        return commands;
     }
 
     /*

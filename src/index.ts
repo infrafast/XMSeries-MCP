@@ -27,6 +27,7 @@ const __dirname = path.dirname(__filename);
 const OSC_HOST = process.env.OSC_HOST || "192.168.1.17";
 const OSC_PORT = parseInt(process.env.OSC_PORT || "10023");
 const OSC_PROTOCOL = parseOscProtocol(process.env.OSC_PROTOCOL);
+const DEBUG_ENABLED = process.env.DEBUG === "1" || process.env.DEBUG?.toLowerCase() === "true";
 const PROMPT_RESOURCE_URI = "xmseries://prompt/system";
 const PROMPT_NAME = "xmseries_mixer_assistant";
 const PROMPT_FILE = process.env.MCP_PROMPT_FILE
@@ -66,6 +67,23 @@ function parseOscProtocol(value?: string): OSCProtocol {
     if (!value) return "OSCX32M32";
     if (value === "OSCX32M32" || value === "OSCXR") return value;
     throw new Error(`Invalid OSC_PROTOCOL "${value}". Expected "OSCX32M32" or "OSCXR".`);
+}
+
+function appendOscTrace(toolResult: any, commands: string[]): any {
+    if (!DEBUG_ENABLED || commands.length === 0) {
+        return toolResult;
+    }
+
+    return {
+        ...toolResult,
+        content: [
+            {
+                type: "text",
+                text: `OSC trace:\n${commands.join("\n")}`,
+            },
+            ...(toolResult.content || []),
+        ],
+    };
 }
 
 // Emulator process management
@@ -1876,6 +1894,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
     try {
+        osc.clearOscCommandLog();
+        const result = await (async () => {
         switch (name) {
             case "osc_get_agent_prompt": {
                 const prompt = await readAgentPrompt();
@@ -3321,10 +3341,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     isError: true,
                 };
         }
+        })();
+        return appendOscTrace(result, osc.drainOscCommandLog());
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (message === "Le mixeur est deconnecté") {
-            return {
+            return appendOscTrace({
                 content: [
                     {
                         type: "text",
@@ -3332,9 +3354,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     },
                 ],
                 isError: true,
-            };
+            }, osc.drainOscCommandLog());
         }
-        return {
+        return appendOscTrace({
             content: [
                 {
                     type: "text",
@@ -3342,7 +3364,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 },
             ],
             isError: true,
-        };
+        }, osc.drainOscCommandLog());
     }
 });
 
