@@ -126,6 +126,9 @@ export class OSCClient {
     private port: number;
     private responseCallbacks: Map<string, (value: any) => void> = new Map();
     private isConnected: boolean = false;
+    private mixerOnline: boolean = true;
+    private lastHealthCheckAt: Date | null = null;
+    private lastHealthError: string | null = null;
     private protocol: OSCProtocol;
 
     constructor(host: string, port: number, protocol: OSCProtocol = "OSCX32M32") {
@@ -155,7 +158,7 @@ export class OSCClient {
             const callback = this.responseCallbacks.get(address);
 
             if (callback && message.args && message.args.length > 0) {
-                callback(message.args[0]);
+                callback(message.args);
                 this.responseCallbacks.delete(address);
             }
         });
@@ -177,11 +180,12 @@ export class OSCClient {
                 this.isConnected = true;
                 console.error("OSC UDP Port ready");
 
-                // Subscribe to mixer updates
-                this.sendCommand("/xremote");
+                // Subscribe to mixer updates and start health monitoring.
+                this.sendCommand("/xremote", undefined, { allowOfflineWrite: true });
+                void this.refreshMixerOnline();
 
-                // Keep connection alive with periodic /xremote messages
-                setInterval(() => this.sendCommand("/xremote"), 9000);
+                // Keep connection alive and verify mixer identity periodically.
+                setInterval(() => void this.refreshMixerOnline(), 9000);
 
                 resolve();
             } catch (error) {
@@ -190,10 +194,17 @@ export class OSCClient {
         });
     }
 
-    private sendCommand(address: string, args?: any[]): void {
+    private isWrite(args?: any[]): boolean {
+        return args !== undefined;
+    }
+
+    private sendCommand(address: string, args?: any[], options?: { allowOfflineWrite?: boolean }): void {
         if (!this.isConnected) {
             console.error("OSC not connected");
             return;
+        }
+        if (this.isWrite(args) && !this.mixerOnline && !options?.allowOfflineWrite) {
+            throw new Error("Le mixeur est deconnecté");
         }
 
         const message = new (OSC as any).Message(address, ...(args || []));
@@ -207,12 +218,44 @@ export class OSCClient {
         this.sendCommand(address, args);
     }    
 
+    private async refreshMixerOnline(): Promise<void> {
+        this.lastHealthCheckAt = new Date();
+        try {
+            this.sendCommand("/xremote", undefined, { allowOfflineWrite: true });
+
+            if (this.responseCallbacks.has("/xinfo")) {
+                return;
+            }
+
+            await this.sendAndReceiveArgs("/xinfo");
+            this.mixerOnline = true;
+            this.lastHealthError = null;
+        } catch (error) {
+            this.mixerOnline = false;
+            this.lastHealthError = error instanceof Error ? error.message : String(error);
+        }
+    }
+
     private async sendAndReceive(address: string, args?: any[]): Promise<any> {
+        return new Promise((resolve, reject) => {
+            this.responseCallbacks.set(address, (args: any[]) => resolve(args[0]));
+            this.sendCommand(address, args);
+
+            // Timeout after 1 second
+            setTimeout(() => {
+                if (this.responseCallbacks.has(address)) {
+                    this.responseCallbacks.delete(address);
+                    reject(new Error(`Timeout waiting for response from ${address}`));
+                }
+            }, 1000);
+        });
+    }
+
+    private async sendAndReceiveArgs(address: string, args?: any[]): Promise<any[]> {
         return new Promise((resolve, reject) => {
             this.responseCallbacks.set(address, resolve);
             this.sendCommand(address, args);
 
-            // Timeout after 1 second
             setTimeout(() => {
                 if (this.responseCallbacks.has(address)) {
                     this.responseCallbacks.delete(address);
@@ -847,25 +890,43 @@ export class OSCClient {
     // ========== Status ==========
 
     async getMixerStatus(): Promise<any> {
+        this.lastHealthCheckAt = new Date();
         try {
-            const info = await this.sendAndReceive("/info");
+            const xinfoArgs = await this.sendAndReceiveArgs("/xinfo");
             const status = await this.sendAndReceive("/status");
+            const [networkAddress, networkName, consoleModel, consoleVersion] = xinfoArgs;
+            this.mixerOnline = true;
+            this.lastHealthError = null;
 
             return {
                 connected: true,
+                mixerOnline: this.mixerOnline,
                 host: this.host,
                 port: this.port,
                 protocol: this.protocol,
-                info,
+                lastHealthCheckAt: this.lastHealthCheckAt.toISOString(),
+                lastHealthError: this.lastHealthError,
+                xinfo: {
+                    networkAddress,
+                    networkName,
+                    consoleModel,
+                    consoleVersion,
+                    raw: xinfoArgs,
+                },
                 status,
             };
         } catch (error) {
+            this.mixerOnline = false;
+            this.lastHealthError = error instanceof Error ? error.message : String(error);
             return {
                 connected: false,
+                mixerOnline: this.mixerOnline,
                 host: this.host,
                 port: this.port,
                 protocol: this.protocol,
-                error: error instanceof Error ? error.message : String(error),
+                lastHealthCheckAt: this.lastHealthCheckAt.toISOString(),
+                lastHealthError: this.lastHealthError,
+                error: this.lastHealthError,
             };
         }
     }

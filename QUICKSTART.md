@@ -76,6 +76,8 @@ Can you check the mixer status?
 
 If everything is working, you should see the mixer status information!
 
+The status tool uses `/xinfo` and `/status`, so a successful response should include connection state plus identity fields such as network address, mixer network name, console model, and console version when the mixer provides them.
+
 ## Example Commands
 
 Once configured, you can control your mixer using natural language:

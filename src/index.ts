@@ -1720,7 +1720,7 @@ const TOOLS: Tool[] = [
     // ========== Status ==========
     {
         name: "osc_get_mixer_status",
-        description: "Get overall mixer status and information",
+        description: "Get overall mixer status and information. Uses /xinfo for network address, mixer network name, console model, and console version, plus /status for active state.",
         inputSchema: {
             type: "object",
             properties: {},
@@ -3322,11 +3322,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 };
         }
     } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (message === "Le mixeur est deconnecté") {
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: "Le mixeur est deconnecté",
+                    },
+                ],
+                isError: true,
+            };
+        }
         return {
             content: [
                 {
                     type: "text",
-                    text: `Error executing ${name}: ${error instanceof Error ? error.message : String(error)}`,
+                    text: `Error executing ${name}: ${message}`,
                 },
             ],
             isError: true,

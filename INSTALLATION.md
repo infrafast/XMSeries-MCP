@@ -36,7 +36,7 @@ XMSeries-MCP/
 7. **osc_set_compressor** - Adjust compression
 8. **osc_send_to_bus** - Control aux sends
 9. **osc_scene_recall** - Load saved scenes
-10. **osc_get_mixer_status** - Get mixer info
+10. **osc_get_mixer_status** - Get mixer status and identity via `/xinfo` plus `/status`
 11. **osc_set_main_fader** - Control main LR fader
 12. **osc_custom_command** - Send any OSC command
 
@@ -134,7 +134,7 @@ Once configured, you can use natural language commands like:
 
 ### Dependencies:
 - **@modelcontextprotocol/sdk** - MCP server framework
-- **osc** - OSC protocol implementation
+- **osc-js** - OSC protocol implementation
 - **TypeScript** - Type-safe development
 
 ### OSC Communication:
@@ -143,7 +143,9 @@ Once configured, you can use natural language commands like:
 - Address protocol selector: `OSC_PROTOCOL` (`OSCX32M32` by default, or `OSCXR`)
 - Agent prompt file selector: `MCP_PROMPT_FILE` (optional; defaults to `PROMPT.md`)
 - Bidirectional communication with mixer
-- Automatic connection keep-alive (/xremote every 9 seconds)
+- Automatic connection keep-alive and health check (`/xremote` every 9 seconds, followed by a `/xinfo` probe)
+- Mixer status uses `/xinfo` for network address, mixer network name, console model, and console version, plus `/status` for active state
+- If the health check marks the mixer offline, write tools return `Le mixeur est deconnecté` until a later health check or status read succeeds
 
 ### Agent Prompt Exposure:
 - Prompt name: `xmseries_mixer_assistant` via MCP `prompts/list` and `prompts/get`

@@ -145,6 +145,7 @@ Full list is visible to Claude; high-level groupings:
 |---|---|
 | **Channel strips** | headamp/preamp context, gate, comp, EQ (4 bands), fader, pan, mute, name, color, icon, source, bus sends |
 | **Bus / Matrix / Aux / FX-Return / DCA / Main** | faders, mutes, names, pan where mapped, EQ where mapped, focused strip reads |
+| **Identity / status** | `osc_get_mixer_status` uses `/xinfo` for network address, mixer network name, console model, and console version, plus `/status`; periodic health checks put writes in offline mode when `/xinfo` times out |
 | **Routing** | block-level in/out/AES50/Card, User In (32 slots), User Out (48 slots), decoded labels, one-call overview |
 | **FX** | per-slot type, 16 params each, source, full-chain read |
 | **Scenes / snippets** | recall, save, name |
@@ -264,7 +265,8 @@ OSC_HOST=192.168.0.16 OSC_PORT=10024 OSC_PROTOCOL=OSCXR npm test
 - OSC transport: `osc-js` `DatagramPlugin` over UDP
 - HTTP bridge dependencies: `express` and `cors`
 - Language/tooling: TypeScript, Node 18+
-- Keep-alive: sends `/xremote` every 9 seconds after connect
+- Keep-alive and health check: sends `/xremote` every 9 seconds, then probes `/xinfo`
+- Offline write guard: if the periodic `/xinfo` health check fails, write tools return `Le mixeur est deconnecté` until a later health check or status read succeeds
 - Reply handling: stores one pending callback per OSC address and times out reads after 1 second
 
 ## Troubleshooting
