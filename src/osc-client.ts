@@ -130,11 +130,13 @@ export class OSCClient {
     private lastHealthCheckAt: Date | null = null;
     private lastHealthError: string | null = null;
     private protocol: OSCProtocol;
+    private debugOsc: boolean;
 
     constructor(host: string, port: number, protocol: OSCProtocol = "OSCX32M32") {
         this.host = host;
         this.port = port;
         this.protocol = protocol;
+        this.debugOsc = process.env.OSC_DEBUG === "1" || process.env.OSC_DEBUG?.toLowerCase() === "true";
 
         // Create OSC instance with UDP plugin
         const plugin = new (OSC as any).DatagramPlugin({
@@ -208,7 +210,16 @@ export class OSCClient {
         }
 
         const message = new (OSC as any).Message(address, ...(args || []));
+        this.logOscCommand(address, args);
         this.osc.send(message);
+    }
+
+    private logOscCommand(address: string, args?: any[]): void {
+        if (!this.debugOsc) return;
+
+        const mode = this.isWrite(args) ? "WRITE" : "READ";
+        const payload = this.isWrite(args) ? ` args=${JSON.stringify(args)}` : "";
+        console.error(`[OSC ${mode}] ${this.protocol} ${this.host}:${this.port} ${address}${payload}`);
     }
 
     /*
