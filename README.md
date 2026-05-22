@@ -111,6 +111,8 @@ For a custom prompt, set `MCP_PROMPT_FILE` in the MCP server `env` to an absolut
 
 ## How the LLM should use it
 
+For any question about the current mixer state, call the relevant read/get tool before answering. Do not reuse prior conversation context as the source of truth for live levels, mutes, routing, scene names, FX state, or other console values.
+
 For broad inspection, start with low-risk read tools:
 
 1. `osc_get_mixer_status`
