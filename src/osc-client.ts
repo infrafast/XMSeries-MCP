@@ -274,8 +274,16 @@ export class OSCClient {
     /*
     sendRaw : sendCommand est privé dans le dépôt actuel. Le client OSC existe déjà et envoie les commandes UDP vers la console.
     */
-    async sendRaw(address: string, args?: any[]): Promise<void> {
-        await this.sendCommand(address, args);
+    async sendRaw(address: string, args?: any[], options?: { allowOfflineWrite?: boolean }): Promise<void> {
+        await this.sendCommand(address, args, options);
+    }
+
+    async readRaw(address: string, args?: any[]): Promise<any> {
+        return await this.sendAndReceive(address, args);
+    }
+
+    async assertMixerOnline(): Promise<void> {
+        await this.ensureMixerOnline();
     }
 
     private async sendAndReceive(address: string, args?: any[]): Promise<any> {
@@ -787,6 +795,16 @@ export class OSCClient {
 
     async getFxReturnName(effect: number): Promise<string> {
         const path = `${this.getFxReturnPath(effect)}/config/name`;
+        return await this.sendAndReceive(path);
+    }
+
+    async setFxReturnFader(effect: number, level: number): Promise<void> {
+        const path = `${this.getFxReturnPath(effect)}/mix/fader`;
+        await this.sendCommand(path, [level]);
+    }
+
+    async getFxReturnFader(effect: number): Promise<number> {
+        const path = `${this.getFxReturnPath(effect)}/mix/fader`;
         return await this.sendAndReceive(path);
     }
 

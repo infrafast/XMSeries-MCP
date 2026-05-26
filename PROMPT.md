@@ -60,6 +60,16 @@ Never replace an unsupported OSCXR bus-specific source mute with a whole-source 
 - When the user asks to raise/lower a fader or send relatively without a precise value, read the current value first, then apply a relative normalized change to that current value: "un peu" / "a little" = 15%, "beaucoup" / "a lot" = 30%, and no modifier = 20%. Clamp the final normalized value to `0.0..1.0`.
 - Pan is `-1.0` left, `0.0` center, `1.0` right. Pan is OSCX32M32-only unless a tool explicitly succeeds in the selected protocol.
 
+## Automation
+
+- For fade-in, fade-out, ramp, progressive changes, "monte progressivement", "baisse en N secondes", or smooth mix changes over time, use `osc_automation_ramp`. Do not perform timed ramps by calling ordinary set tools repeatedly yourself.
+- For a delayed one-shot action such as "dans 10 secondes, ...", use `osc_automation_delayed_command` when a raw OSC action is appropriate.
+- For temporal sequences with waits, several commands, or several ramps, use `osc_automation_macro`.
+- Automation targets use normalized levels. For dB requests, convert the requested dB with dB-aware tools or pass `toDb` to the automation ramp.
+- A fade-out defaults to target `toDb: -120` / normalized `0.0` unless the user specifies another target. A fade-in needs a target; if no target is clear, ask.
+- Resolve names before starting automations. Examples: source only means `channel_fader`; source plus destination means `channel_send`; bus/global monitor means `bus_fader`; façade/main means `main_fader`.
+- Automation tools return immediately with a job id. Use `osc_automation_list` to inspect active/completed automations and `osc_automation_cancel` to stop one.
+
 ## Language Mapping
 
 French aliases:
@@ -81,12 +91,14 @@ French aliases:
 5. Phrases with a source and destination connector such as "X sur Y", "X dans Y", "X vers Y", "X to Y", "X in Y", or "volume de X sur Y" are send requests, not source fader requests. After resolving X and Y, use send tools only. Do not answer these by reading or changing the source channel fader (`osc_get_fader*` / `osc_set_fader*`) or main LR.
 6. For source-to-destination mute phrases such as "coupe X sur Y", "mute X dans Y", "désactive X sur Y", "remets/réactive X sur Y", use the bus/source mute tool (`osc_mute_channel_to_bus`, `osc_mute_fx_to_bus`, or `osc_mute_aux_to_bus`) when supported. Do not approximate by setting the send/fader level to `0`, `-inf`, or restoring it to unity.
 7. If only a source is named and no destination is named, assume main LR/façade only when the source clearly maps to an input channel. Do not inherit the destination from the previous request, previous tool calls, or conversation memory. Only reuse a previous destination when the user explicitly says a follow-up reference such as "idem", "pareil", "même bus", "sur le même retour", "encore", "continue", or another clear phrase that intentionally refers to the prior destination. If ambiguous, ask.
+8. Timed requests have priority over immediate set tools. If the user says "fade", "fade-in", "fade-out", "progressivement", "en N secondes", "dans N secondes", or describes a sequence, use automation tools.
 
 ## High-Value Reads
 
 - `osc_get_mixer_status({})` for connection, protocol, model/version, and health.
 - `osc_find_named_target({"name":"...", "families":[...]})` to resolve named channels, buses, FX returns, aux returns, DCAs, and matrices in one deterministic tool call.
 - `osc_get_channel_name({"channel":N})` to read the name of a known channel number.
+- `osc_automation_ramp`, `osc_automation_delayed_command`, `osc_automation_macro`, `osc_automation_list`, `osc_automation_cancel` for timed actions.
 - `osc_get_bus_strip`, `osc_get_aux_strip`, and `osc_get_fxreturn_strip` may be used one index at a time to resolve names when no narrower name-read tool exists; use their name fields only for resolution, then call the specific read/write tool for the requested operation.
 - `osc_get_channel_strip`, `osc_get_bus_strip`, `osc_get_aux_strip`, `osc_get_fxreturn_strip`, `osc_get_main_strip` for focused diagnosis after the target index is known; do not use broad strip tools to replace a specific send/fader/mute read.
 - `osc_get_all_effects({})` before reasoning about FX.

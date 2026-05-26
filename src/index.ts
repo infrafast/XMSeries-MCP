@@ -16,7 +16,8 @@ import {
     ReadResourceRequestSchema,
     Tool,
 } from "@modelcontextprotocol/sdk/types.js";
-import { OSCClient, OSCProtocol } from "./osc-client.js";
+import { AutomationAction, AutomationCurve, AutomationEngine } from "./automation.js";
+import { coerceOscArg, OSCClient, OSCProtocol } from "./osc-client.js";
 import { dbToFaderLevel, faderLevelToDb, formatDb } from "./level-table.js";
 
 const execAsync = promisify(exec);
@@ -40,6 +41,7 @@ async function readAgentPrompt(): Promise<string> {
 
 // Initialize OSC client
 const osc = new OSCClient(OSC_HOST, OSC_PORT, OSC_PROTOCOL);
+const automation = new AutomationEngine();
 
 function levelDbPayload(result: ReturnType<typeof dbToFaderLevel>): string {
     return JSON.stringify({
@@ -174,6 +176,259 @@ async function findNamedTargets(
         .map(({ normalizedName: _normalizedName, ...candidate }) => ({ ...candidate, matchType: "contains" as const }));
 }
 
+type AutomationTargetKind =
+    | "channel_fader"
+    | "channel_send"
+    | "bus_fader"
+    | "main_fader"
+    | "fx_return_fader"
+    | "fx_send"
+    | "aux_fader"
+    | "aux_send"
+    | "matrix_fader"
+    | "raw";
+
+interface AutomationTargetSpec {
+    kind: AutomationTargetKind;
+    channel?: number;
+    bus?: number;
+    effect?: number;
+    aux?: number;
+    matrix?: number;
+    address?: string;
+    readAddress?: string;
+    writeAddress?: string;
+    osctype?: "int" | "float" | "string" | "bool";
+}
+
+interface AutomationTargetAdapter {
+    label: string;
+    read: () => Promise<number>;
+    write: (value: number) => Promise<void>;
+}
+
+interface AutomationRawCommand {
+    address: string;
+    args?: any[];
+    osctype?: "int" | "float" | "string" | "bool";
+}
+
+interface AutomationRampInput {
+    target: AutomationTargetSpec;
+    toLevel?: number;
+    toDb?: number | null;
+    fromLevel?: number;
+    durationSeconds: number;
+    stepMs?: number;
+    curve?: AutomationCurve;
+    label?: string;
+}
+
+interface AutomationDelayedCommandInput {
+    delaySeconds: number;
+    command: AutomationRawCommand;
+    label?: string;
+}
+
+type AutomationMacroStepInput =
+    | ({ type: "wait"; durationSeconds: number; label?: string })
+    | ({ type: "command"; delaySeconds?: number; command: AutomationRawCommand; label?: string })
+    | ({ type: "ramp" } & AutomationRampInput);
+
+function clampLevel(value: number): number {
+    return Math.min(1, Math.max(0, value));
+}
+
+function targetAdapter(target: AutomationTargetSpec): AutomationTargetAdapter {
+    switch (target.kind) {
+        case "channel_fader": {
+            const channel = requireNumber(target.channel, "channel");
+            const address = channelPath(channel, "/mix/fader");
+            return {
+                label: `channel ${channel} fader`,
+                read: () => osc.getFader(channel),
+                write: (level) => osc.sendRaw(address, [level], { allowOfflineWrite: true }),
+            };
+        }
+        case "channel_send": {
+            const channel = requireNumber(target.channel, "channel");
+            const bus = requireNumber(target.bus, "bus");
+            const address = channelPath(channel, `/mix/${busSendSegment(bus)}/level`);
+            return {
+                label: `channel ${channel} send to bus ${bus}`,
+                read: () => osc.getSendToBus(channel, bus),
+                write: (level) => osc.sendRaw(address, [level], { allowOfflineWrite: true }),
+            };
+        }
+        case "bus_fader": {
+            const bus = requireNumber(target.bus, "bus");
+            const address = `${busPath(bus)}/mix/fader`;
+            return {
+                label: `bus ${bus} fader`,
+                read: () => osc.getBusFader(bus),
+                write: (level) => osc.sendRaw(address, [level], { allowOfflineWrite: true }),
+            };
+        }
+        case "main_fader":
+            return {
+                label: "main LR fader",
+                read: () => osc.getMainFader(),
+                write: (level) => osc.sendRaw(`${mainStereoPath()}/mix/fader`, [level], { allowOfflineWrite: true }),
+            };
+        case "fx_return_fader": {
+            const effect = requireNumber(target.effect, "effect");
+            const address = `${fxReturnPath(effect)}/mix/fader`;
+            return {
+                label: `FX return ${effect} fader`,
+                read: () => osc.getFxReturnFader(effect),
+                write: (level) => osc.sendRaw(address, [level], { allowOfflineWrite: true }),
+            };
+        }
+        case "fx_send": {
+            const effect = requireNumber(target.effect, "effect");
+            const bus = requireNumber(target.bus, "bus");
+            const address = `${fxReturnPath(effect)}/mix/${busSendSegment(bus)}/level`;
+            return {
+                label: `FX return ${effect} send to bus ${bus}`,
+                read: () => osc.getFxToBus(effect, bus),
+                write: (level) => osc.sendRaw(address, [level], { allowOfflineWrite: true }),
+            };
+        }
+        case "aux_fader": {
+            const aux = requireNumber(target.aux, "aux");
+            const address = `${auxPath(aux)}/mix/fader`;
+            return {
+                label: `aux ${aux} fader`,
+                read: () => osc.getAuxFader(aux),
+                write: (level) => osc.sendRaw(address, [level], { allowOfflineWrite: true }),
+            };
+        }
+        case "aux_send": {
+            const aux = requireNumber(target.aux, "aux");
+            const bus = requireNumber(target.bus, "bus");
+            const address = `${auxBusPath(aux, bus)}/level`;
+            return {
+                label: `aux ${aux} send to bus ${bus}`,
+                read: () => osc.getAuxToBus(aux, bus),
+                write: (level) => osc.sendRaw(address, [level], { allowOfflineWrite: true }),
+            };
+        }
+        case "matrix_fader": {
+            const matrix = requireNumber(target.matrix, "matrix");
+            const address = `/mtx/${matrix.toString().padStart(2, "0")}/mix/fader`;
+            return {
+                label: `matrix ${matrix} fader`,
+                read: () => osc.getMatrixFader(matrix),
+                write: (level) => osc.sendRaw(address, [level], { allowOfflineWrite: true }),
+            };
+        }
+        case "raw": {
+            const readAddress = target.readAddress || target.address;
+            const writeAddress = target.writeAddress || target.address;
+            if (!readAddress || !writeAddress) {
+                throw new Error("Raw automation targets require address or readAddress/writeAddress.");
+            }
+            return {
+                label: `raw OSC ${writeAddress}`,
+                read: async () => Number(await osc.readRaw(readAddress)),
+                write: (level) => osc.sendRaw(writeAddress, [coerceOscArg(level, target.osctype || "float")], { allowOfflineWrite: true }),
+            };
+        }
+    }
+}
+
+function requireNumber(value: number | undefined, name: string): number {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+        throw new Error(`Automation target missing numeric ${name}.`);
+    }
+    return value;
+}
+
+function mainStereoPath(): string {
+    return OSC_PROTOCOL === "OSCXR" ? "/lr" : "/main/st";
+}
+
+function channelPath(channel: number, suffix = ""): string {
+    return `/ch/${channel.toString().padStart(2, "0")}${suffix}`;
+}
+
+function busPath(bus: number): string {
+    return OSC_PROTOCOL === "OSCXR" ? `/bus/${bus}` : `/bus/${bus.toString().padStart(2, "0")}`;
+}
+
+function fxReturnPath(effect: number): string {
+    return OSC_PROTOCOL === "OSCXR" ? `/rtn/${effect}` : `/fxrtn/${effect.toString().padStart(2, "0")}`;
+}
+
+function auxPath(aux: number): string {
+    if (OSC_PROTOCOL === "OSCXR") {
+        if (aux !== 1) throw new Error("OSCXR exposes the aux return as /rtn/aux; use aux 1.");
+        return "/rtn/aux";
+    }
+    return `/auxin/${aux.toString().padStart(2, "0")}`;
+}
+
+function auxBusPath(aux: number, bus: number): string {
+    return `${auxPath(aux)}/mix/${busSendSegment(bus)}`;
+}
+
+function busSendSegment(bus: number): string {
+    return bus.toString().padStart(2, "0");
+}
+
+function rawCommandAction(input: AutomationDelayedCommandInput): AutomationAction {
+    return {
+        type: "delay",
+        delaySeconds: input.delaySeconds,
+        description: input.label || `delayed OSC ${input.command.address}`,
+        run: async () => {
+            const args = input.command.args?.map((arg) => coerceOscArg(arg, input.command.osctype));
+            await osc.assertMixerOnline();
+            await osc.sendRaw(input.command.address, args, { allowOfflineWrite: true });
+        },
+    };
+}
+
+function rampAction(input: AutomationRampInput): AutomationAction {
+    const adapter = targetAdapter(input.target);
+    const to = input.toLevel ?? (input.toDb === null ? 0 : input.toDb !== undefined ? dbToFaderLevel(input.toDb).level : undefined);
+    if (to === undefined) {
+        throw new Error("Ramp automation requires toLevel or toDb.");
+    }
+
+    return {
+        type: "ramp",
+        description: input.label || `ramp ${adapter.label}`,
+        from: input.fromLevel,
+        to: clampLevel(to),
+        durationSeconds: input.durationSeconds,
+        stepMs: input.stepMs,
+        curve: input.curve,
+        read: adapter.read,
+        write: (level) => adapter.write(clampLevel(level)),
+    };
+}
+
+function macroActions(steps: AutomationMacroStepInput[]): AutomationAction[] {
+    return steps.map((step) => {
+        if (step.type === "wait") {
+            return {
+                type: "wait",
+                durationSeconds: step.durationSeconds,
+                description: step.label || `wait ${step.durationSeconds}s`,
+            };
+        }
+        if (step.type === "command") {
+            return rawCommandAction({
+                delaySeconds: step.delaySeconds ?? 0,
+                command: step.command,
+                label: step.label,
+            });
+        }
+        return rampAction(step);
+    });
+}
+
 // Emulator process management
 let emulatorProcess: ReturnType<typeof spawn> | null = null;
 let emulatorPid: number | null = null;
@@ -209,6 +464,115 @@ const TOOLS: Tool[] = [
                 },
             },
             required: ["name"],
+        },
+    },
+    {
+        name: "osc_automation_ramp",
+        description: "Start a background automation that ramps one numeric OSC mixer target over time. Use this for fade-in, fade-out, progressive level changes, and smooth mix changes. Returns immediately with an automation id.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                target: {
+                    type: "object",
+                    description: "Target to automate. Use channel_fader for source on main LR, channel_send for source to bus, bus_fader, main_fader, fx_return_fader, fx_send, aux_fader, aux_send, matrix_fader, or raw.",
+                    properties: {
+                        kind: { type: "string", enum: ["channel_fader", "channel_send", "bus_fader", "main_fader", "fx_return_fader", "fx_send", "aux_fader", "aux_send", "matrix_fader", "raw"] },
+                        channel: { type: "number" },
+                        bus: { type: "number" },
+                        effect: { type: "number" },
+                        aux: { type: "number" },
+                        matrix: { type: "number" },
+                        address: { type: "string", description: "Raw OSC address used for both read and write when kind=raw" },
+                        readAddress: { type: "string", description: "Raw OSC read address when kind=raw" },
+                        writeAddress: { type: "string", description: "Raw OSC write address when kind=raw" },
+                        osctype: { type: "string", enum: ["int", "float", "string", "bool"] },
+                    },
+                    required: ["kind"],
+                },
+                toLevel: { type: "number", description: "Target normalized level 0.0 to 1.0", minimum: 0, maximum: 1 },
+                toDb: { type: "number", description: "Target dB value; use this for fade-out/fade-in in dB. Values below -87 map to -inf/0.0.", minimum: -120, maximum: 20 },
+                fromLevel: { type: "number", description: "Optional start normalized level; omit to read current live value first", minimum: 0, maximum: 1 },
+                durationSeconds: { type: "number", minimum: 0 },
+                stepMs: { type: "number", description: "Automation step period in milliseconds; default 100", minimum: 20 },
+                curve: { type: "string", enum: ["linear", "ease_in", "ease_out", "ease_in_out"] },
+                label: { type: "string" },
+            },
+            required: ["target", "durationSeconds"],
+        },
+    },
+    {
+        name: "osc_automation_delayed_command",
+        description: "Schedule a raw OSC command to run later. Use for delayed actions that are not ramps. The command is sent once after delaySeconds.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                delaySeconds: { type: "number", minimum: 0 },
+                command: {
+                    type: "object",
+                    properties: {
+                        address: { type: "string" },
+                        args: { type: "array", items: {} },
+                        osctype: { type: "string", enum: ["int", "float", "string", "bool"] },
+                    },
+                    required: ["address"],
+                },
+                label: { type: "string" },
+            },
+            required: ["delaySeconds", "command"],
+        },
+    },
+    {
+        name: "osc_automation_macro",
+        description: "Start a background temporal macro composed of waits, raw OSC commands, and ramps. Use this for timed sequences and progressive multi-parameter mix changes.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                label: { type: "string" },
+                steps: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: {
+                            type: { type: "string", enum: ["wait", "command", "ramp"] },
+                            label: { type: "string" },
+                            durationSeconds: { type: "number", minimum: 0 },
+                            delaySeconds: { type: "number", minimum: 0 },
+                            command: {
+                                type: "object",
+                                properties: {
+                                    address: { type: "string" },
+                                    args: { type: "array", items: {} },
+                                    osctype: { type: "string", enum: ["int", "float", "string", "bool"] },
+                                },
+                            },
+                            target: { type: "object" },
+                            toLevel: { type: "number", minimum: 0, maximum: 1 },
+                            toDb: { type: "number", minimum: -120, maximum: 20 },
+                            fromLevel: { type: "number", minimum: 0, maximum: 1 },
+                            stepMs: { type: "number", minimum: 20 },
+                            curve: { type: "string", enum: ["linear", "ease_in", "ease_out", "ease_in_out"] },
+                        },
+                        required: ["type"],
+                    },
+                },
+            },
+            required: ["steps"],
+        },
+    },
+    {
+        name: "osc_automation_list",
+        description: "List automation jobs and their status.",
+        inputSchema: { type: "object", properties: {} },
+    },
+    {
+        name: "osc_automation_cancel",
+        description: "Cancel a running automation job by id.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                id: { type: "string" },
+            },
+            required: ["id"],
         },
     },
     // ========== Level / dB Conversion ==========
@@ -2119,6 +2483,49 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                             ),
                         },
                     ],
+                };
+            }
+
+            case "osc_automation_ramp": {
+                const input = args as unknown as AutomationRampInput;
+                await osc.assertMixerOnline();
+                const action = rampAction(input);
+                const job = automation.start(input.label || action.description || "ramp automation", [action]);
+                return {
+                    content: [{ type: "text", text: JSON.stringify(job, null, 2) }],
+                };
+            }
+
+            case "osc_automation_delayed_command": {
+                const input = args as unknown as AutomationDelayedCommandInput;
+                const action = rawCommandAction(input);
+                const job = automation.start(input.label || action.description || "delayed OSC command", [action]);
+                return {
+                    content: [{ type: "text", text: JSON.stringify(job, null, 2) }],
+                };
+            }
+
+            case "osc_automation_macro": {
+                const input = args as { label?: string; steps: AutomationMacroStepInput[] };
+                await osc.assertMixerOnline();
+                const actions = macroActions(input.steps || []);
+                const job = automation.start(input.label || "temporal macro", actions);
+                return {
+                    content: [{ type: "text", text: JSON.stringify(job, null, 2) }],
+                };
+            }
+
+            case "osc_automation_list": {
+                return {
+                    content: [{ type: "text", text: JSON.stringify(automation.list(), null, 2) }],
+                };
+            }
+
+            case "osc_automation_cancel": {
+                const { id } = args as { id: string };
+                const job = automation.cancel(id);
+                return {
+                    content: [{ type: "text", text: job ? JSON.stringify(job, null, 2) : `Automation job not found: ${id}` }],
                 };
             }
 
