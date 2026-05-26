@@ -68,6 +68,9 @@ Never replace an unsupported OSCXR bus-specific source mute with a whole-source 
 - Automation targets use normalized levels. For dB requests, convert the requested dB with dB-aware tools or pass `toDb` to the automation ramp.
 - A fade-out defaults to target `toDb: -120` / normalized `0.0` unless the user specifies another target. A fade-in needs a target; if no target is clear, ask.
 - Resolve names before starting automations. Examples: source only means `channel_fader`; source plus destination means `channel_send`; bus/global monitor means `bus_fader`; façade/main means `main_fader`.
+- If an automation request contains a source and destination connector such as "X sur Y", "X dans Y", "X vers Y", "X to Y", or "X in Y", the automation target is a send target (`channel_send`, `fx_send`, or `aux_send`). Never use `channel_fader`, `fx_return_fader`, or `aux_fader` for a source-to-destination fade/ramp.
+- For compound commands joined by "puis", "ensuite", "après", "and then", or several clauses in the same utterance, keep the resolved source/destination attached to every action until the user explicitly names another destination. Prefer `osc_automation_macro` for sequences that combine immediate sets, waits, delayed actions, and ramps.
+- Numeric levels in source-to-destination automation are send levels. Example: "mets snare à -90 dB sur Claude puis fais un fade-in de snare sur Claude à -5 dB en 20 secondes" must set/ramp the send from snare to Claude, not the snare channel fader.
 - Automation tools return immediately with a job id. Use `osc_automation_list` to inspect active/completed automations and `osc_automation_cancel` to stop one.
 
 ## Language Mapping
@@ -90,8 +93,10 @@ French aliases:
    - aux return to bus: `osc_get_aux_to_bus`, `osc_get_aux_to_bus_db`, `osc_send_aux_to_bus`, `osc_send_aux_to_bus_db`, `osc_mute_aux_to_bus`
 5. Phrases with a source and destination connector such as "X sur Y", "X dans Y", "X vers Y", "X to Y", "X in Y", or "volume de X sur Y" are send requests, not source fader requests. After resolving X and Y, use send tools only. Do not answer these by reading or changing the source channel fader (`osc_get_fader*` / `osc_set_fader*`) or main LR.
 6. For source-to-destination mute phrases such as "coupe X sur Y", "mute X dans Y", "désactive X sur Y", "remets/réactive X sur Y", use the bus/source mute tool (`osc_mute_channel_to_bus`, `osc_mute_fx_to_bus`, or `osc_mute_aux_to_bus`) when supported. Do not approximate by setting the send/fader level to `0`, `-inf`, or restoring it to unity.
-7. If only a source is named and no destination is named, assume main LR/façade only when the source clearly maps to an input channel. Do not inherit the destination from the previous request, previous tool calls, or conversation memory. Only reuse a previous destination when the user explicitly says a follow-up reference such as "idem", "pareil", "même bus", "sur le même retour", "encore", "continue", or another clear phrase that intentionally refers to the prior destination. If ambiguous, ask.
-8. Timed requests have priority over immediate set tools. If the user says "fade", "fade-in", "fade-out", "progressivement", "en N secondes", "dans N secondes", or describes a sequence, use automation tools.
+7. In compound source-to-destination commands, the destination applies to all level, mute, delayed, and timed actions in the same utterance until another destination is explicitly named. Do not split the command by applying one clause to the source fader and another clause to the send.
+8. If a source-to-destination command specifies a numeric level such as `-90 dB`, `0 dB`, `50%`, or `0.5`, treat it as a send level. Do not reinterpret `-90 dB` as a mute unless the user uses a mute verb such as "mute", "coupe", "désactive", or "éteins".
+9. If only a source is named and no destination is named, assume main LR/façade only when the source clearly maps to an input channel. Do not inherit the destination from the previous request, previous tool calls, or conversation memory. Only reuse a previous destination when the user explicitly says a follow-up reference such as "idem", "pareil", "même bus", "sur le même retour", "encore", "continue", or another clear phrase that intentionally refers to the prior destination. If ambiguous, ask.
+10. Timed requests have priority over immediate set tools. If the user says "fade", "fade-in", "fade-out", "progressivement", "en N secondes", "dans N secondes", or describes a sequence, use automation tools.
 
 ## High-Value Reads
 

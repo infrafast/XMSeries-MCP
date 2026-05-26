@@ -60,6 +60,8 @@ Once configured, you can use natural language commands in Claude Desktop:
 - "Mute channel 3"
 - "What's the current level of channel 5?"
 - "Recall scene 10"
+- "Fade out channel 1 in 10 seconds"
+- "In 5 seconds, mute the main LR"
 
 ### System Prompt (Optional)
 
@@ -184,6 +186,7 @@ Most MCP-compatible agents use a similar configuration format. The basic structu
 - **Built project**: Make sure you've run `npm run build` before using the server
 - **Environment variables**: Set `OSC_HOST` and `OSC_PORT` to match your mixer. Optionally set `OSC_PROTOCOL` to `OSCX32M32` or `OSCXR`; the default is `OSCX32M32`. Optionally set `MCP_PROMPT_FILE` to expose a custom prompt file to the agent.
 - **OSCXR coverage**: `OSCXR` uses the XAir/XR paths currently mapped in `PROTOCOL.md`: channel fader/mute/name, EQ gain/on, channel sends to bus level, bus fader/mute/name, main LR, FX return, aux return, DCA, headamp gain, and scenes. Source-to-bus level operations are mapped where equivalent. Bus-specific source mutes that would become global XR mutes return `Unsupported for OSCXR: ...` instead of silently muting the whole source.
+- **Timed automation**: Fade/ramp, delayed action, and temporal macro requests use `osc_automation_*` tools. The server handles timing in the background and returns an automation job id immediately.
 - **After code changes**: Run `npm run build` before restarting the MCP client, because stdio configurations usually launch `dist/index.js`.
 - **Smoke tests**: `npm test` runs protocol-aware checks in default `OSCX32M32`; set `OSC_PROTOCOL=OSCXR` to run the XR-compatible smoke path.
 

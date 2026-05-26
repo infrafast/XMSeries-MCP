@@ -124,6 +124,12 @@ Once configured, you can use natural language commands like:
 **Aux Sends:**
 - "Send channel 1 to bus 3 at 50%"
 
+**Timed Automation:**
+- "Fade out channel 1 in 10 seconds"
+- "Fade Kick on Laurent down over 3 seconds"
+- "In 5 seconds, mute the main LR"
+- "Run a macro: lower the music, wait 2 seconds, then mute FX return 1"
+
 **Scenes:**
 - "Recall scene 5"
 
