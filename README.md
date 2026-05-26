@@ -6,7 +6,7 @@ This is a rewrite/fork of [anteriovieira/osc-mcp-server](https://github.com/ante
 
 ## What's in here
 
-93 tools organized into groups. Highlights beyond the original small MCP server:
+MCP tools organized into groups. Highlights beyond the original small MCP server:
 
 - **Deep channel strips** — headamp/preamp context, gate, compressor, EQ (all 4 bands with freq/Q/type/on in X32 mode), fader, pan, name, color, icon, sends, and mute
 - **Broad bus / matrix / aux / FX-return / DCA / main coverage** — faders, mutes, names, pan where mapped, EQ where mapped, and focused strip reads
@@ -15,6 +15,7 @@ This is a rewrite/fork of [anteriovieira/osc-mcp-server](https://github.com/ante
 - **Routing overview in one call** — `osc_get_routing_overview` returns the full topology (block-level + per-slot + AES50 + Card) with human labels
 - **Bulk section reads** — `osc_get_channel_strip`, `osc_get_bus_strip`, `osc_get_console_overview`, etc., so Claude can grab a coherent snapshot in one shot instead of 40 round-trips
 - **dB-aware fader helpers** — `osc_db_to_fader_level`, `osc_fader_level_to_db`, and `*_fader_db` tools use the X32/M32 161-point pseudo-log Level table (`0.7500 = 0 dB`, `1.0000 = +10 dB`)
+- **Timed automation** — background ramps/fades, delayed OSC actions, and temporal macros through `osc_automation_*` tools, so agents do not perform timing-sensitive work with repeated LLM tool calls
 - **Typed custom commands** — `osc_custom_command` accepts an `osctype` override (`int`/`float`/`string`/`bool`) because X32 silently drops type mismatches on strict addresses like `/config/color`
 
 ## Primary use cases
@@ -137,6 +138,9 @@ Once wired up to LLM, natural language works:
 "Mute all channels except kick, snare, and overheads."
 "Save the current state as scene 12 named 'Soundcheck'."
 "What's plugged into the console right now?"
+"Fade out Voc-Claude in 10 seconds."
+"In 5 seconds, mute the main LR."
+"Fade Kick on Laurent down a little over 3 seconds."
 ```
 
 ## Tool groups
@@ -154,6 +158,7 @@ Full list is visible to Claude; high-level groupings:
 | **Linking** | per-pair channel and bus links |
 | **Bulk reads** | `channel_strip`, `bus_strip`, `aux_strip`, `matrix_strip`, `fx_return_strip`, `main_strip`, `dca`, `headamp`, `console_overview`, `routing_overview`, `full_fx_chain`, `user_routing` |
 | **Fader dB conversion** | `osc_db_to_fader_level`, `osc_fader_level_to_db`, channel/bus/aux/main/matrix `*_fader_db` setters/getters |
+| **Automation** | `osc_automation_ramp`, `osc_automation_delayed_command`, `osc_automation_macro`, `osc_automation_list`, `osc_automation_cancel` for background fades, delayed actions, and timed sequences |
 | **Raw escape hatch** | `osc_custom_command` with typed args and read-back |
 
 ## Fader Levels in dB
@@ -169,6 +174,51 @@ The raw OSC fader values are normalized floats from `0.0` to `1.0`. For user-fac
 - `osc_set_matrix_fader_db`, `osc_get_matrix_fader_db` for X32/M32 matrices
 
 The conversion snaps to the nearest point in the 161-entry table. Values below `-87 dB` map to `-inf`/`0.0`; values above `+10 dB` clip to `+10 dB`/`1.0`.
+
+## Timed Automation
+
+The MCP server includes a small background automation engine for timing-sensitive work. The LLM should start one automation job and let the server handle the clock, rather than trying to perform fades with many repeated tool calls.
+
+Available tools:
+
+- `osc_automation_ramp` starts a fade/ramp on one numeric target and returns immediately with a job id.
+- `osc_automation_delayed_command` sends one raw OSC command after a delay.
+- `osc_automation_macro` runs a sequence of waits, raw commands, and ramps.
+- `osc_automation_list` lists running, completed, failed, and cancelled jobs.
+- `osc_automation_cancel` cancels a running job by id.
+
+Supported ramp targets include channel faders, channel sends to bus, bus faders, main LR, FX-return faders, FX sends to bus, aux faders, aux sends to bus, matrix faders, and raw numeric OSC addresses.
+
+Examples:
+
+```json
+{
+  "target": { "kind": "channel_fader", "channel": 1 },
+  "toDb": -120,
+  "durationSeconds": 10,
+  "curve": "ease_out",
+  "label": "Fade out channel 1"
+}
+```
+
+```json
+{
+  "target": { "kind": "channel_send", "channel": 6, "bus": 1 },
+  "toDb": -6,
+  "durationSeconds": 3,
+  "label": "Fade Kick on Laurent"
+}
+```
+
+```json
+{
+  "delaySeconds": 5,
+  "command": { "address": "/main/st/mix/on", "args": [0], "osctype": "int" },
+  "label": "Mute main LR later"
+}
+```
+
+For write-heavy ramps, the server performs the mixer connectivity check once at automation start, then sends the timed OSC writes without probing `/xinfo` at every step. This keeps fades smooth and avoids unnecessary network load.
 
 ## Custom OSC commands
 
@@ -255,6 +305,8 @@ OSC_HOST=192.168.0.16 OSC_PORT=10024 OSC_PROTOCOL=OSCXR npm test
 
 `src/index.ts` — the MCP tool surface. Every tool has a `name`, `description`, `inputSchema`, and a handler case.
 
+`src/automation.ts` — the background automation engine used by `osc_automation_*` tools for ramps, delayed actions, and temporal macros.
+
 `src/openai-remote.ts` — optional minimal Streamable HTTP MCP server exposing a very small remote-control tool subset (`x32_get_channel_name`, main mute, main fader get/set). This is separate from the full stdio MCP server in `src/index.ts`.
 
 `PROTOCOL.md` — logical path mapping notes for X32/M32 and XAir/XR-compatible addresses.
@@ -267,8 +319,8 @@ OSC_HOST=192.168.0.16 OSC_PORT=10024 OSC_PROTOCOL=OSCXR npm test
 - OSC transport: `osc-js` `DatagramPlugin` over UDP
 - HTTP bridge dependencies: `express` and `cors`
 - Language/tooling: TypeScript, Node 18+
-- Keep-alive and health check: sends `/xremote` every 9 seconds, then probes `/xinfo`
-- Offline write guard: if the periodic `/xinfo` health check fails, write tools return `Le mixeur est deconnecté` until a later health check or status read succeeds
+- Health check: write tools probe `/xinfo` on demand before sending writes; automation jobs probe once when the job starts
+- Offline write guard: if the on-demand `/xinfo` health check fails, write tools return `Le mixeur est deconnecté`
 - Reply handling: stores one pending callback per OSC address and times out reads after 1 second
 
 ## Troubleshooting
