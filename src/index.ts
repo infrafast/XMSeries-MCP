@@ -1738,7 +1738,7 @@ const TOOLS: Tool[] = [
     // ========== Status ==========
     {
         name: "osc_get_mixer_status",
-        description: "Get overall mixer status and information. Uses /xinfo for network address, mixer network name, console model, and console version, plus /status for active state.",
+        description: "Get the currently connected mixer identity and connection state. Always performs a fresh live /xinfo query; never answer mixer connection/model/version from cached state, prior results, or assumptions.",
         inputSchema: {
             type: "object",
             properties: {},
