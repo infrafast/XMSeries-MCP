@@ -724,6 +724,11 @@ export class OSCClient {
         await this.sendCommand(path, [name]);
     }
 
+    async getBusName(bus: number): Promise<string> {
+        const path = `${this.getBusPath(bus)}/config/name`;
+        return await this.sendAndReceive(path);
+    }
+
     // ========== Aux Controls ==========
 
     async setAuxFader(aux: number, level: number): Promise<void> {
@@ -733,6 +738,11 @@ export class OSCClient {
 
     async getAuxFader(aux: number): Promise<number> {
         const path = `${this.getAuxPath(aux)}/mix/fader`;
+        return await this.sendAndReceive(path);
+    }
+
+    async getAuxName(aux: number): Promise<string> {
+        const path = `${this.getAuxPath(aux)}/config/name`;
         return await this.sendAndReceive(path);
     }
 
@@ -772,6 +782,11 @@ export class OSCClient {
 
     async getFxToBus(effect: number, bus: number): Promise<number> {
         const path = `${this.getFxReturnPath(effect)}/mix/${this.getBusSendSegment(bus)}/level`;
+        return await this.sendAndReceive(path);
+    }
+
+    async getFxReturnName(effect: number): Promise<string> {
+        const path = `${this.getFxReturnPath(effect)}/config/name`;
         return await this.sendAndReceive(path);
     }
 
@@ -839,6 +854,12 @@ export class OSCClient {
     async getMatrixFader(matrix: number): Promise<number> {
         this.requireX32("Matrix controls");
         const path = `/mtx/${matrix.toString().padStart(2, "0")}/mix/fader`;
+        return await this.sendAndReceive(path);
+    }
+
+    async getMatrixName(matrix: number): Promise<string> {
+        this.requireX32("Matrix name");
+        const path = `/mtx/${matrix.toString().padStart(2, "0")}/config/name`;
         return await this.sendAndReceive(path);
     }
 
@@ -1170,6 +1191,11 @@ export class OSCClient {
         result.color = await this.safeRead(`${path}/config/color`);
 
         return result;
+    }
+
+    async getDcaName(dca: number): Promise<string> {
+        const path = `/dca/${dca}/config/name`;
+        return await this.sendAndReceive(path);
     }
 
     async getMainStrip(): Promise<any> {

@@ -86,6 +86,94 @@ function appendOscTrace(toolResult: any, commands: string[]): any {
     };
 }
 
+type NamedTargetFamily = "channel" | "bus" | "fxreturn" | "aux" | "dca" | "matrix";
+type NamedTargetMatchType = "exact" | "contains";
+
+interface NamedTargetMatch {
+    family: NamedTargetFamily;
+    index: number;
+    name: string;
+    matchType: NamedTargetMatchType;
+}
+
+const NAMED_TARGET_FAMILIES: NamedTargetFamily[] = ["channel", "bus", "fxreturn", "aux", "dca", "matrix"];
+
+function normalizeMixerName(value: string): string {
+    return value
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim();
+}
+
+async function readNamedTarget(family: NamedTargetFamily, index: number): Promise<string | null> {
+    try {
+        switch (family) {
+            case "channel":
+                return await osc.getChannelName(index);
+            case "bus":
+                return await osc.getBusName(index);
+            case "fxreturn":
+                return await osc.getFxReturnName(index);
+            case "aux":
+                return await osc.getAuxName(index);
+            case "dca":
+                return await osc.getDcaName(index);
+            case "matrix":
+                return await osc.getMatrixName(index);
+        }
+    } catch {
+        return null;
+    }
+}
+
+function namedTargetRange(family: NamedTargetFamily): number[] {
+    const maxByFamily: Record<NamedTargetFamily, number> = {
+        channel: 32,
+        bus: 16,
+        fxreturn: 8,
+        aux: OSC_PROTOCOL === "OSCXR" ? 1 : 8,
+        dca: 8,
+        matrix: OSC_PROTOCOL === "OSCXR" ? 0 : 6,
+    };
+    return Array.from({ length: maxByFamily[family] }, (_, i) => i + 1);
+}
+
+async function findNamedTargets(
+    query: string,
+    families: NamedTargetFamily[] = NAMED_TARGET_FAMILIES
+): Promise<NamedTargetMatch[]> {
+    const normalizedQuery = normalizeMixerName(query);
+    if (!normalizedQuery) return [];
+
+    const candidates: Array<Omit<NamedTargetMatch, "matchType"> & { normalizedName: string }> = [];
+
+    for (const family of families) {
+        for (const index of namedTargetRange(family)) {
+            const name = await readNamedTarget(family, index);
+            if (!name) continue;
+
+            candidates.push({
+                family,
+                index,
+                name,
+                normalizedName: normalizeMixerName(name),
+            });
+        }
+    }
+
+    const exactMatches = candidates
+        .filter((candidate) => candidate.normalizedName === normalizedQuery)
+        .map(({ normalizedName: _normalizedName, ...candidate }) => ({ ...candidate, matchType: "exact" as const }));
+
+    if (exactMatches.length > 0) return exactMatches;
+
+    return candidates
+        .filter((candidate) => candidate.normalizedName.includes(normalizedQuery))
+        .map(({ normalizedName: _normalizedName, ...candidate }) => ({ ...candidate, matchType: "contains" as const }));
+}
+
 // Emulator process management
 let emulatorProcess: ReturnType<typeof spawn> | null = null;
 let emulatorPid: number | null = null;
@@ -99,6 +187,28 @@ const TOOLS: Tool[] = [
         inputSchema: {
             type: "object",
             properties: {},
+        },
+    },
+    {
+        name: "osc_find_named_target",
+        description: "Resolve a user-facing mixer label to concrete indexes in one deterministic scan. Use this before any operation that names a channel, bus/monitor, FX return, aux return, DCA, or matrix by label. Returns exact matches first; if none exist, returns contains matches. If zero or multiple matches are returned, ask the user to clarify instead of guessing.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                name: {
+                    type: "string",
+                    description: "Name or label to resolve, such as 'snare', 'Laurent', 'reverb', or 'choeurs'. Matching is case/accent insensitive.",
+                },
+                families: {
+                    type: "array",
+                    description: "Object families to search. Narrow this whenever the phrase implies a source or destination, for example ['channel'] for an input source or ['bus'] for a monitor destination.",
+                    items: {
+                        type: "string",
+                        enum: ["channel", "bus", "fxreturn", "aux", "dca", "matrix"],
+                    },
+                },
+            },
+            required: ["name"],
         },
     },
     // ========== Level / dB Conversion ==========
@@ -1904,6 +2014,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                         {
                             type: "text",
                             text: prompt,
+                        },
+                    ],
+                };
+            }
+
+            case "osc_find_named_target": {
+                const { name: targetName, families } = args as { name: string; families?: NamedTargetFamily[] };
+                const selectedFamilies =
+                    families && families.length > 0
+                        ? families.filter((family): family is NamedTargetFamily =>
+                              NAMED_TARGET_FAMILIES.includes(family as NamedTargetFamily)
+                          )
+                        : NAMED_TARGET_FAMILIES;
+                const matches = await findNamedTargets(targetName, selectedFamilies);
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: JSON.stringify(
+                                {
+                                    query: targetName,
+                                    searchedFamilies: selectedFamilies,
+                                    matches,
+                                    unique: matches.length === 1,
+                                },
+                                null,
+                                2
+                            ),
                         },
                     ],
                 };
