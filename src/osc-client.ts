@@ -435,6 +435,11 @@ export class OSCClient {
         await this.sendCommand(path, [level]);
     }
 
+    async setFaderUnchecked(channel: number, level: number): Promise<void> {
+        const path = `${this.getChannelPath(channel)}/mix/fader`;
+        await this.sendCommand(path, [level], { allowOfflineWrite: true });
+    }
+
     async getFader(channel: number): Promise<number> {
         const path = `${this.getChannelPath(channel)}/mix/fader`;
         return await this.sendAndReceive(path);
@@ -720,6 +725,11 @@ export class OSCClient {
         await this.sendCommand(path, [mute ? 0 : 1]);
     }
 
+    async muteBusUnchecked(bus: number, mute: boolean): Promise<void> {
+        const path = `${this.getBusPath(bus)}/mix/on`;
+        await this.sendCommand(path, [mute ? 0 : 1], { allowOfflineWrite: true });
+    }
+
     async setBusPan(bus: number, pan: number): Promise<void> {
         this.requireX32("Bus pan");
         const path = `${this.getBusPath(bus)}/mix/pan`;
@@ -771,6 +781,11 @@ export class OSCClient {
     async sendToBus(channel: number, bus: number, level: number): Promise<void> {
         const path = `${this.getChannelPath(channel)}/mix/${this.getBusSendSegment(bus)}/level`;
         await this.sendCommand(path, [level]);
+    }
+
+    async sendToBusUnchecked(channel: number, bus: number, level: number): Promise<void> {
+        const path = `${this.getChannelPath(channel)}/mix/${this.getBusSendSegment(bus)}/level`;
+        await this.sendCommand(path, [level], { allowOfflineWrite: true });
     }
 
     async getSendToBus(channel: number, bus: number): Promise<number> {

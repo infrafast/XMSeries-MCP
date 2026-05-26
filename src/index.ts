@@ -1337,6 +1337,35 @@ const TOOLS: Tool[] = [
         },
     },
     {
+        name: "osc_mute_buses",
+        description: "Mute or unmute a selected list of mix bus masters in one batch. Use for commands like 'mute les bus Mike et Laurent' after resolving each named bus. This controls the bus master on/off state, not a channel send to those buses. Do not use for 'tous les bus'; use osc_mute_all_buses for that.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                buses: {
+                    type: "array",
+                    description: "Selected mix bus numbers (1-16)",
+                    items: { type: "number", minimum: 1, maximum: 16 },
+                    minItems: 1,
+                    uniqueItems: true,
+                },
+                mute: { type: "boolean", description: "True to mute, false to unmute" },
+            },
+            required: ["buses", "mute"],
+        },
+    },
+    {
+        name: "osc_mute_all_buses",
+        description: "Mute or unmute every mix bus master in one batch. Use only when the user explicitly says 'mute/coupe/désactive tous les bus' or 'unmute/réactive tous les bus'. This controls all bus master on/off states, not channel sends.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                mute: { type: "boolean", description: "True to mute all buses, false to unmute all buses" },
+            },
+            required: ["mute"],
+        },
+    },
+    {
         name: "osc_set_bus_pan",
         description: "Set the pan position for a mix bus",
         inputSchema: {
@@ -1500,7 +1529,7 @@ const TOOLS: Tool[] = [
     // ========== Sends ==========
     {
         name: "osc_send_to_bus",
-        description: "Set the send level from a channel to a mix bus. Use only when the user explicitly names both a source and a destination bus, such as '[channel] sur [bus]'. Do not use for a single named target like 'Voc-Claude à 0 dB'. Do not use this for mute/cut/off commands; use osc_mute_channel_to_bus for that intent.",
+        description: "Set the send level from a channel to a mix bus. Use only when the user explicitly names both a source and a destination bus, such as '[channel] sur [bus]'. Do not use for main LR/façade destinations; use the source channel fader for that. Do not use for a single named target like 'Voc-Claude à 0 dB'. Do not use this for mute/cut/off commands; use osc_mute_channel_to_bus for that intent.",
         inputSchema: {
             type: "object",
             properties: {
@@ -1562,7 +1591,7 @@ const TOOLS: Tool[] = [
     },
     {
         name: "osc_send_to_bus_db",
-        description: "Set the send level from a channel to a mix bus by dB value using the X32/M32 161-point Level table. Use only when the user explicitly names both a source and a destination bus, such as '[channel] sur [bus] à -5 dB'. Do not use for a single named target like 'Voc-Claude à 0 dB'. Do not use this for mute/cut/off commands, even if the user says 'moins infini' or '-120 dB' while meaning mute; use osc_mute_channel_to_bus for that intent.",
+        description: "Set the send level from a channel to a mix bus by dB value using the X32/M32 161-point Level table. Use only when the user explicitly names both a source and a destination bus, such as '[channel] sur [bus] à -5 dB'. Do not use for main LR/façade destinations; use osc_set_fader_db for the source channel. Do not use for a single named target like 'Voc-Claude à 0 dB'. Do not use this for mute/cut/off commands, even if the user says 'moins infini' or '-120 dB' while meaning mute; use osc_mute_channel_to_bus for that intent.",
         inputSchema: {
             type: "object",
             properties: {
@@ -1571,6 +1600,39 @@ const TOOLS: Tool[] = [
                 db: { type: "number", description: "Requested send level in dB (-87 to +10; lower values map to -inf)", minimum: -120, maximum: 20 },
             },
             required: ["channel", "bus", "db"],
+        },
+    },
+    {
+        name: "osc_send_to_all_buses_db",
+        description: "Set a channel send level to every mix bus by dB value in one batch. Use only when the user explicitly says 'tous les bus', 'all buses', or equivalent. Do not use for a finite named list such as 'les bus Mike et Laurent'; use osc_send_to_buses_db for that. If the user also says 'sur façade/main/LR', set includeMain=true to set the channel's own main LR fader too. Do not read bus faders for this command.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                channel: { type: "number", description: "Channel number (1-32)", minimum: 1, maximum: 32 },
+                db: { type: "number", description: "Requested send level in dB (-87 to +10; lower values map to -inf)", minimum: -120, maximum: 20 },
+                includeMain: { type: "boolean", description: "True when the user also asks for façade/main/LR; sets the source channel fader to the same dB value." },
+            },
+            required: ["channel", "db"],
+        },
+    },
+    {
+        name: "osc_send_to_buses_db",
+        description: "Set a channel send level to a selected list of mix buses by dB value in one batch. Use for commands like '[channel] à +5 dB sur les bus Mike et Laurent' after resolving each named bus. If the user also says 'sur façade/main/LR', set includeMain=true to set the channel's own main LR fader too. Do not use for 'tous les bus'; use osc_send_to_all_buses_db for that.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                channel: { type: "number", description: "Channel number (1-32)", minimum: 1, maximum: 32 },
+                buses: {
+                    type: "array",
+                    description: "Selected mix bus numbers (1-16)",
+                    items: { type: "number", minimum: 1, maximum: 16 },
+                    minItems: 1,
+                    uniqueItems: true,
+                },
+                db: { type: "number", description: "Requested send level in dB (-87 to +10; lower values map to -inf)", minimum: -120, maximum: 20 },
+                includeMain: { type: "boolean", description: "True when the user also asks for façade/main/LR; sets the source channel fader to the same dB value." },
+            },
+            required: ["channel", "buses", "db"],
         },
     },
     {
@@ -3056,6 +3118,43 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 };
             }
 
+            case "osc_mute_buses": {
+                const { buses, mute } = args as { buses: number[]; mute: boolean };
+                const uniqueBuses = Array.from(new Set(buses)).filter((bus) => Number.isInteger(bus) && bus >= 1 && bus <= 16);
+                if (uniqueBuses.length === 0) {
+                    throw new Error("At least one valid bus number from 1 to 16 is required");
+                }
+                await osc.assertMixerOnline();
+                for (const bus of uniqueBuses) {
+                    await osc.muteBusUnchecked(bus, mute);
+                }
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Buses ${uniqueBuses.join(", ")} ${mute ? "muted" : "unmuted"}`,
+                        },
+                    ],
+                };
+            }
+
+            case "osc_mute_all_buses": {
+                const { mute } = args as { mute: boolean };
+                const buses = namedTargetRange("bus");
+                await osc.assertMixerOnline();
+                for (const bus of buses) {
+                    await osc.muteBusUnchecked(bus, mute);
+                }
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `All ${buses.length} buses ${mute ? "muted" : "unmuted"}`,
+                        },
+                    ],
+                };
+            }
+
             case "osc_set_bus_pan": {
                 const { bus, pan } = args as { bus: number; pan: number };
                 await osc.setBusPan(bus, pan);
@@ -3224,6 +3323,51 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                         {
                             type: "text",
                             text: `Set channel ${channel} send to bus ${bus} to ${formatDb(converted.db)} (level ${converted.level.toFixed(4)}, table index ${converted.index}${converted.clipped ? ", clipped" : ""})`,
+                        },
+                    ],
+                };
+            }
+
+            case "osc_send_to_all_buses_db": {
+                const { channel, db, includeMain } = args as { channel: number; db: number; includeMain?: boolean };
+                const converted = dbToFaderLevel(db);
+                const buses = namedTargetRange("bus");
+                await osc.assertMixerOnline();
+                for (const bus of buses) {
+                    await osc.sendToBusUnchecked(channel, bus, converted.level);
+                }
+                if (includeMain) {
+                    await osc.setFaderUnchecked(channel, converted.level);
+                }
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Set channel ${channel} send to all ${buses.length} buses to ${formatDb(converted.db)} (level ${converted.level.toFixed(4)}, table index ${converted.index}${converted.clipped ? ", clipped" : ""})${includeMain ? " and set its main LR fader to the same value" : ""}`,
+                        },
+                    ],
+                };
+            }
+
+            case "osc_send_to_buses_db": {
+                const { channel, buses, db, includeMain } = args as { channel: number; buses: number[]; db: number; includeMain?: boolean };
+                const uniqueBuses = Array.from(new Set(buses)).filter((bus) => Number.isInteger(bus) && bus >= 1 && bus <= 16);
+                if (uniqueBuses.length === 0) {
+                    throw new Error("At least one valid bus number from 1 to 16 is required");
+                }
+                const converted = dbToFaderLevel(db);
+                await osc.assertMixerOnline();
+                for (const bus of uniqueBuses) {
+                    await osc.sendToBusUnchecked(channel, bus, converted.level);
+                }
+                if (includeMain) {
+                    await osc.setFaderUnchecked(channel, converted.level);
+                }
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Set channel ${channel} send to buses ${uniqueBuses.join(", ")} to ${formatDb(converted.db)} (level ${converted.level.toFixed(4)}, table index ${converted.index}${converted.clipped ? ", clipped" : ""})${includeMain ? " and set its main LR fader to the same value" : ""}`,
                         },
                     ],
                 };
