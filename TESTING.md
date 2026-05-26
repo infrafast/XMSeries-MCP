@@ -62,6 +62,30 @@ OSC_HOST=192.168.0.16 OSC_PORT=10024 OSC_PROTOCOL=OSCXR npm test
 
 This will attempt to connect to the configured mixer and perform protocol-aware smoke tests. With no `OSC_PROTOCOL`, it uses the default `OSCX32M32` mode; with `OSC_PROTOCOL=OSCXR`, it runs the XR-compatible checks. In `OSCXR`, it also checks that an unsupported X32-only aggregate returns `Unsupported for OSCXR: ...` instead of timing out.
 
+## LLM Tool-Selection Benchmark
+
+`test-llm-tools.js` verifies the LLM behavior before any real OSC write happens. It gives the model the repository `PROMPT.md`, a small MCP tool surface, and a fixed test naming context, then checks that each natural-language command produces the expected MCP tool call and arguments.
+
+This test does not connect to the mixer and does not write OSC. Relative commands are handled by returning mocked read-tool results to the model.
+
+Run with OpenAI:
+
+```bash
+OPENAI_API_KEY=... OPENAI_MODEL=gpt-4o-mini npm run test:llm-tools
+```
+
+Run with a local Ollama model through its OpenAI-compatible endpoint:
+
+```bash
+LLM_PROVIDER=ollama LLM_MODEL=llama3.1 OLLAMA_BASE_URL=http://127.0.0.1:11434 npm run test:llm-tools
+```
+
+The editable test data is intentionally near the top of `test-llm-tools.js`:
+
+- `NAME_CONTEXT` defines channel and bus aliases used by the phrases.
+- `INITIAL_MOCK_STATE` defines the mocked dB/mute state returned by read tools.
+- `TOOL_CASES` defines each phrase and the expected MCP tool-call sequence.
+
 ## Manual Testing
 
 Once connected, you can use Claude Desktop to control the emulator. Try commands like:

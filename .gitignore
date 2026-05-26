@@ -6,3 +6,4 @@ dist/
 *.tsbuildinfo
 exportkey.sh
 garbage.txt
+test-llm-tools.js

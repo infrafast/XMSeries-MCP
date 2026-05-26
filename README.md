@@ -293,6 +293,7 @@ npm run build     # compile
 npm run dev       # watch mode
 npm start         # run directly (for debugging outside Claude Desktop)
 npm test          # protocol-aware smoke test through test-connection.js
+npm run test:llm-tools  # LLM natural-language -> MCP tool-call benchmark
 ```
 
 For XR/XAir-compatible smoke testing:
@@ -312,6 +313,8 @@ OSC_HOST=192.168.0.16 OSC_PORT=10024 OSC_PROTOCOL=OSCXR npm test
 `PROTOCOL.md` — logical path mapping notes for X32/M32 and XAir/XR-compatible addresses.
 
 `test-connection.js` — protocol-aware smoke test used by `npm test`.
+
+`test-llm-tools.js` — LLM tool-selection benchmark that feeds natural-language commands plus the agent prompt to a model and verifies the expected MCP tool names/arguments. It uses mocked tool results for relative commands and never connects to the mixer.
 
 ### Technical details
 
