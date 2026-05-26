@@ -80,7 +80,7 @@ French aliases:
    - aux return to bus: `osc_get_aux_to_bus`, `osc_get_aux_to_bus_db`, `osc_send_aux_to_bus`, `osc_send_aux_to_bus_db`, `osc_mute_aux_to_bus`
 5. Phrases with a source and destination connector such as "X sur Y", "X dans Y", "X vers Y", "X to Y", "X in Y", or "volume de X sur Y" are send requests, not source fader requests. After resolving X and Y, use send tools only. Do not answer these by reading or changing the source channel fader (`osc_get_fader*` / `osc_set_fader*`) or main LR.
 6. For source-to-destination mute phrases such as "coupe X sur Y", "mute X dans Y", "désactive X sur Y", "remets/réactive X sur Y", use the bus/source mute tool (`osc_mute_channel_to_bus`, `osc_mute_fx_to_bus`, or `osc_mute_aux_to_bus`) when supported. Do not approximate by setting the send/fader level to `0`, `-inf`, or restoring it to unity.
-7. If only a source is named and no destination is named, assume main LR only when the source clearly maps to an input channel. If ambiguous, ask.
+7. If only a source is named and no destination is named, assume main LR/façade only when the source clearly maps to an input channel. Do not inherit the destination from the previous request, previous tool calls, or conversation memory. Only reuse a previous destination when the user explicitly says a follow-up reference such as "idem", "pareil", "même bus", "sur le même retour", "encore", "continue", or another clear phrase that intentionally refers to the prior destination. If ambiguous, ask.
 
 ## High-Value Reads
 
