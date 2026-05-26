@@ -1123,6 +1123,31 @@ const TOOLS: Tool[] = [
         },
     },
     {
+        name: "osc_get_send_to_bus_db",
+        description: "Get the send level from a channel to a mix bus as dB using the X32/M32 161-point Level table. Use this directly when the user asks for a channel send level in dB.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                channel: { type: "number", description: "Channel number (1-32)", minimum: 1, maximum: 32 },
+                bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
+            },
+            required: ["channel", "bus"],
+        },
+    },
+    {
+        name: "osc_send_to_bus_db",
+        description: "Set the send level from a channel to a mix bus by dB value using the X32/M32 161-point Level table.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                channel: { type: "number", description: "Channel number (1-32)", minimum: 1, maximum: 32 },
+                bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
+                db: { type: "number", description: "Requested send level in dB (-87 to +10; lower values map to -inf)", minimum: -120, maximum: 20 },
+            },
+            required: ["channel", "bus", "db"],
+        },
+    },
+    {
         name: "osc_mute_channel_to_bus",
         description: "Mute/unmute a channel send to a specific bus. In OSCXR this is unsupported because XR exposes only whole-channel mute, not bus-specific channel mute.",
         inputSchema: {
@@ -1161,6 +1186,31 @@ const TOOLS: Tool[] = [
         },
     },
     {
+        name: "osc_get_fx_to_bus_db",
+        description: "Get the send level from an FX return to a mix bus as dB using the X32/M32 161-point Level table.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                effect: { type: "number", description: "FX return/effect number (1-8)", minimum: 1, maximum: 8 },
+                bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
+            },
+            required: ["effect", "bus"],
+        },
+    },
+    {
+        name: "osc_send_fx_to_bus_db",
+        description: "Set the send level from an FX return to a mix bus by dB value using the X32/M32 161-point Level table.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                effect: { type: "number", description: "FX return/effect number (1-8)", minimum: 1, maximum: 8 },
+                bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
+                db: { type: "number", description: "Requested send level in dB (-87 to +10; lower values map to -inf)", minimum: -120, maximum: 20 },
+            },
+            required: ["effect", "bus", "db"],
+        },
+    },
+    {
         name: "osc_mute_fx_to_bus",
         description: "Mute/unmute an FX return send to a specific bus. In OSCXR this is unsupported because XR exposes only whole-FX-return mute, not bus-specific FX mute.",
         inputSchema: {
@@ -1196,6 +1246,31 @@ const TOOLS: Tool[] = [
                 bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
             },
             required: ["aux", "bus"],
+        },
+    },
+    {
+        name: "osc_get_aux_to_bus_db",
+        description: "Get the send level from an aux return to a mix bus as dB using the X32/M32 161-point Level table. In OSCXR the aux return is a singleton; use aux 1.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                aux: { type: "number", description: "Aux return number (X32: 1-6; OSCXR: use 1 for /rtn/aux)", minimum: 1, maximum: 6 },
+                bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
+            },
+            required: ["aux", "bus"],
+        },
+    },
+    {
+        name: "osc_send_aux_to_bus_db",
+        description: "Set the send level from an aux return to a mix bus by dB value using the X32/M32 161-point Level table. In OSCXR the aux return is a singleton; use aux 1.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                aux: { type: "number", description: "Aux return number (X32: 1-6; OSCXR: use 1 for /rtn/aux)", minimum: 1, maximum: 6 },
+                bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
+                db: { type: "number", description: "Requested send level in dB (-87 to +10; lower values map to -inf)", minimum: -120, maximum: 20 },
+            },
+            required: ["aux", "bus", "db"],
         },
     },
     {
@@ -2657,6 +2732,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 };
             }
 
+            case "osc_get_send_to_bus_db": {
+                const { channel, bus } = args as { channel: number; bus: number };
+                const level = await osc.getSendToBus(channel, bus);
+                const converted = faderLevelToDb(level);
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Channel ${channel} send to bus ${bus} is ${formatDb(converted.db)} (level ${level.toFixed(4)}, nearest table index ${converted.index})`,
+                        },
+                    ],
+                };
+            }
+
+            case "osc_send_to_bus_db": {
+                const { channel, bus, db } = args as { channel: number; bus: number; db: number };
+                const converted = dbToFaderLevel(db);
+                await osc.sendToBus(channel, bus, converted.level);
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Set channel ${channel} send to bus ${bus} to ${formatDb(converted.db)} (level ${converted.level.toFixed(4)}, table index ${converted.index}${converted.clipped ? ", clipped" : ""})`,
+                        },
+                    ],
+                };
+            }
+
             case "osc_mute_channel_to_bus": {
                 const { channel, bus, mute } = args as { channel: number; bus: number; mute: boolean };
                 await osc.muteChannelToBus(channel, bus, mute);
@@ -2681,6 +2784,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 };
             }
 
+            case "osc_get_fx_to_bus_db": {
+                const { effect, bus } = args as { effect: number; bus: number };
+                const level = await osc.getFxToBus(effect, bus);
+                const converted = faderLevelToDb(level);
+                return {
+                    content: [{ type: "text", text: `FX return ${effect} send to bus ${bus} is ${formatDb(converted.db)} (level ${level.toFixed(4)}, nearest table index ${converted.index})` }],
+                };
+            }
+
+            case "osc_send_fx_to_bus_db": {
+                const { effect, bus, db } = args as { effect: number; bus: number; db: number };
+                const converted = dbToFaderLevel(db);
+                await osc.sendFxToBus(effect, bus, converted.level);
+                return {
+                    content: [{ type: "text", text: `Set FX return ${effect} send to bus ${bus} to ${formatDb(converted.db)} (level ${converted.level.toFixed(4)}, table index ${converted.index}${converted.clipped ? ", clipped" : ""})` }],
+                };
+            }
+
             case "osc_mute_fx_to_bus": {
                 const { effect, bus, mute } = args as { effect: number; bus: number; mute: boolean };
                 await osc.muteFxToBus(effect, bus, mute);
@@ -2702,6 +2823,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 const level = await osc.getAuxToBus(aux, bus);
                 return {
                     content: [{ type: "text", text: `Aux return ${aux} send to bus ${bus} is at ${(level * 100).toFixed(1)}%` }],
+                };
+            }
+
+            case "osc_get_aux_to_bus_db": {
+                const { aux, bus } = args as { aux: number; bus: number };
+                const level = await osc.getAuxToBus(aux, bus);
+                const converted = faderLevelToDb(level);
+                return {
+                    content: [{ type: "text", text: `Aux return ${aux} send to bus ${bus} is ${formatDb(converted.db)} (level ${level.toFixed(4)}, nearest table index ${converted.index})` }],
+                };
+            }
+
+            case "osc_send_aux_to_bus_db": {
+                const { aux, bus, db } = args as { aux: number; bus: number; db: number };
+                const converted = dbToFaderLevel(db);
+                await osc.sendAuxToBus(aux, bus, converted.level);
+                return {
+                    content: [{ type: "text", text: `Set aux return ${aux} send to bus ${bus} to ${formatDb(converted.db)} (level ${converted.level.toFixed(4)}, table index ${converted.index}${converted.clipped ? ", clipped" : ""})` }],
                 };
             }
 

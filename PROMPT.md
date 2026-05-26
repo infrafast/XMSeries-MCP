@@ -54,7 +54,9 @@ Never replace an unsupported OSCXR bus-specific source mute with a whole-source 
 - `0.75` is unity/0 dB; `1.0` is +10 dB.
 - When the user says dB/decibel for faders, use dB-aware tools:
   `osc_set_fader_db`, `osc_get_fader_db`, `osc_set_bus_fader_db`, `osc_get_bus_fader_db`, `osc_set_aux_fader_db`, `osc_get_aux_fader_db`, `osc_set_main_fader_db`, `osc_get_main_fader_db`, `osc_set_matrix_fader_db`, `osc_get_matrix_fader_db`.
-- For conversion only, use `osc_db_to_fader_level` and `osc_fader_level_to_db`.
+- When the user says dB/decibel for sends, use send dB tools directly:
+  `osc_get_send_to_bus_db`, `osc_send_to_bus_db`, `osc_get_fx_to_bus_db`, `osc_send_fx_to_bus_db`, `osc_get_aux_to_bus_db`, `osc_send_aux_to_bus_db`.
+- For conversion only, use `osc_db_to_fader_level` and `osc_fader_level_to_db`. Never use conversion tools alone to answer a live value question; first read the live value in the same request, or prefer a dedicated `*_db` read tool.
 - When the user asks to raise/lower a fader or send relatively without a precise value, read the current value first, then apply a relative normalized change to that current value: "un peu" / "a little" = 15%, "beaucoup" / "a lot" = 30%, and no modifier = 20%. Clamp the final normalized value to `0.0..1.0`.
 - Pan is `-1.0` left, `0.0` center, `1.0` right. Pan is OSCX32M32-only unless a tool explicitly succeeds in the selected protocol.
 
@@ -73,9 +75,9 @@ French aliases:
 2. Main LR commands use `osc_get_main_fader_db`, `osc_set_main_fader_db`, `osc_get_main_fader`, `osc_set_main_fader`, or `osc_mute_main`.
 3. Bus/monitor/retour global commands use bus fader/mute/name tools.
 4. Source-to-destination commands map to sends:
-   - channel to bus: `osc_get_send_to_bus`, `osc_send_to_bus`, `osc_mute_channel_to_bus`
-   - FX return to bus: `osc_get_fx_to_bus`, `osc_send_fx_to_bus`, `osc_mute_fx_to_bus`
-   - aux return to bus: `osc_get_aux_to_bus`, `osc_send_aux_to_bus`, `osc_mute_aux_to_bus`
+   - channel to bus: `osc_get_send_to_bus`, `osc_get_send_to_bus_db`, `osc_send_to_bus`, `osc_send_to_bus_db`, `osc_mute_channel_to_bus`
+   - FX return to bus: `osc_get_fx_to_bus`, `osc_get_fx_to_bus_db`, `osc_send_fx_to_bus`, `osc_send_fx_to_bus_db`, `osc_mute_fx_to_bus`
+   - aux return to bus: `osc_get_aux_to_bus`, `osc_get_aux_to_bus_db`, `osc_send_aux_to_bus`, `osc_send_aux_to_bus_db`, `osc_mute_aux_to_bus`
 5. Phrases with a source and destination connector such as "X sur Y", "X dans Y", "X vers Y", "X to Y", "X in Y", or "volume de X sur Y" are send requests, not source fader requests. After resolving X and Y, use send tools only. Do not answer these by reading or changing the source channel fader (`osc_get_fader*` / `osc_set_fader*`) or main LR.
 6. For source-to-destination mute phrases such as "coupe X sur Y", "mute X dans Y", "désactive X sur Y", "remets/réactive X sur Y", use the bus/source mute tool (`osc_mute_channel_to_bus`, `osc_mute_fx_to_bus`, or `osc_mute_aux_to_bus`) when supported. Do not approximate by setting the send/fader level to `0`, `-inf`, or restoring it to unity.
 7. If only a source is named and no destination is named, assume main LR only when the source clearly maps to an input channel. If ambiguous, ask.
