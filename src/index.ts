@@ -71,17 +71,22 @@ function parseOscProtocol(value?: string): OSCProtocol {
     throw new Error(`Invalid OSC_PROTOCOL "${value}". Expected "OSCX32M32" or "OSCXR".`);
 }
 
-function appendOscTrace(toolResult: any, commands: string[]): any {
+function appendOscTrace(toolResult: any, commands: string[], toolName?: string): any {
     if (!DEBUG_ENABLED || commands.length === 0) {
         return toolResult;
     }
+
+    const traceText =
+        toolName === "osc_find_named_target"
+            ? `OSC trace:\n${commands.length} name-resolution OSC read(s) omitted from the MCP response; see server logs for details.`
+            : `OSC trace:\n${commands.join("\n")}`;
 
     return {
         ...toolResult,
         content: [
             {
                 type: "text",
-                text: `OSC trace:\n${commands.join("\n")}`,
+                text: traceText,
             },
             ...(toolResult.content || []),
         ],
@@ -89,7 +94,7 @@ function appendOscTrace(toolResult: any, commands: string[]): any {
 }
 
 type NamedTargetFamily = "channel" | "bus" | "fxreturn" | "aux" | "dca" | "matrix";
-type NamedTargetMatchType = "exact" | "contains";
+type NamedTargetMatchType = "exact" | "contains" | "fuzzy";
 
 interface NamedTargetMatch {
     family: NamedTargetFamily;
@@ -107,6 +112,52 @@ function normalizeMixerName(value: string): string {
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, " ")
         .trim();
+}
+
+function editDistance(a: string, b: string): number {
+    const previous = Array.from({ length: b.length + 1 }, (_, i) => i);
+    const current = Array.from({ length: b.length + 1 }, () => 0);
+
+    for (let i = 1; i <= a.length; i += 1) {
+        current[0] = i;
+        for (let j = 1; j <= b.length; j += 1) {
+            const substitutionCost = a[i - 1] === b[j - 1] ? 0 : 1;
+            current[j] = Math.min(
+                previous[j] + 1,
+                current[j - 1] + 1,
+                previous[j - 1] + substitutionCost
+            );
+        }
+        previous.splice(0, previous.length, ...current);
+    }
+
+    return previous[b.length];
+}
+
+function fuzzyThreshold(value: string): number {
+    if (value.length <= 4) return 1;
+    if (value.length <= 8) return 2;
+    if (value.length <= 14) return 3;
+    return 4;
+}
+
+function fuzzyNameDistance(query: string, candidate: string): number | null {
+    const fullDistance = editDistance(query, candidate);
+    if (fullDistance <= fuzzyThreshold(query)) return fullDistance;
+
+    const queryTokens = query.split(" ").filter(Boolean);
+    const candidateTokens = candidate.split(" ").filter(Boolean);
+    if (queryTokens.length === 0 || candidateTokens.length === 0) return null;
+
+    let totalDistance = 0;
+    for (const queryToken of queryTokens) {
+        if (queryToken.length < 4 && !candidateTokens.includes(queryToken)) return null;
+        const bestTokenDistance = Math.min(...candidateTokens.map((candidateToken) => editDistance(queryToken, candidateToken)));
+        if (bestTokenDistance > fuzzyThreshold(queryToken)) return null;
+        totalDistance += bestTokenDistance;
+    }
+
+    return totalDistance;
 }
 
 async function readNamedTarget(family: NamedTargetFamily, index: number): Promise<string | null> {
@@ -171,9 +222,20 @@ async function findNamedTargets(
 
     if (exactMatches.length > 0) return exactMatches;
 
-    return candidates
+    const containsMatches = candidates
         .filter((candidate) => candidate.normalizedName.includes(normalizedQuery))
         .map(({ normalizedName: _normalizedName, ...candidate }) => ({ ...candidate, matchType: "contains" as const }));
+
+    if (containsMatches.length > 0) return containsMatches;
+
+    return candidates
+        .map((candidate) => ({ ...candidate, fuzzyDistance: fuzzyNameDistance(normalizedQuery, candidate.normalizedName) }))
+        .filter((candidate): candidate is typeof candidate & { fuzzyDistance: number } => candidate.fuzzyDistance !== null)
+        .sort((a, b) => a.fuzzyDistance - b.fuzzyDistance)
+        .map(({ normalizedName: _normalizedName, fuzzyDistance: _fuzzyDistance, ...candidate }) => ({
+            ...candidate,
+            matchType: "fuzzy" as const,
+        }));
 }
 
 type AutomationTargetKind =
@@ -446,7 +508,7 @@ const TOOLS: Tool[] = [
     },
     {
         name: "osc_find_named_target",
-        description: "Resolve a user-facing mixer label to concrete indexes in one deterministic scan. Use this before any operation that names a channel, bus/monitor, FX return, aux return, DCA, or matrix by label. Returns exact matches first; if none exist, returns contains matches. If zero or multiple matches are returned, ask the user to clarify instead of guessing.",
+        description: "Resolve a user-facing mixer label to concrete indexes in one deterministic scan. Use this before any operation that names a channel, bus/monitor, FX return, aux return, DCA, or matrix by label. Exact name matches win over partial/contains matches: if an exact match exists, contains matches in other names are not ambiguity. If no exact match exists, returns contains matches, then limited fuzzy matches for likely speech-recognition spelling errors. If zero matches or multiple equally plausible matches are returned, ask the user to clarify instead of guessing.",
         inputSchema: {
             type: "object",
             properties: {
@@ -456,7 +518,7 @@ const TOOLS: Tool[] = [
                 },
                 families: {
                     type: "array",
-                    description: "Object families to search. Narrow this whenever the phrase implies a source or destination, for example ['channel'] for an input source or ['bus'] for a monitor destination.",
+                    description: "Object families to search. For a single named target with no explicit family word, omit this field or search all families so bus names are not missed. Narrow to ['channel'] only when the user explicitly says channel/tranche/canal/source, or when resolving the source side of a clear source-to-destination command. Narrow to ['bus'] only when resolving an explicit bus/monitor/retour destination.",
                     items: {
                         type: "string",
                         enum: ["channel", "bus", "fxreturn", "aux", "dca", "matrix"],
@@ -1438,7 +1500,7 @@ const TOOLS: Tool[] = [
     // ========== Sends ==========
     {
         name: "osc_send_to_bus",
-        description: "Set the send level from a channel to a mix bus",
+        description: "Set the send level from a channel to a mix bus. Use only when the user explicitly names both a source and a destination bus, such as '[channel] sur [bus]'. Do not use for a single named target like 'Voc-Claude à 0 dB'. Do not use this for mute/cut/off commands; use osc_mute_channel_to_bus for that intent.",
         inputSchema: {
             type: "object",
             properties: {
@@ -1500,7 +1562,7 @@ const TOOLS: Tool[] = [
     },
     {
         name: "osc_send_to_bus_db",
-        description: "Set the send level from a channel to a mix bus by dB value using the X32/M32 161-point Level table.",
+        description: "Set the send level from a channel to a mix bus by dB value using the X32/M32 161-point Level table. Use only when the user explicitly names both a source and a destination bus, such as '[channel] sur [bus] à -5 dB'. Do not use for a single named target like 'Voc-Claude à 0 dB'. Do not use this for mute/cut/off commands, even if the user says 'moins infini' or '-120 dB' while meaning mute; use osc_mute_channel_to_bus for that intent.",
         inputSchema: {
             type: "object",
             properties: {
@@ -1513,7 +1575,7 @@ const TOOLS: Tool[] = [
     },
     {
         name: "osc_mute_channel_to_bus",
-        description: "Mute/unmute a channel send to a specific bus. In OSCXR this is unsupported because XR exposes only whole-channel mute, not bus-specific channel mute.",
+        description: "Mute/unmute a channel send to a specific bus. Use this for 'coupe/mute/désactive [channel] sur [bus]' and 'remets/réactive [channel] sur [bus]'. In OSCXR this is unsupported because XR exposes only whole-channel mute, not bus-specific channel mute.",
         inputSchema: {
             type: "object",
             properties: {
@@ -1526,7 +1588,7 @@ const TOOLS: Tool[] = [
     },
     {
         name: "osc_send_fx_to_bus",
-        description: "Set the send level from an FX return to a mix bus",
+        description: "Set the send level from an FX return to a mix bus. Do not use this for mute/cut/off commands; use osc_mute_fx_to_bus for that intent.",
         inputSchema: {
             type: "object",
             properties: {
@@ -1563,7 +1625,7 @@ const TOOLS: Tool[] = [
     },
     {
         name: "osc_send_fx_to_bus_db",
-        description: "Set the send level from an FX return to a mix bus by dB value using the X32/M32 161-point Level table.",
+        description: "Set the send level from an FX return to a mix bus by dB value using the X32/M32 161-point Level table. Do not use this for mute/cut/off commands; use osc_mute_fx_to_bus for that intent.",
         inputSchema: {
             type: "object",
             properties: {
@@ -1576,7 +1638,7 @@ const TOOLS: Tool[] = [
     },
     {
         name: "osc_mute_fx_to_bus",
-        description: "Mute/unmute an FX return send to a specific bus. In OSCXR this is unsupported because XR exposes only whole-FX-return mute, not bus-specific FX mute.",
+        description: "Mute/unmute an FX return send to a specific bus. Use this for 'coupe/mute/désactive [FX] sur [bus]' and 'remets/réactive [FX] sur [bus]'. In OSCXR this is unsupported because XR exposes only whole-FX-return mute, not bus-specific FX mute.",
         inputSchema: {
             type: "object",
             properties: {
@@ -1589,7 +1651,7 @@ const TOOLS: Tool[] = [
     },
     {
         name: "osc_send_aux_to_bus",
-        description: "Set the send level from an aux return to a mix bus. In OSCXR the aux return is a singleton; use aux 1.",
+        description: "Set the send level from an aux return to a mix bus. Do not use this for mute/cut/off commands; use osc_mute_aux_to_bus for that intent. In OSCXR the aux return is a singleton; use aux 1.",
         inputSchema: {
             type: "object",
             properties: {
@@ -1626,7 +1688,7 @@ const TOOLS: Tool[] = [
     },
     {
         name: "osc_send_aux_to_bus_db",
-        description: "Set the send level from an aux return to a mix bus by dB value using the X32/M32 161-point Level table. In OSCXR the aux return is a singleton; use aux 1.",
+        description: "Set the send level from an aux return to a mix bus by dB value using the X32/M32 161-point Level table. Do not use this for mute/cut/off commands; use osc_mute_aux_to_bus for that intent. In OSCXR the aux return is a singleton; use aux 1.",
         inputSchema: {
             type: "object",
             properties: {
@@ -1639,7 +1701,7 @@ const TOOLS: Tool[] = [
     },
     {
         name: "osc_mute_aux_to_bus",
-        description: "Mute/unmute an aux return send to a specific bus. In OSCXR this is unsupported because XR exposes only whole-aux-return mute, not bus-specific aux mute.",
+        description: "Mute/unmute an aux return send to a specific bus. Use this for 'coupe/mute/désactive [aux] sur [bus]' and 'remets/réactive [aux] sur [bus]'. In OSCXR this is unsupported because XR exposes only whole-aux-return mute, not bus-specific aux mute.",
         inputSchema: {
             type: "object",
             properties: {
@@ -4026,7 +4088,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 };
         }
         })();
-        return appendOscTrace(result, osc.drainOscCommandLog());
+        return appendOscTrace(result, osc.drainOscCommandLog(), name);
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (message === "Le mixeur est deconnecté") {
@@ -4038,7 +4100,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     },
                 ],
                 isError: true,
-            }, osc.drainOscCommandLog());
+            }, osc.drainOscCommandLog(), name);
         }
         return appendOscTrace({
             content: [
@@ -4048,7 +4110,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 },
             ],
             isError: true,
-        }, osc.drainOscCommandLog());
+        }, osc.drainOscCommandLog(), name);
     }
 });
 
