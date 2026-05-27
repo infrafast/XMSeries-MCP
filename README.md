@@ -4,6 +4,8 @@ A Model Context Protocol (MCP) server that gives Claude, ChatGPT-compatible MCP 
 
 This is a rewrite/fork of [anteriovieira/osc-mcp-server](https://github.com/anteriovieira/osc-mcp-server) and carries ideas from the X32 MCP fork lineage, with substantially expanded direct OSC coverage and several bug fixes verified against live hardware (firmware 2.07+). This repository does **not** include the later schema-driven `/node`, meter snapshot, deterministic scene-audit, or FX-algorithm-schema layers described by some upstream forks; see [Not Implemented Here](#not-implemented-here).
 
+For developpers: https://deepwiki.com/infrafast/XMSeries-MCP
+
 ## What's in here
 
 MCP tools organized into groups. Highlights beyond the original small MCP server:
