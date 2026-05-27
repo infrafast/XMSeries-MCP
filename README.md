@@ -141,7 +141,27 @@ Once wired up to LLM, natural language works:
 "Fade out Voc-Claude in 10 seconds."
 "In 5 seconds, mute the main LR."
 "Fade Kick on Laurent down a little over 3 seconds."
+"Mute all buses."
+"Mute Mike and Laurent buses."
+"Set Laurent, Mike, and front panel to -3 dB."
 ```
+
+### Multi-target and grouped commands
+
+This server supports grouped operations so the agent can execute one intent across several targets without manually iterating one tool call per target.
+
+- **All bus masters** (for example: `"mute all buses"`):
+  - Uses `osc_mute_all_buses` to mute/unmute every bus master in one batch.
+- **Selected bus master lists** (for example: `"mute Mike and Laurent buses"`):
+  - Resolve each bus name with `osc_find_named_target`, then use `osc_mute_buses`.
+- **Selected bus send-level lists** (for example: `"set kick to -3 dB on Laurent and Mike"`):
+  - Resolve bus names, then use `osc_send_to_buses_db`.
+- **All bus send levels** (for example: `"set kick to -3 dB on all buses"`):
+  - Use `osc_send_to_all_buses_db`.
+- **Mixed destination command including main LR** (for example: `"set Laurent, Mike and the front panel to -3 dB"`):
+  - The bus list (`Laurent`, `Mike`) is applied with `osc_send_to_buses_db`, and front panel/façade/main LR is included in the same batch intent via `includeMain: true`.
+
+These grouped tools are preferred over issuing many per-bus tool calls because they keep intent explicit, reduce round-trips, and avoid inconsistent partial execution.
 
 ## Tool groups
 
