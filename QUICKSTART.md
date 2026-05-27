@@ -72,7 +72,7 @@ For an agent running on another machine, build the project and start the full MC
 
 ```bash
 npm run build
-HTTP_HOST=0.0.0.0 HTTP_PORT=8787 MCP_AUTH_TOKEN=change-me npm run start:http
+OSC_HOST=192.168.0.1 OSC_PORT=10023 OSC_PROTOCOL=OSCX32M32 HTTP_HOST=0.0.0.0 HTTP_PORT=8787 MCP_AUTH_TOKEN=change-me npm run start:http
 ```
 
 Then configure the remote agent with the server computer's LAN IP:

@@ -9,6 +9,7 @@ import { connectOscDevice, createOscMcpServer, OSC_HOST, OSC_PORT, OSC_PROTOCOL 
 
 const HTTP_HOST = process.env.HTTP_HOST || "0.0.0.0";
 const HTTP_PORT = parseInt(process.env.HTTP_PORT || "8787", 10);
+const HTTP_SCHEME = "http";
 const MCP_AUTH_TOKEN = process.env.MCP_AUTH_TOKEN;
 
 function isAuthorized(req: express.Request): boolean {
@@ -42,6 +43,7 @@ export async function startHttpServer(): Promise<void> {
     app.get("/health", (_req, res) => {
         res.json({
             ok: true,
+            scheme: HTTP_SCHEME,
             transport: "streamable-http",
             oscHost: OSC_HOST,
             oscPort: OSC_PORT,
@@ -84,8 +86,8 @@ export async function startHttpServer(): Promise<void> {
 
     app.listen(HTTP_PORT, HTTP_HOST, () => {
         console.error("OSC MCP HTTP server running");
-        console.error(`MCP: http://${HTTP_HOST}:${HTTP_PORT}/mcp`);
-        console.error(`Health: http://${HTTP_HOST}:${HTTP_PORT}/health`);
+        console.error(`MCP: ${HTTP_SCHEME}://${HTTP_HOST}:${HTTP_PORT}/mcp`);
+        console.error(`Health: ${HTTP_SCHEME}://${HTTP_HOST}:${HTTP_PORT}/health`);
         console.error(`OSC: ${OSC_HOST}:${OSC_PORT} (${OSC_PROTOCOL})`);
         if (MCP_AUTH_TOKEN) {
             console.error("HTTP auth: bearer token required");
