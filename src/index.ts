@@ -25,9 +25,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Default OSC configuration
-const OSC_HOST = process.env.OSC_HOST || "192.168.1.17";
-const OSC_PORT = parseInt(process.env.OSC_PORT || "10023");
-const OSC_PROTOCOL = parseOscProtocol(process.env.OSC_PROTOCOL);
+export const OSC_HOST = process.env.OSC_HOST || "192.168.1.17";
+export const OSC_PORT = parseInt(process.env.OSC_PORT || "10023");
+export const OSC_PROTOCOL = parseOscProtocol(process.env.OSC_PROTOCOL);
 const DEBUG_ENABLED = process.env.DEBUG === "1" || process.env.DEBUG?.toLowerCase() === "true";
 const PROMPT_RESOURCE_URI = "xmseries://prompt/system";
 const PROMPT_NAME = "xmseries_mixer_assistant";
@@ -42,6 +42,14 @@ async function readAgentPrompt(): Promise<string> {
 // Initialize OSC client
 const osc = new OSCClient(OSC_HOST, OSC_PORT, OSC_PROTOCOL);
 const automation = new AutomationEngine();
+let oscConnectPromise: Promise<void> | null = null;
+
+export function connectOscDevice(): Promise<void> {
+    if (!oscConnectPromise) {
+        oscConnectPromise = osc.connect();
+    }
+    return oscConnectPromise;
+}
 
 function levelDbPayload(result: ReturnType<typeof dbToFaderLevel>): string {
     return JSON.stringify({
@@ -2478,6 +2486,7 @@ const TOOLS: Tool[] = [
 ];
 
 // Create MCP server
+export function createOscMcpServer(): Server {
 const server = new Server(
     {
         name: "osc-mcp",
@@ -4258,20 +4267,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
 });
 
+return server;
+}
+
 // Start server
 async function main() {
     console.error("Starting OSC MCP Server...");
     console.error(`Connecting to OSC device at ${OSC_HOST}:${OSC_PORT} (${OSC_PROTOCOL})`);
 
-    await osc.connect();
+    await connectOscDevice();
 
+    const server = createOscMcpServer();
     const transport = new StdioServerTransport();
     await server.connect(transport);
 
     console.error("OSC MCP Server running");
 }
 
-main().catch((error) => {
-    console.error("Fatal error:", error);
-    process.exit(1);
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+    main().catch((error) => {
+        console.error("Fatal error:", error);
+        process.exit(1);
+    });
+}

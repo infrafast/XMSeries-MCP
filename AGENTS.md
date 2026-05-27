@@ -181,12 +181,47 @@ Most MCP-compatible agents use a similar configuration format. The basic structu
 }
 ```
 
+### Streamable HTTP MCP Configuration
+
+XMSeries-MCP can also expose the full MCP server over HTTP for agents running on another machine.
+
+Start the HTTP transport on the mixer-control computer:
+
+```bash
+cd /Users/ts/Documents/PlatformIO/Projects/XMSeries-MCP
+npm install
+npm run build
+HTTP_HOST=0.0.0.0 HTTP_PORT=8787 MCP_AUTH_TOKEN=change-me npm run start:http
+```
+
+`HTTP_HOST=0.0.0.0` allows other machines on the LAN to connect. Keep `MCP_AUTH_TOKEN` set for any shared network.
+
+Example remote-agent JSON:
+
+```json
+{
+  "mcpServers": {
+    "xmseries-http": {
+      "type": "streamable-http",
+      "url": "http://192.168.1.50:8787/mcp",
+      "headers": {
+        "Authorization": "Bearer change-me"
+      }
+    }
+  }
+}
+```
+
+Replace `192.168.1.50` with the IP address of the computer running the MCP server. The same example is available in `mcp_http_agent_config.example.json`.
+
 ### Key Points
 
 - **Absolute paths**: Always use absolute paths, not relative paths
 - **Node.js required**: Ensure Node.js is installed and accessible in your PATH
 - **Built project**: Make sure you've run `npm run build` before using the server
+- **Transport choice**: Use `node dist/index.js` for local stdio clients, or `npm run start:http` for Streamable HTTP clients connecting over the network
 - **Environment variables**: Set `OSC_HOST` and `OSC_PORT` to match your mixer. Optionally set `OSC_PROTOCOL` to `OSCX32M32` or `OSCXR`; the default is `OSCX32M32`. Optionally set `MCP_PROMPT_FILE` to expose a custom prompt file to the agent.
+- **HTTP security**: HTTP mode binds to `HTTP_HOST` (`0.0.0.0` by default). Use `MCP_AUTH_TOKEN`, a trusted LAN, VPN, or authenticated reverse proxy; do not expose mixer control directly to the public internet.
 - **OSCXR coverage**: `OSCXR` uses the XAir/XR paths currently mapped in `PROTOCOL.md`: channel fader/mute/name, EQ gain/on, channel sends to bus level, bus fader/mute/name, main LR, FX return, aux return, DCA, headamp gain, and scenes. Source-to-bus level operations are mapped where equivalent. Bus-specific source mutes that would become global XR mutes return `Unsupported for OSCXR: ...` instead of silently muting the whole source.
 - **Timed automation**: Fade/ramp, delayed action, and temporal macro requests use `osc_automation_*` tools. The server handles timing in the background and returns an automation job id immediately.
 - **Grouped multi-target actions**: Requests like "mute all buses", "mute Mike and Laurent buses", or "set Laurent, Mike and the front panel to -3 dB" are supported via batch-oriented tools (`osc_mute_all_buses`, `osc_mute_buses`, `osc_send_to_buses_db`/`osc_send_to_all_buses_db` with `includeMain` for main LR).

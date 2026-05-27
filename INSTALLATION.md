@@ -153,6 +153,13 @@ Once configured, you can use natural language commands like:
 - Mixer status uses `/xinfo` for network address, mixer network name, console model, and console version, plus `/status` for active state
 - If the health check marks the mixer offline, write tools return `Le mixeur est deconnecté` until a later health check or status read succeeds
 
+### MCP Transports:
+- `npm start` runs the full MCP server over stdio through `dist/index.js`
+- `npm run start:http` runs the same full MCP server over Streamable HTTP through `dist/http.js`
+- HTTP mode uses `HTTP_HOST` (`0.0.0.0` by default), `HTTP_PORT` (`8787` by default), and optional `MCP_AUTH_TOKEN`
+- Remote agents connect to `http://SERVER_IP:8787/mcp`; see `mcp_http_agent_config.example.json`
+- Use `MCP_AUTH_TOKEN` and a trusted LAN/VPN/reverse proxy when exposing HTTP mode, because the server can control live mixer state
+
 ### Agent Prompt Exposure:
 - Prompt name: `xmseries_mixer_assistant` via MCP `prompts/list` and `prompts/get`
 - Resource URI: `xmseries://prompt/system` via MCP `resources/list` and `resources/read`

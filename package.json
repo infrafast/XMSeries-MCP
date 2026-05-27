@@ -11,6 +11,7 @@
         "build": "tsc",
         "dev": "tsc --watch",
         "start": "node dist/index.js",
+        "start:http": "node dist/http.js",
         "prepare": "npm run build",
         "test": "node test-connection.js",
         "test:llm-tools": "node test-llm-tools.js",

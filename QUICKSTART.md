@@ -66,6 +66,33 @@ The prompt is exposed as MCP prompt `xmseries_mixer_assistant`, resource `xmseri
 
 Completely quit and restart Claude Desktop for the changes to take effect.
 
+### Optional: Run Over HTTP
+
+For an agent running on another machine, build the project and start the full MCP server with the Streamable HTTP transport:
+
+```bash
+npm run build
+HTTP_HOST=0.0.0.0 HTTP_PORT=8787 MCP_AUTH_TOKEN=change-me npm run start:http
+```
+
+Then configure the remote agent with the server computer's LAN IP:
+
+```json
+{
+  "mcpServers": {
+    "xmseries-http": {
+      "type": "streamable-http",
+      "url": "http://192.168.1.50:8787/mcp",
+      "headers": {
+        "Authorization": "Bearer change-me"
+      }
+    }
+  }
+}
+```
+
+The same example is available in `mcp_http_agent_config.example.json`. Use a trusted LAN, VPN, or authenticated reverse proxy; this MCP can control live mixer state.
+
 ### 5. Verify Installation
 
 In Claude Desktop, start a new conversation and try:

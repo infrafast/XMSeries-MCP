@@ -64,7 +64,7 @@ See `INSTALLATION.md`, `QUICKSTART.md`, and `AGENTS.md` for additional client wi
 
 ### Environment variables
 
-The stdio MCP server reads these values at startup:
+Both MCP transports read these values at startup:
 
 | Variable | Default | Purpose |
 |---|---:|---|
@@ -73,7 +73,53 @@ The stdio MCP server reads these values at startup:
 | `OSC_PROTOCOL` | `OSCX32M32` | Address mapping mode: `OSCX32M32` or `OSCXR` |
 | `MCP_PROMPT_FILE` | repository `PROMPT.md` | Optional absolute path to the prompt exposed through MCP |
 
-The optional HTTP bridge in `src/openai-remote.ts` also reads `HTTP_PORT` and currently has development-oriented defaults for an XR target. Treat it as a small remote-control bridge, not a replacement for the full stdio server.
+### Transport modes
+
+The full MCP server can run either as the original local `stdio` server or as a Streamable HTTP MCP server. Both transports use the same reusable MCP server factory and expose the same tools, prompts, and resources.
+
+**stdio mode** remains the default and is unchanged:
+
+```bash
+npm start
+```
+
+Client configs that launch `node dist/index.js` continue to work as before.
+
+**HTTP mode** exposes the MCP endpoint on the network:
+
+```bash
+HTTP_HOST=0.0.0.0 HTTP_PORT=8787 MCP_AUTH_TOKEN=change-me npm run start:http
+```
+
+HTTP mode reads these additional variables:
+
+| Variable | Default | Purpose |
+|---|---:|---|
+| `HTTP_HOST` | `0.0.0.0` | Interface for the HTTP MCP server. Use `0.0.0.0` to accept connections from other machines on the LAN. |
+| `HTTP_PORT` | `8787` | HTTP MCP port |
+| `MCP_AUTH_TOKEN` | unset | Optional bearer token required on `/mcp` and `/health` when set |
+
+The HTTP MCP endpoint is `/mcp`; a health endpoint is available at `/health`. If `MCP_AUTH_TOKEN` is set, remote agents must send `Authorization: Bearer <token>` or `x-mcp-auth-token: <token>`.
+
+Example remote-agent configuration:
+
+```json
+{
+  "mcpServers": {
+    "xmseries-http": {
+      "type": "streamable-http",
+      "url": "http://192.168.1.50:8787/mcp",
+      "headers": {
+        "Authorization": "Bearer change-me"
+      }
+    }
+  }
+}
+```
+
+Replace `192.168.1.50` with the IP address of the computer running XMSeries-MCP. A copy of this example is provided in `mcp_http_agent_config.example.json`.
+
+Because this server can control live mixer state, avoid exposing HTTP mode directly to the public internet. Prefer a trusted LAN, VPN, or authenticated reverse proxy.
 
 ### Protocol support
 
@@ -314,6 +360,7 @@ Other out-of-scope mixer areas:
 npm run build     # compile
 npm run dev       # watch mode
 npm start         # run directly (for debugging outside Claude Desktop)
+npm run start:http  # run the full MCP server over Streamable HTTP
 npm test          # protocol-aware smoke test through test-connection.js
 npm run test:llm-tools  # LLM natural-language -> MCP tool-call benchmark
 ```
@@ -326,11 +373,11 @@ OSC_HOST=192.168.0.16 OSC_PORT=10024 OSC_PROTOCOL=OSCXR npm test
 
 `src/osc-client.ts` — all the mixer I/O, path selection for `OSCX32M32` vs. `OSCXR`, type coercion helpers, User In/User Out decoders, and the OSC connection (binds UDP on `0.0.0.0` so the mixer's replies actually arrive — upstream bound localhost and silently got nothing).
 
-`src/index.ts` — the MCP tool surface. Every tool has a `name`, `description`, `inputSchema`, and a handler case.
+`src/index.ts` — the MCP tool surface and reusable `createOscMcpServer()` factory. Every tool has a `name`, `description`, `inputSchema`, and a handler case. The CLI entry point still uses `StdioServerTransport`.
 
 `src/automation.ts` — the background automation engine used by `osc_automation_*` tools for ramps, delayed actions, and temporal macros.
 
-`src/openai-remote.ts` — optional minimal Streamable HTTP MCP server exposing a very small remote-control tool subset (`x32_get_channel_name`, main mute, main fader get/set). This is separate from the full stdio MCP server in `src/index.ts`.
+`src/http.ts` — full Streamable HTTP MCP transport for the same server created by `createOscMcpServer()`. `src/openai-remote.ts` remains as a compatibility wrapper for the older `start:openai` script.
 
 `PROTOCOL.md` — logical path mapping notes for X32/M32 and XAir/XR-compatible addresses.
 
