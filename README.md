@@ -1,6 +1,6 @@
 # XMSeries-MCP
 
-A Model Context Protocol (MCP) server that gives Claude, ChatGPT-compatible MCP clients, or any MCP-capable agent direct control of Behringer/Midas mixers via OSC. The default and most complete mode targets Behringer X32 / Midas M32 consoles; an optional `OSCXR` mode adds partial XAir/XR-compatible addressing for the command families mapped in `PROTOCOL.md`.
+A Model Context Protocol (MCP) server that gives Claude, ChatGPT-compatible MCP clients, or any MCP-capable agent direct control of Behringer/Midas mixers via OSC. The default and most complete mode targets Behringer X32 / Midas M32 consoles; an optional `OSCXR` mode adds partial XAir/XR-compatible addressing for the command families mapped in `PROTOCOL.md`. Recommended to be used together with the LLM agent https://github.com/infrafast/LiveStageAssistant
 
 This is a rewrite/fork of [anteriovieira/osc-mcp-server](https://github.com/anteriovieira/osc-mcp-server) and carries ideas from the X32 MCP fork lineage, with substantially expanded direct OSC coverage and several bug fixes verified against live hardware (firmware 2.07+). This repository does **not** include the later schema-driven `/node`, meter snapshot, deterministic scene-audit, or FX-algorithm-schema layers described by some upstream forks; see [Not Implemented Here](#not-implemented-here).
 
