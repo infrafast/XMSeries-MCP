@@ -10,8 +10,8 @@
 
 import { OSCClient } from "./dist/osc-client.js";
 
-const OSC_HOST = process.env.OSC_HOST || "192.168.0.16";
-const OSC_PORT = parseInt(process.env.OSC_PORT || "10024");
+const OSC_HOST = process.env.OSC_HOST || "infrafast.fr";
+const OSC_PORT = parseInt(process.env.OSC_PORT || "10023");
 const OSC_PROTOCOL = parseOscProtocol(process.env.OSC_PROTOCOL);
 
 console.log("🎚️  OSC Connection Test");
