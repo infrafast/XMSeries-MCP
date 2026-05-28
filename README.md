@@ -101,6 +101,8 @@ HTTP mode reads these additional variables:
 | `MCP_AUTH_TOKEN` | unset | Optional bearer token required on `/mcp` and `/health` when set |
 | `OSC_CHANNEL_COUNT` | `32` | Number of mixer input channels to scan for name resolution and overview reads. Override for smaller OSCXR consoles. |
 | `OSC_BUS_COUNT` | `16` | Number of mix buses to scan/use for name resolution and all-bus commands. Override for smaller OSCXR consoles. |
+| `OSC_FX_COUNT` | `8` | Number of FX slots/returns to scan for name resolution and FX reads. Override if a compact console exposes fewer FX returns. |
+| `OSC_DCA_COUNT` | `8` | Number of DCA groups to scan for name resolution and overview reads. Override if a compact console exposes fewer DCA groups. |
 
 The HTTP MCP endpoint is `/mcp`; a health endpoint is available at `/health`. If `MCP_AUTH_TOKEN` is set, remote agents must send `Authorization: Bearer <token>` or `x-mcp-auth-token: <token>`.
 
@@ -138,6 +140,8 @@ docker run --rm -p 8787:8787 \
   -e OSC_PROTOCOL=OSCX32M32 \
   -e OSC_CHANNEL_COUNT=32 \
   -e OSC_BUS_COUNT=16 \
+  -e OSC_FX_COUNT=8 \
+  -e OSC_DCA_COUNT=8 \
   -e DEBUG=false \
   xmseries-mcp:latest
 ```

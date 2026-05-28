@@ -30,6 +30,8 @@ export const OSC_PORT = parseInt(process.env.OSC_PORT || "10023");
 export const OSC_PROTOCOL = parseOscProtocol(process.env.OSC_PROTOCOL);
 export const OSC_CHANNEL_COUNT = parseOscCountEnv("OSC_CHANNEL_COUNT", 32);
 export const OSC_BUS_COUNT = parseOscCountEnv("OSC_BUS_COUNT", 16);
+export const OSC_FX_COUNT = parseOscCountEnv("OSC_FX_COUNT", 8);
+export const OSC_DCA_COUNT = parseOscCountEnv("OSC_DCA_COUNT", 8);
 const DEBUG_ENABLED = process.env.DEBUG === "1" || process.env.DEBUG?.toLowerCase() === "true";
 const PROMPT_RESOURCE_URI = "xmseries://prompt/system";
 const PROMPT_NAME = "xmseries_mixer_assistant";
@@ -45,6 +47,8 @@ async function readAgentPrompt(): Promise<string> {
 const osc = new OSCClient(OSC_HOST, OSC_PORT, OSC_PROTOCOL, {
     channelCount: OSC_CHANNEL_COUNT,
     busCount: OSC_BUS_COUNT,
+    fxCount: OSC_FX_COUNT,
+    dcaCount: OSC_DCA_COUNT,
 });
 const automation = new AutomationEngine();
 let oscConnectPromise: Promise<void> | null = null;
@@ -198,9 +202,9 @@ function namedTargetRange(family: NamedTargetFamily): number[] {
     const maxByFamily: Record<NamedTargetFamily, number> = {
         channel: OSC_CHANNEL_COUNT,
         bus: OSC_BUS_COUNT,
-        fxreturn: 8,
+        fxreturn: OSC_FX_COUNT,
         aux: OSC_PROTOCOL === "OSCXR" ? 1 : 8,
-        dca: 8,
+        dca: OSC_DCA_COUNT,
         matrix: OSC_PROTOCOL === "OSCXR" ? 0 : 6,
     };
     return Array.from({ length: maxByFamily[family] }, (_, i) => i + 1);
@@ -1666,7 +1670,7 @@ const TOOLS: Tool[] = [
         inputSchema: {
             type: "object",
             properties: {
-                effect: { type: "number", description: "FX return/effect number (1-8)", minimum: 1, maximum: 8 },
+                effect: { type: "number", description: `FX return/effect number (1-${OSC_FX_COUNT})`, minimum: 1, maximum: OSC_FX_COUNT },
                 bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
                 level: { type: "number", description: "Send level (0.0 to 1.0)", minimum: 0, maximum: 1 },
             },
@@ -1679,7 +1683,7 @@ const TOOLS: Tool[] = [
         inputSchema: {
             type: "object",
             properties: {
-                effect: { type: "number", description: "FX return/effect number (1-8)", minimum: 1, maximum: 8 },
+                effect: { type: "number", description: `FX return/effect number (1-${OSC_FX_COUNT})`, minimum: 1, maximum: OSC_FX_COUNT },
                 bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
             },
             required: ["effect", "bus"],
@@ -1691,7 +1695,7 @@ const TOOLS: Tool[] = [
         inputSchema: {
             type: "object",
             properties: {
-                effect: { type: "number", description: "FX return/effect number (1-8)", minimum: 1, maximum: 8 },
+                effect: { type: "number", description: `FX return/effect number (1-${OSC_FX_COUNT})`, minimum: 1, maximum: OSC_FX_COUNT },
                 bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
             },
             required: ["effect", "bus"],
@@ -1703,7 +1707,7 @@ const TOOLS: Tool[] = [
         inputSchema: {
             type: "object",
             properties: {
-                effect: { type: "number", description: "FX return/effect number (1-8)", minimum: 1, maximum: 8 },
+                effect: { type: "number", description: `FX return/effect number (1-${OSC_FX_COUNT})`, minimum: 1, maximum: OSC_FX_COUNT },
                 bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
                 db: { type: "number", description: "Requested send level in dB (-87 to +10; lower values map to -inf)", minimum: -120, maximum: 20 },
             },
@@ -1716,7 +1720,7 @@ const TOOLS: Tool[] = [
         inputSchema: {
             type: "object",
             properties: {
-                effect: { type: "number", description: "FX return/effect number (1-8)", minimum: 1, maximum: 8 },
+                effect: { type: "number", description: `FX return/effect number (1-${OSC_FX_COUNT})`, minimum: 1, maximum: OSC_FX_COUNT },
                 bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
                 mute: { type: "boolean", description: "True to mute, false to unmute" },
             },
@@ -1983,9 +1987,9 @@ const TOOLS: Tool[] = [
             properties: {
                 effect: {
                     type: "number",
-                    description: "Effect number (1-8)",
+                    description: `Effect number (1-${OSC_FX_COUNT})`,
                     minimum: 1,
-                    maximum: 8,
+                    maximum: OSC_FX_COUNT,
                 },
             },
             required: ["effect"],
@@ -1999,9 +2003,9 @@ const TOOLS: Tool[] = [
             properties: {
                 effect: {
                     type: "number",
-                    description: "Effect number (1-8)",
+                    description: `Effect number (1-${OSC_FX_COUNT})`,
                     minimum: 1,
-                    maximum: 8,
+                    maximum: OSC_FX_COUNT,
                 },
             },
             required: ["effect"],
@@ -2015,9 +2019,9 @@ const TOOLS: Tool[] = [
             properties: {
                 effect: {
                     type: "number",
-                    description: "Effect number (1-8)",
+                    description: `Effect number (1-${OSC_FX_COUNT})`,
                     minimum: 1,
-                    maximum: 8,
+                    maximum: OSC_FX_COUNT,
                 },
                 param: {
                     type: "number",
@@ -2031,7 +2035,7 @@ const TOOLS: Tool[] = [
     },
     {
         name: "osc_get_all_effects",
-        description: "Get a summary of all 8 FX slots including type and first 8 parameters",
+        description: `Get a summary of all configured FX slots (${OSC_FX_COUNT}) including type and first 8 parameters`,
         inputSchema: {
             type: "object",
             properties: {},
@@ -2093,9 +2097,9 @@ const TOOLS: Tool[] = [
             properties: {
                 fxreturn: {
                     type: "number",
-                    description: "FX return number (1-8)",
+                    description: `FX return number (1-${OSC_FX_COUNT})`,
                     minimum: 1,
-                    maximum: 8,
+                    maximum: OSC_FX_COUNT,
                 },
             },
             required: ["fxreturn"],
@@ -2125,9 +2129,9 @@ const TOOLS: Tool[] = [
             properties: {
                 dca: {
                     type: "number",
-                    description: "DCA group number (1-8)",
+                    description: `DCA group number (1-${OSC_DCA_COUNT})`,
                     minimum: 1,
-                    maximum: 8,
+                    maximum: OSC_DCA_COUNT,
                 },
             },
             required: ["dca"],
@@ -2159,7 +2163,7 @@ const TOOLS: Tool[] = [
     },
     {
         name: "osc_get_console_overview",
-        description: "Get a high-level overview of the ENTIRE console: all 32 channels (name/fader/mute), 16 buses, 8 DCAs, 6 matrices, 8 aux inputs, 8 FX returns, 8 FX slot types, and main bus. Warning: this reads ~200 parameters so takes several seconds.",
+        description: `Get a high-level overview of the ENTIRE console: configured channels (${OSC_CHANNEL_COUNT}), buses (${OSC_BUS_COUNT}), DCAs (${OSC_DCA_COUNT}), 6 matrices, 8 aux inputs, FX returns (${OSC_FX_COUNT}), FX slot types (${OSC_FX_COUNT}), and main bus. Warning: this reads many parameters so takes several seconds.`,
         inputSchema: {
             type: "object",
             properties: {},
@@ -2274,7 +2278,7 @@ const TOOLS: Tool[] = [
     },
     {
         name: "osc_get_full_fx_chain",
-        description: "Get the complete FX signal chain: for each of the 8 FX slots, returns the FX type, all 16 parameters, source assignment (which bus feeds it), and the FX return channel state (fader/mute/name). This is the full picture of what effects are loaded, how they're configured, what feeds them, and whether the return is active.",
+        description: `Get the complete FX signal chain: for each configured FX slot (${OSC_FX_COUNT}), returns the FX type, all 16 parameters, source assignment (which bus feeds it), and the FX return channel state (fader/mute/name). This is the full picture of what effects are loaded, how they're configured, what feeds them, and whether the return is active.`,
         inputSchema: {
             type: "object",
             properties: {},
@@ -4278,7 +4282,7 @@ return server;
 async function main() {
     console.error("Starting OSC MCP Server...");
     console.error(`Connecting to OSC device at ${OSC_HOST}:${OSC_PORT} (${OSC_PROTOCOL})`);
-    console.error(`OSC limits: ${OSC_CHANNEL_COUNT} channel(s), ${OSC_BUS_COUNT} bus(es)`);
+    console.error(`OSC limits: ${OSC_CHANNEL_COUNT} channel(s), ${OSC_BUS_COUNT} bus(es), ${OSC_FX_COUNT} FX slot/return(s), ${OSC_DCA_COUNT} DCA group(s)`);
 
     await connectOscDevice();
 

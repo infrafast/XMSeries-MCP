@@ -21,5 +21,7 @@ services:
       # X32/M32 defaults are 32 channels and 16 buses; override for smaller OSCXR consoles.
       OSC_CHANNEL_COUNT: 32
       OSC_BUS_COUNT: 16
+      OSC_FX_COUNT: 8
+      OSC_DCA_COUNT: 8
       # Enable [OSC READ] and [OSC WRITE] traces in container logs.
       DEBUG: "false"

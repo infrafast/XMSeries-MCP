@@ -146,13 +146,15 @@ export class OSCClient {
     private debugOsc: boolean;
     private channelCount: number;
     private busCount: number;
+    private fxCount: number;
+    private dcaCount: number;
     private oscCommandLog: string[] = [];
 
     constructor(
         host: string,
         port: number,
         protocol: OSCProtocol = "OSCX32M32",
-        options: { channelCount?: number; busCount?: number } = {}
+        options: { channelCount?: number; busCount?: number; fxCount?: number; dcaCount?: number } = {}
     ) {
         this.host = host;
         this.port = port;
@@ -160,6 +162,8 @@ export class OSCClient {
         this.debugOsc = process.env.DEBUG === "1" || process.env.DEBUG?.toLowerCase() === "true";
         this.channelCount = options.channelCount ?? parseOscCountEnv("OSC_CHANNEL_COUNT", 32);
         this.busCount = options.busCount ?? parseOscCountEnv("OSC_BUS_COUNT", 16);
+        this.fxCount = options.fxCount ?? parseOscCountEnv("OSC_FX_COUNT", 8);
+        this.dcaCount = options.dcaCount ?? parseOscCountEnv("OSC_DCA_COUNT", 8);
 
         // Create OSC instance with UDP plugin
         const plugin = new (OSC as any).DatagramPlugin({
@@ -1328,9 +1332,9 @@ export class OSCClient {
             });
         }
 
-        // 8 DCA groups
+        // DCA groups
         overview.dcas = [];
-        for (let d = 1; d <= 8; d++) {
+        for (let d = 1; d <= this.dcaCount; d++) {
             overview.dcas.push({
                 dca: d,
                 name: await this.safeRead(`/dca/${d}/config/name`),
@@ -1363,9 +1367,9 @@ export class OSCClient {
             });
         }
 
-        // 8 FX returns
+        // FX returns
         overview.fxReturns = [];
-        for (let f = 1; f <= 8; f++) {
+        for (let f = 1; f <= this.fxCount; f++) {
             const path = `/fxrtn/${f.toString().padStart(2, "0")}`;
             overview.fxReturns.push({
                 fxReturn: f,
@@ -1375,9 +1379,9 @@ export class OSCClient {
             });
         }
 
-        // 8 FX slots
+        // FX slots
         overview.fxSlots = [];
-        for (let fx = 1; fx <= 8; fx++) {
+        for (let fx = 1; fx <= this.fxCount; fx++) {
             overview.fxSlots.push({
                 slot: fx,
                 type: await this.safeRead(`/fx/${fx}/type`),
@@ -1399,17 +1403,17 @@ export class OSCClient {
         this.requireX32("Routing overview");
         const routing: any = {};
 
-        // FX source assignments (FX 1-4 are stereo insert, 5-8 are dual mono)
+        // FX source assignments (FX 1-4 are stereo insert, later slots are dual mono)
         routing.fxSources = [];
-        for (let fx = 1; fx <= 4; fx++) {
+        for (let fx = 1; fx <= Math.min(4, this.fxCount); fx++) {
             routing.fxSources.push({
                 slot: fx,
                 sourceL: await this.safeRead(`/fx/${fx}/source/l`),
                 sourceR: await this.safeRead(`/fx/${fx}/source/r`),
             });
         }
-        // FX 5-8 are inserted on channels, different structure
-        for (let fx = 5; fx <= 8; fx++) {
+        // FX 5+ are inserted on channels, different structure
+        for (let fx = 5; fx <= this.fxCount; fx++) {
             routing.fxSources.push({
                 slot: fx,
                 source: await this.safeRead(`/fx/${fx}/source`),
@@ -1542,7 +1546,7 @@ export class OSCClient {
         }
         // For each FX slot: type, source assignment, params, and FX return state
         const chains: any[] = [];
-        for (let fx = 1; fx <= 8; fx++) {
+        for (let fx = 1; fx <= this.fxCount; fx++) {
             const chain: any = { slot: fx };
 
             // FX type and params
@@ -1574,7 +1578,7 @@ export class OSCClient {
 
     async getAllEffects(): Promise<any[]> {
         const effects: any[] = [];
-        for (let fx = 1; fx <= 8; fx++) {
+        for (let fx = 1; fx <= this.fxCount; fx++) {
             const slot: any = { slot: fx };
             if (this.protocol === "OSCXR") {
                 try {
