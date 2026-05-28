@@ -246,6 +246,59 @@ export class OSCClient {
         this.osc.send(message);
     }
 
+    private valuesMatch(expected: any, actual: any, tolerance = 0.002): boolean {
+        if (typeof expected === "number" && typeof actual === "number") {
+            return Math.abs(expected - actual) <= tolerance;
+        }
+        return expected === actual;
+    }
+
+    private formatOscValue(value: any): string {
+        return typeof value === "number" ? value.toFixed(6).replace(/0+$/, "").replace(/\.$/, "") : JSON.stringify(value);
+    }
+
+    private async sleep(ms: number): Promise<void> {
+        await new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    async writeAndVerify(address: string, args: any[], options?: { tolerance?: number; label?: string; attempts?: number; retryDelayMs?: number }): Promise<any> {
+        if (args.length !== 1) {
+            throw new Error(`Transactional OSC write requires exactly one argument for ${address}`);
+        }
+
+        const expected = args[0];
+        const attempts = Math.max(1, options?.attempts ?? 5);
+        const retryDelayMs = options?.retryDelayMs ?? 60;
+        await this.sendCommand(address, args, { allowOfflineWrite: true });
+
+        let actual: any = undefined;
+        for (let attempt = 1; attempt <= attempts; attempt += 1) {
+            if (attempt > 1) {
+                await this.sleep(retryDelayMs);
+            }
+
+            try {
+                actual = await this.sendAndReceive(address);
+                this.mixerOnline = true;
+                this.lastHealthError = null;
+            } catch (error) {
+                this.mixerOnline = false;
+                this.lastHealthError = error instanceof Error ? error.message : String(error);
+                throw new Error(`Le mixeur est deconnecté: impossible de confirmer l'ecriture OSC ${address}`);
+            }
+
+            if (this.valuesMatch(expected, actual, options?.tolerance)) {
+                this.recordOscCommand(`[OSC VERIFY] ${this.protocol} ${this.host}:${this.port} ${address} confirmed ${this.formatOscValue(actual)}${attempt > 1 ? ` after ${attempt} reads` : ""}`);
+                return actual;
+            }
+        }
+
+        const target = options?.label || address;
+        throw new Error(
+            `La commande OSC a mal ete executee pour ${target}: valeur envoyee ${this.formatOscValue(expected)}, valeur relue ${this.formatOscValue(actual)} apres ${attempts} tentative(s)`
+        );
+    }
+
     private async ensureMixerOnline(): Promise<void> {
         if (this.mixerHealthCheckPromise) {
             return this.mixerHealthCheckPromise;
@@ -457,7 +510,7 @@ export class OSCClient {
 
     async setFader(channel: number, level: number): Promise<void> {
         const path = `${this.getChannelPath(channel)}/mix/fader`;
-        await this.sendCommand(path, [level]);
+        await this.writeAndVerify(path, [level], { label: `channel ${channel} fader` });
     }
 
     async setFaderUnchecked(channel: number, level: number): Promise<void> {
@@ -473,7 +526,7 @@ export class OSCClient {
     async muteChannel(channel: number, mute: boolean): Promise<void> {
         const path = `${this.getChannelPath(channel)}/mix/on`;
         // Mixer uses 1 for ON (unmuted) and 0 for OFF (muted)
-        await this.sendCommand(path, [mute ? 0 : 1]);
+        await this.writeAndVerify(path, [mute ? 0 : 1], { tolerance: 0, label: `channel ${channel} mute` });
     }
 
     async getMute(channel: number): Promise<boolean> {
@@ -487,7 +540,7 @@ export class OSCClient {
         const path = `${this.getChannelPath(channel)}/mix/pan`;
         // Convert -1 to 1 range to 0 to 1 range (0 = left, 0.5 = center, 1 = right)
         const mixerPan = (pan + 1) / 2;
-        await this.sendCommand(path, [mixerPan]);
+        await this.writeAndVerify(path, [mixerPan], { label: `channel ${channel} pan` });
     }
 
     async getPan(channel: number): Promise<number> {
@@ -500,7 +553,7 @@ export class OSCClient {
 
     async setChannelName(channel: number, name: string): Promise<void> {
         const path = `${this.getChannelPath(channel)}/config/name`;
-        await this.sendCommand(path, [name]);
+        await this.writeAndVerify(path, [name], { tolerance: 0, label: `channel ${channel} name` });
     }
 
     async getChannelName(channel: number): Promise<string> {
@@ -511,7 +564,7 @@ export class OSCClient {
     async setChannelColor(channel: number, color: number): Promise<void> {
         this.requireX32("Channel color");
         const path = `${this.getChannelPath(channel)}/config/color`;
-        await this.sendCommand(path, [color]);
+        await this.writeAndVerify(path, [color], { tolerance: 0, label: `channel ${channel} color` });
     }
 
     async getChannelColor(channel: number): Promise<number> {
@@ -523,7 +576,7 @@ export class OSCClient {
     async setChannelIcon(channel: number, icon: number): Promise<void> {
         this.requireX32("Channel icon");
         const path = `${this.getChannelPath(channel)}/config/icon`;
-        await this.sendCommand(path, [icon]);
+        await this.writeAndVerify(path, [icon], { tolerance: 0, label: `channel ${channel} icon` });
     }
 
     async getChannelIcon(channel: number): Promise<number> {
@@ -547,7 +600,7 @@ export class OSCClient {
 
     async setChannelLink(pair: string, linked: boolean): Promise<void> {
         this.requireX32("Channel links");
-        await this.sendCommand(`/config/chlink/${pair}`, [linked ? 1 : 0]);
+        await this.writeAndVerify(`/config/chlink/${pair}`, [linked ? 1 : 0], { tolerance: 0, label: `channel pair ${pair} link` });
     }
 
     async getBusLinks(): Promise<Array<{ pair: string; linked: boolean }>> {
@@ -563,7 +616,7 @@ export class OSCClient {
 
     async setBusLink(pair: string, linked: boolean): Promise<void> {
         this.requireX32("Bus links");
-        await this.sendCommand(`/config/buslink/${pair}`, [linked ? 1 : 0]);
+        await this.writeAndVerify(`/config/buslink/${pair}`, [linked ? 1 : 0], { tolerance: 0, label: `bus pair ${pair} link` });
     }
     
 
@@ -581,7 +634,7 @@ export class OSCClient {
         const path = `${this.getChannelPath(channel)}/eq/${band}/g`;
         // Convert dB to mixer range (0.0 to 1.0, where 0.5 is 0dB)
         const mixerGain = (gain + 15) / 30; // -15dB to +15dB mapped to 0-1
-        await this.sendCommand(path, [mixerGain]);
+        await this.writeAndVerify(path, [mixerGain], { label: `channel ${channel} EQ band ${band} gain` });
     }
 
     async getEQ(channel: number, band: number): Promise<number> {
@@ -600,7 +653,7 @@ export class OSCClient {
     async setEQFrequency(channel: number, band: number, frequency: number): Promise<void> {
         this.requireX32("Channel EQ frequency");
         const path = `${this.getChannelPath(channel)}/eq/${band}/f`;
-        await this.sendCommand(path, [frequency]);
+        await this.writeAndVerify(path, [frequency], { label: `channel ${channel} EQ band ${band} frequency` });
     }
 
     async getEQQ(channel: number, band: number): Promise<number> {
@@ -612,7 +665,7 @@ export class OSCClient {
     async setEQQ(channel: number, band: number, q: number): Promise<void> {
         this.requireX32("Channel EQ Q");
         const path = `${this.getChannelPath(channel)}/eq/${band}/q`;
-        await this.sendCommand(path, [q]);
+        await this.writeAndVerify(path, [q], { label: `channel ${channel} EQ band ${band} Q` });
     }
 
     async getEQType(channel: number, band: number): Promise<number> {
@@ -624,7 +677,7 @@ export class OSCClient {
     async setEQType(channel: number, band: number, type: number): Promise<void> {
         this.requireX32("Channel EQ type");
         const path = `${this.getChannelPath(channel)}/eq/${band}/type`;
-        await this.sendCommand(path, [type]);
+        await this.writeAndVerify(path, [type], { tolerance: 0, label: `channel ${channel} EQ band ${band} type` });
     }
 
     async getEQOn(channel: number): Promise<boolean> {
@@ -635,7 +688,7 @@ export class OSCClient {
 
     async setEQOn(channel: number, on: boolean): Promise<void> {
         const path = `${this.getChannelPath(channel)}/eq/on`;
-        await this.sendCommand(path, [on ? 1 : 0]);
+        await this.writeAndVerify(path, [on ? 1 : 0], { tolerance: 0, label: `channel ${channel} EQ on` });
     }
 
     // ========== Dynamics Controls ==========
@@ -645,7 +698,7 @@ export class OSCClient {
         const path = `${this.getChannelPath(channel)}/gate/thr`;
         // Convert dB to mixer range
         const mixerThreshold = (threshold + 80) / 80; // -80dB to 0dB mapped to 0-1
-        await this.sendCommand(path, [mixerThreshold]);
+        await this.writeAndVerify(path, [mixerThreshold], { label: `channel ${channel} gate threshold` });
     }
 
     async getGate(channel: number): Promise<number> {
@@ -658,31 +711,31 @@ export class OSCClient {
     async setGateRange(channel: number, range: number): Promise<void> {
         this.requireX32("Channel gate");
         const path = `${this.getChannelPath(channel)}/gate/range`;
-        await this.sendCommand(path, [range]);
+        await this.writeAndVerify(path, [range], { label: `channel ${channel} gate range` });
     }
 
     async setGateAttack(channel: number, attack: number): Promise<void> {
         this.requireX32("Channel gate");
         const path = `${this.getChannelPath(channel)}/gate/attack`;
-        await this.sendCommand(path, [attack]);
+        await this.writeAndVerify(path, [attack], { label: `channel ${channel} gate attack` });
     }
 
     async setGateHold(channel: number, hold: number): Promise<void> {
         this.requireX32("Channel gate");
         const path = `${this.getChannelPath(channel)}/gate/hold`;
-        await this.sendCommand(path, [hold]);
+        await this.writeAndVerify(path, [hold], { label: `channel ${channel} gate hold` });
     }
 
     async setGateRelease(channel: number, release: number): Promise<void> {
         this.requireX32("Channel gate");
         const path = `${this.getChannelPath(channel)}/gate/release`;
-        await this.sendCommand(path, [release]);
+        await this.writeAndVerify(path, [release], { label: `channel ${channel} gate release` });
     }
 
     async setGateOn(channel: number, on: boolean): Promise<void> {
         this.requireX32("Channel gate");
         const path = `${this.getChannelPath(channel)}/gate/on`;
-        await this.sendCommand(path, [on ? 1 : 0]);
+        await this.writeAndVerify(path, [on ? 1 : 0], { tolerance: 0, label: `channel ${channel} gate on` });
     }
 
     async setCompressor(
@@ -696,48 +749,48 @@ export class OSCClient {
 
         // Convert threshold dB to mixer range
         const mixerThreshold = (threshold + 60) / 60; // -60dB to 0dB mapped to 0-1
-        await this.sendCommand(thrPath, [mixerThreshold]);
+        await this.writeAndVerify(thrPath, [mixerThreshold], { label: `channel ${channel} compressor threshold` });
 
         // Convert ratio to mixer range
         const mixerRatio = (ratio - 1) / 19; // 1:1 to 20:1 mapped to 0-1
-        await this.sendCommand(ratioPath, [mixerRatio]);
+        await this.writeAndVerify(ratioPath, [mixerRatio], { label: `channel ${channel} compressor ratio` });
     }
 
     async setCompressorAttack(channel: number, attack: number): Promise<void> {
         this.requireX32("Channel compressor");
         const path = `${this.getChannelPath(channel)}/dyn/attack`;
-        await this.sendCommand(path, [attack]);
+        await this.writeAndVerify(path, [attack], { label: `channel ${channel} compressor attack` });
     }
 
     async setCompressorRelease(channel: number, release: number): Promise<void> {
         this.requireX32("Channel compressor");
         const path = `${this.getChannelPath(channel)}/dyn/release`;
-        await this.sendCommand(path, [release]);
+        await this.writeAndVerify(path, [release], { label: `channel ${channel} compressor release` });
     }
 
     async setCompressorKnee(channel: number, knee: number): Promise<void> {
         this.requireX32("Channel compressor");
         const path = `${this.getChannelPath(channel)}/dyn/knee`;
-        await this.sendCommand(path, [knee]);
+        await this.writeAndVerify(path, [knee], { label: `channel ${channel} compressor knee` });
     }
 
     async setCompressorGain(channel: number, gain: number): Promise<void> {
         this.requireX32("Channel compressor");
         const path = `${this.getChannelPath(channel)}/dyn/gain`;
-        await this.sendCommand(path, [gain]);
+        await this.writeAndVerify(path, [gain], { label: `channel ${channel} compressor gain` });
     }
 
     async setCompressorOn(channel: number, on: boolean): Promise<void> {
         this.requireX32("Channel compressor");
         const path = `${this.getChannelPath(channel)}/dyn/on`;
-        await this.sendCommand(path, [on ? 1 : 0]);
+        await this.writeAndVerify(path, [on ? 1 : 0], { tolerance: 0, label: `channel ${channel} compressor on` });
     }
 
     // ========== Bus Controls ==========
 
     async setBusFader(bus: number, level: number): Promise<void> {
         const path = `${this.getBusPath(bus)}/mix/fader`;
-        await this.sendCommand(path, [level]);
+        await this.writeAndVerify(path, [level], { label: `bus ${bus} fader` });
     }
 
     async getBusFader(bus: number): Promise<number> {
@@ -747,24 +800,24 @@ export class OSCClient {
 
     async muteBus(bus: number, mute: boolean): Promise<void> {
         const path = `${this.getBusPath(bus)}/mix/on`;
-        await this.sendCommand(path, [mute ? 0 : 1]);
+        await this.writeAndVerify(path, [mute ? 0 : 1], { tolerance: 0, label: `bus ${bus} mute` });
     }
 
     async muteBusUnchecked(bus: number, mute: boolean): Promise<void> {
         const path = `${this.getBusPath(bus)}/mix/on`;
-        await this.sendCommand(path, [mute ? 0 : 1], { allowOfflineWrite: true });
+        await this.writeAndVerify(path, [mute ? 0 : 1], { tolerance: 0, label: `bus ${bus} mute` });
     }
 
     async setBusPan(bus: number, pan: number): Promise<void> {
         this.requireX32("Bus pan");
         const path = `${this.getBusPath(bus)}/mix/pan`;
         const mixerPan = (pan + 1) / 2;
-        await this.sendCommand(path, [mixerPan]);
+        await this.writeAndVerify(path, [mixerPan], { label: `bus ${bus} pan` });
     }
 
     async setBusName(bus: number, name: string): Promise<void> {
         const path = `${this.getBusPath(bus)}/config/name`;
-        await this.sendCommand(path, [name]);
+        await this.writeAndVerify(path, [name], { tolerance: 0, label: `bus ${bus} name` });
     }
 
     async getBusName(bus: number): Promise<string> {
@@ -776,7 +829,7 @@ export class OSCClient {
 
     async setAuxFader(aux: number, level: number): Promise<void> {
         const path = `${this.getAuxPath(aux)}/mix/fader`;
-        await this.sendCommand(path, [level]);
+        await this.writeAndVerify(path, [level], { label: `aux ${aux} fader` });
     }
 
     async getAuxFader(aux: number): Promise<number> {
@@ -791,26 +844,26 @@ export class OSCClient {
 
     async muteAux(aux: number, mute: boolean): Promise<void> {
         const path = `${this.getAuxPath(aux)}/mix/on`;
-        await this.sendCommand(path, [mute ? 0 : 1]);
+        await this.writeAndVerify(path, [mute ? 0 : 1], { tolerance: 0, label: `aux ${aux} mute` });
     }
 
     async setAuxPan(aux: number, pan: number): Promise<void> {
         this.requireX32("Aux pan");
         const path = `${this.getAuxPath(aux)}/mix/pan`;
         const mixerPan = (pan + 1) / 2;
-        await this.sendCommand(path, [mixerPan]);
+        await this.writeAndVerify(path, [mixerPan], { label: `aux ${aux} pan` });
     }
 
     // ========== Sends ==========
 
     async sendToBus(channel: number, bus: number, level: number): Promise<void> {
         const path = `${this.getChannelPath(channel)}/mix/${this.getBusSendSegment(bus)}/level`;
-        await this.sendCommand(path, [level]);
+        await this.writeAndVerify(path, [level], { label: `channel ${channel} send to bus ${bus}` });
     }
 
     async sendToBusUnchecked(channel: number, bus: number, level: number): Promise<void> {
         const path = `${this.getChannelPath(channel)}/mix/${this.getBusSendSegment(bus)}/level`;
-        await this.sendCommand(path, [level], { allowOfflineWrite: true });
+        await this.writeAndVerify(path, [level], { label: `channel ${channel} send to bus ${bus}` });
     }
 
     async getSendToBus(channel: number, bus: number): Promise<number> {
@@ -820,12 +873,12 @@ export class OSCClient {
 
     async muteChannelToBus(channel: number, bus: number, mute: boolean): Promise<void> {
         const path = this.getChannelBusMutePath(channel, bus);
-        await this.sendCommand(path, [mute ? 0 : 1]);
+        await this.writeAndVerify(path, [mute ? 0 : 1], { tolerance: 0, label: `channel ${channel} send mute to bus ${bus}` });
     }
 
     async sendFxToBus(effect: number, bus: number, level: number): Promise<void> {
         const path = `${this.getFxReturnPath(effect)}/mix/${this.getBusSendSegment(bus)}/level`;
-        await this.sendCommand(path, [level]);
+        await this.writeAndVerify(path, [level], { label: `FX return ${effect} send to bus ${bus}` });
     }
 
     async getFxToBus(effect: number, bus: number): Promise<number> {
@@ -840,7 +893,7 @@ export class OSCClient {
 
     async setFxReturnFader(effect: number, level: number): Promise<void> {
         const path = `${this.getFxReturnPath(effect)}/mix/fader`;
-        await this.sendCommand(path, [level]);
+        await this.writeAndVerify(path, [level], { label: `FX return ${effect} fader` });
     }
 
     async getFxReturnFader(effect: number): Promise<number> {
@@ -850,12 +903,12 @@ export class OSCClient {
 
     async muteFxToBus(effect: number, bus: number, mute: boolean): Promise<void> {
         const path = this.getFxBusMutePath(effect, bus);
-        await this.sendCommand(path, [mute ? 0 : 1]);
+        await this.writeAndVerify(path, [mute ? 0 : 1], { tolerance: 0, label: `FX return ${effect} send mute to bus ${bus}` });
     }
 
     async sendAuxToBus(aux: number, bus: number, level: number): Promise<void> {
         const path = `${this.getAuxBusPath(aux, bus)}/level`;
-        await this.sendCommand(path, [level]);
+        await this.writeAndVerify(path, [level], { label: `aux ${aux} send to bus ${bus}` });
     }
 
     async getAuxToBus(aux: number, bus: number): Promise<number> {
@@ -865,25 +918,25 @@ export class OSCClient {
 
     async muteAuxToBus(aux: number, bus: number, mute: boolean): Promise<void> {
         const path = this.getAuxBusMutePath(aux, bus);
-        await this.sendCommand(path, [mute ? 0 : 1]);
+        await this.writeAndVerify(path, [mute ? 0 : 1], { tolerance: 0, label: `aux ${aux} send mute to bus ${bus}` });
     }
 
     async sendToAux(channel: number, aux: number, level: number): Promise<void> {
         this.requireX32("Channel sends to aux");
         const path = `${this.getChannelPath(channel)}/mix/${(aux + 15).toString().padStart(2, "0")}/level`;
-        await this.sendCommand(path, [level]);
+        await this.writeAndVerify(path, [level], { label: `channel ${channel} send to aux ${aux}` });
     }
 
     async setSendPrePost(channel: number, bus: number, pre: boolean): Promise<void> {
         this.requireX32("Send pre/post");
         const path = `${this.getChannelPath(channel)}/mix/${bus.toString().padStart(2, "0")}/preamp`;
-        await this.sendCommand(path, [pre ? 1 : 0]);
+        await this.writeAndVerify(path, [pre ? 1 : 0], { tolerance: 0, label: `channel ${channel} send pre/post to bus ${bus}` });
     }
 
     // ========== Main Mix ==========
 
     async setMainFader(level: number): Promise<void> {
-        await this.sendCommand(`${this.getMainStereoPath()}/mix/fader`, [level]);
+        await this.writeAndVerify(`${this.getMainStereoPath()}/mix/fader`, [level], { label: "main LR fader" });
     }
 
     async getMainFader(): Promise<number> {
@@ -891,14 +944,14 @@ export class OSCClient {
     }
 
     async muteMain(mute: boolean): Promise<void> {
-        await this.sendCommand(`${this.getMainStereoPath()}/mix/on`, [mute ? 0 : 1]);
+        await this.writeAndVerify(`${this.getMainStereoPath()}/mix/on`, [mute ? 0 : 1], { tolerance: 0, label: "main LR mute" });
     }
 
     async setMainPan(pan: number): Promise<void> {
         this.requireX32("Main pan");
         const path = `${this.getMainStereoPath()}/mix/pan`;
         const mixerPan = (pan + 1) / 2;
-        await this.sendCommand(path, [mixerPan]);
+        await this.writeAndVerify(path, [mixerPan], { label: "main LR pan" });
     }
 
     // ========== Matrix ==========
@@ -906,7 +959,7 @@ export class OSCClient {
     async setMatrixFader(matrix: number, level: number): Promise<void> {
         this.requireX32("Matrix controls");
         const path = `/mtx/${matrix.toString().padStart(2, "0")}/mix/fader`;
-        await this.sendCommand(path, [level]);
+        await this.writeAndVerify(path, [level], { label: `matrix ${matrix} fader` });
     }
 
     async getMatrixFader(matrix: number): Promise<number> {
@@ -924,7 +977,7 @@ export class OSCClient {
     async muteMatrix(matrix: number, mute: boolean): Promise<void> {
         this.requireX32("Matrix controls");
         const path = `/mtx/${matrix.toString().padStart(2, "0")}/mix/on`;
-        await this.sendCommand(path, [mute ? 0 : 1]);
+        await this.writeAndVerify(path, [mute ? 0 : 1], { tolerance: 0, label: `matrix ${matrix} mute` });
     }
 
     // ========== Effects ==========
@@ -946,7 +999,7 @@ export class OSCClient {
     async setEffectOn(effect: number, on: boolean): Promise<void> {
         // Rewired: mute/unmute the corresponding FX return channel
         const fxrPath = `${this.getFxReturnPath(effect)}/mix/on`;
-        await this.sendCommand(fxrPath, [on ? 1 : 0]);
+        await this.writeAndVerify(fxrPath, [on ? 1 : 0], { tolerance: 0, label: `FX return ${effect} mute` });
     }
 
     async getEffectOn(effect: number): Promise<boolean> {
@@ -960,7 +1013,7 @@ export class OSCClient {
         if (this.protocol === "OSCXR" && param !== 1) {
             this.unsupportedForXR("Only FX parameter 1 is mapped in PROTOCOL.md.");
         }
-        await this.sendCommand(`${this.getFxPath(effect)}/par/${param.toString().padStart(2, "0")}`, [value]);
+        await this.writeAndVerify(`${this.getFxPath(effect)}/par/${param.toString().padStart(2, "0")}`, [value], { label: `FX slot ${effect} parameter ${param}` });
     }
 
     async getEffectParam(effect: number, param: number): Promise<number> {
@@ -975,7 +1028,7 @@ export class OSCClient {
     async setChannelSource(channel: number, source: number): Promise<void> {
         this.requireX32("Channel source");
         const path = `${this.getChannelPath(channel)}/config/source`;
-        await this.sendCommand(path, [source]);
+        await this.writeAndVerify(path, [source], { tolerance: 0, label: `channel ${channel} source` });
     }
 
     async getChannelSource(channel: number): Promise<number> {
@@ -1517,7 +1570,7 @@ export class OSCClient {
         this.requireX32("User routing");
         const code = encodeUserInSource(source);
         const path = `/config/userrout/in/${slot.toString().padStart(2, "0")}`;
-        await this.sendCommand(path, [code]);
+        await this.writeAndVerify(path, [code], { tolerance: 0, label: `User In slot ${slot}` });
     }
 
     async getUserRoutingIn(slot: number): Promise<{ source: number; sourceLabel: string }> {
@@ -1530,7 +1583,7 @@ export class OSCClient {
     async setUserRoutingOut(slot: number, source: number): Promise<void> {
         this.requireX32("User routing");
         const path = `/config/userrout/out/${slot.toString().padStart(2, "0")}`;
-        await this.sendCommand(path, [source]);
+        await this.writeAndVerify(path, [source], { tolerance: 0, label: `User Out slot ${slot}` });
     }
 
     async getUserRoutingOut(slot: number): Promise<{ source: number; sourceLabel: string }> {

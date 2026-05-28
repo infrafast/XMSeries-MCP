@@ -10,6 +10,8 @@ export interface AutomationRampAction {
     curve?: AutomationCurve;
     read: () => Promise<number>;
     write: (value: number) => Promise<void>;
+    verifyFinal?: boolean;
+    finalTolerance?: number;
 }
 
 export interface AutomationDelayAction {
@@ -132,6 +134,30 @@ export class AutomationEngine {
                 await this.sleep(job, stepMs);
             }
         }
+
+        await this.verifyRampFinalValue(job, action, clamp01(to));
+    }
+
+    private async verifyRampFinalValue(job: AutomationJob, action: AutomationRampAction, expected: number): Promise<void> {
+        if (action.verifyFinal === false) return;
+
+        const attempts = 5;
+        const tolerance = action.finalTolerance ?? 0.002;
+        let actual = Number.NaN;
+
+        for (let attempt = 1; attempt <= attempts; attempt += 1) {
+            this.throwIfCancelled(job);
+            if (attempt > 1) {
+                await this.sleep(job, 60);
+            }
+
+            actual = await action.read();
+            if (Math.abs(actual - expected) <= tolerance) {
+                return;
+            }
+        }
+
+        throw new Error(`Automation final verification failed for ${action.description || "ramp"}: expected ${formatAutomationValue(expected)}, read ${formatAutomationValue(actual)}`);
     }
 
     private async sleep(job: AutomationJob, ms: number): Promise<void> {
@@ -164,6 +190,10 @@ export class AutomationEngine {
 
 function clamp01(value: number): number {
     return Math.min(1, Math.max(0, value));
+}
+
+function formatAutomationValue(value: number): string {
+    return Number.isFinite(value) ? value.toFixed(6).replace(/0+$/, "").replace(/\.$/, "") : String(value);
 }
 
 function ease(progress: number, curve: AutomationCurve): number {

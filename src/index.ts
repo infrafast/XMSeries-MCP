@@ -487,6 +487,26 @@ function rampAction(input: AutomationRampInput): AutomationAction {
     };
 }
 
+async function muteBusBatch(buses: number[], mute: boolean): Promise<{ changed: number[]; failures: string[] }> {
+    const changed: number[] = [];
+    const failures: string[] = [];
+
+    for (const bus of buses) {
+        try {
+            await osc.muteBusUnchecked(bus, mute);
+            changed.push(bus);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            failures.push(`bus ${bus}: ${message}`);
+            if (message.toLowerCase().includes("deconnecte") || message.toLowerCase().includes("timeout")) {
+                break;
+            }
+        }
+    }
+
+    return { changed, failures };
+}
+
 function macroActions(steps: AutomationMacroStepInput[]): AutomationAction[] {
     return steps.map((step) => {
         if (step.type === "wait") {
@@ -1360,8 +1380,8 @@ const TOOLS: Tool[] = [
             properties: {
                 buses: {
                     type: "array",
-                    description: "Selected mix bus numbers (1-16)",
-                    items: { type: "number", minimum: 1, maximum: 16 },
+                    description: `Selected mix bus numbers (1-${OSC_BUS_COUNT})`,
+                    items: { type: "number", minimum: 1, maximum: OSC_BUS_COUNT },
                     minItems: 1,
                     uniqueItems: true,
                 },
@@ -1372,13 +1392,31 @@ const TOOLS: Tool[] = [
     },
     {
         name: "osc_mute_all_buses",
-        description: "Mute or unmute every mix bus master in one batch. Use only when the user explicitly says 'mute/coupe/désactive tous les bus' or 'unmute/réactive tous les bus'. This controls all bus master on/off states, not channel sends.",
+        description: "Mute or unmute every mix bus master in one batch. Use only when the user explicitly says 'mute/coupe/désactive tous les bus' or 'unmute/réactive tous les bus' with no exceptions. For 'all buses except ...', use osc_mute_all_buses_except.",
         inputSchema: {
             type: "object",
             properties: {
                 mute: { type: "boolean", description: "True to mute all buses, false to unmute all buses" },
             },
             required: ["mute"],
+        },
+    },
+    {
+        name: "osc_mute_all_buses_except",
+        description: "Mute or unmute every configured mix bus master except the listed bus numbers. Use for commands like 'coupe tous les bus sauf Anto' after resolving each exception name to a bus. This controls bus masters, not channel sends.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                exceptBuses: {
+                    type: "array",
+                    description: `Configured mix bus numbers to leave unchanged (1-${OSC_BUS_COUNT})`,
+                    items: { type: "number", minimum: 1, maximum: OSC_BUS_COUNT },
+                    minItems: 1,
+                    uniqueItems: true,
+                },
+                mute: { type: "boolean", description: "True to mute all other buses, false to unmute all other buses" },
+            },
+            required: ["exceptBuses", "mute"],
         },
     },
     {
@@ -2629,7 +2667,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
             case "osc_automation_ramp": {
                 const input = args as unknown as AutomationRampInput;
-                await osc.assertMixerOnline();
                 const action = rampAction(input);
                 const job = automation.start(input.label || action.description || "ramp automation", [action]);
                 return {
@@ -3137,19 +3174,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
             case "osc_mute_buses": {
                 const { buses, mute } = args as { buses: number[]; mute: boolean };
-                const uniqueBuses = Array.from(new Set(buses)).filter((bus) => Number.isInteger(bus) && bus >= 1 && bus <= OSC_BUS_COUNT);
-                if (uniqueBuses.length === 0) {
-                    throw new Error(`At least one valid bus number from 1 to ${OSC_BUS_COUNT} is required`);
+                const uniqueBuses = Array.from(new Set(buses));
+                const invalidBuses = uniqueBuses.filter((bus) => !Number.isInteger(bus) || bus < 1 || bus > OSC_BUS_COUNT);
+                if (invalidBuses.length > 0) {
+                    throw new Error(`Invalid bus number(s): ${invalidBuses.join(", ")}. Configured bus range is 1 to ${OSC_BUS_COUNT}.`);
                 }
-                await osc.assertMixerOnline();
-                for (const bus of uniqueBuses) {
-                    await osc.muteBusUnchecked(bus, mute);
+                if (uniqueBuses.length === 0) {
+                    throw new Error(`At least one bus number from 1 to ${OSC_BUS_COUNT} is required`);
+                }
+                const { changed, failures } = await muteBusBatch(uniqueBuses, mute);
+                if (failures.length > 0) {
+                    throw new Error(`Certaines commandes bus ont mal ete executees. Reussies: ${changed.join(", ") || "aucune"}. Echecs: ${failures.join(" | ")}`);
                 }
                 return {
                     content: [
                         {
                             type: "text",
-                            text: `Buses ${uniqueBuses.join(", ")} ${mute ? "muted" : "unmuted"}`,
+                            text: `Buses ${changed.join(", ")} ${mute ? "muted" : "unmuted"} and verified`,
                         },
                     ],
                 };
@@ -3158,15 +3199,43 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             case "osc_mute_all_buses": {
                 const { mute } = args as { mute: boolean };
                 const buses = namedTargetRange("bus");
-                await osc.assertMixerOnline();
-                for (const bus of buses) {
-                    await osc.muteBusUnchecked(bus, mute);
+                const { changed, failures } = await muteBusBatch(buses, mute);
+                if (failures.length > 0) {
+                    throw new Error(`Certaines commandes bus ont mal ete executees. Reussies: ${changed.join(", ") || "aucune"}. Echecs: ${failures.join(" | ")}`);
                 }
                 return {
                     content: [
                         {
                             type: "text",
-                            text: `All ${buses.length} buses ${mute ? "muted" : "unmuted"}`,
+                            text: `All ${changed.length} buses ${mute ? "muted" : "unmuted"} and verified`,
+                        },
+                    ],
+                };
+            }
+
+            case "osc_mute_all_buses_except": {
+                const { exceptBuses, mute } = args as { exceptBuses: number[]; mute: boolean };
+                const uniqueExceptBuses = Array.from(new Set(exceptBuses));
+                const invalidBuses = uniqueExceptBuses.filter((bus) => !Number.isInteger(bus) || bus < 1 || bus > OSC_BUS_COUNT);
+                if (invalidBuses.length > 0) {
+                    throw new Error(`Invalid exception bus number(s): ${invalidBuses.join(", ")}. Configured bus range is 1 to ${OSC_BUS_COUNT}.`);
+                }
+
+                const protectedBuses = new Set(uniqueExceptBuses);
+                const buses = namedTargetRange("bus").filter((bus) => !protectedBuses.has(bus));
+                if (buses.length === 0) {
+                    throw new Error("No buses left to change after applying exceptions.");
+                }
+
+                const { changed, failures } = await muteBusBatch(buses, mute);
+                if (failures.length > 0) {
+                    throw new Error(`Certaines commandes bus ont mal ete executees. Reussies: ${changed.join(", ") || "aucune"}. Echecs: ${failures.join(" | ")}`);
+                }
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Buses ${changed.join(", ")} ${mute ? "muted" : "unmuted"} and verified; left unchanged: ${uniqueExceptBuses.join(", ")}`,
                         },
                     ],
                 };
