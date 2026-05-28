@@ -134,10 +134,11 @@ docker run --rm -p 8787:8787 \
   -e OSC_HOST=192.168.0.1 \
   -e OSC_PORT=10023 \
   -e OSC_PROTOCOL=OSCX32M32 \
+  -e DEBUG=false \
   xmseries-mcp:latest
 ```
 
-Or use the included `docker-compose.yml` as a starting point. On Synology, set `HTTP_PUBLIC_HOST` to the NAS LAN IP or DNS name that agents should use. The official Node base image supports common Synology architectures such as `linux/amd64` and `linux/arm64`; build on the target NAS or publish a multi-architecture image with `docker buildx`.
+Or use the included `docker-compose.yml` as a starting point. On Synology, set `HTTP_PUBLIC_HOST` to the NAS LAN IP or DNS name that agents should use. Set `DEBUG=true` when you want `[OSC READ]` and `[OSC WRITE]` traces in the container logs. The official Node base image supports common Synology architectures such as `linux/amd64` and `linux/arm64`; build on the target NAS or publish a multi-architecture image with `docker buildx`.
 
 ### Protocol support
 

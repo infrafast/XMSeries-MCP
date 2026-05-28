@@ -117,6 +117,7 @@ docker run -d \
   -e OSC_HOST=192.168.0.1 \
   -e OSC_PORT=10023 \
   -e OSC_PROTOCOL=OSCX32M32 \
+  -e DEBUG=false \
   xmseries-mcp:latest
 ```
 
@@ -125,6 +126,7 @@ Replace:
 - `MCP_AUTH_TOKEN` with your own token
 - `OSC_HOST` with your mixer IP
 - `OSC_PROTOCOL` with `OSCX32M32` for X32/M32 or `OSCXR` for the supported XAir/XR command subset
+- `DEBUG` with `true` when you want `[OSC READ]` and `[OSC WRITE]` traces in the container logs
 
 The container logs print the ready-to-use MCP JSON config, including the real URL, bearer token, and `assistantPrompt` block.
 
@@ -152,6 +154,7 @@ MCP_AUTH_TOKEN: change-me
 OSC_HOST: 192.168.0.1
 OSC_PORT: 10023
 OSC_PROTOCOL: OSCX32M32
+DEBUG: "false"
 ```
 
 8. Set `HTTP_PUBLIC_HOST` to the NAS LAN IP or DNS name that your agent can reach.

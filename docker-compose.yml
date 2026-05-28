@@ -18,3 +18,5 @@ services:
       OSC_HOST: 192.168.0.1
       OSC_PORT: 10023
       OSC_PROTOCOL: OSCX32M32
+      # Enable [OSC READ] and [OSC WRITE] traces in container logs.
+      DEBUG: "false"
