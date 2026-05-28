@@ -81,6 +81,10 @@ export async function startHttpServer(): Promise<void> {
             oscHost: OSC_HOST,
             oscPort: OSC_PORT,
             oscProtocol: OSC_PROTOCOL,
+            oscChannelCount: OSC_CHANNEL_COUNT,
+            oscBusCount: OSC_BUS_COUNT,
+            oscFxCount: OSC_FX_COUNT,
+            oscDcaCount: OSC_DCA_COUNT,
             authRequired: Boolean(MCP_AUTH_TOKEN),
         });
     });

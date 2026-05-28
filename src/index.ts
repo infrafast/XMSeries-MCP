@@ -2292,9 +2292,9 @@ const TOOLS: Tool[] = [
             properties: {
                 effect: {
                     type: "number",
-                    description: "Effect number (1-8)",
+                    description: `Effect number (1-${OSC_FX_COUNT})`,
                     minimum: 1,
-                    maximum: 8,
+                    maximum: OSC_FX_COUNT,
                 },
                 on: {
                     type: "boolean",
@@ -2312,9 +2312,9 @@ const TOOLS: Tool[] = [
             properties: {
                 effect: {
                     type: "number",
-                    description: "Effect number (1-8)",
+                    description: `Effect number (1-${OSC_FX_COUNT})`,
                     minimum: 1,
-                    maximum: 8,
+                    maximum: OSC_FX_COUNT,
                 },
                 param: {
                     type: "number",
