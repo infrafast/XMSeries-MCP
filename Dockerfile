@@ -21,6 +21,7 @@ COPY package*.json ./
 RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
 COPY --from=build /app/dist ./dist
+COPY PROMPT.md ./PROMPT.md
 
 EXPOSE 8787
 

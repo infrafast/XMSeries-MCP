@@ -93,6 +93,79 @@ Then configure the remote agent with the server computer's LAN IP:
 
 The same example is available in `mcp_http_agent_config.example.json`. Use a trusted LAN, VPN, or authenticated reverse proxy; this MCP can control live mixer state.
 
+### Optional: Run With Docker
+
+Docker is useful when you want XMSeries-MCP to run autonomously on a NAS, mini PC, or server without installing Node.js directly on the host.
+
+Build the image:
+
+```bash
+docker build -t xmseries-mcp:latest .
+```
+
+Run it:
+
+```bash
+docker run -d \
+  --name xmseries-mcp \
+  --restart unless-stopped \
+  -p 8787:8787 \
+  -e HTTP_HOST=0.0.0.0 \
+  -e HTTP_PORT=8787 \
+  -e HTTP_PUBLIC_HOST=192.168.1.50 \
+  -e MCP_AUTH_TOKEN=change-me \
+  -e OSC_HOST=192.168.0.1 \
+  -e OSC_PORT=10023 \
+  -e OSC_PROTOCOL=OSCX32M32 \
+  xmseries-mcp:latest
+```
+
+Replace:
+- `HTTP_PUBLIC_HOST` with the LAN IP or hostname of the Docker host
+- `MCP_AUTH_TOKEN` with your own token
+- `OSC_HOST` with your mixer IP
+- `OSC_PROTOCOL` with `OSCX32M32` for X32/M32 or `OSCXR` for the supported XAir/XR command subset
+
+The container logs print the ready-to-use MCP JSON config, including the real URL, bearer token, and `assistantPrompt` block.
+
+You can also start from the included `docker-compose.yml`:
+
+```bash
+docker compose up -d --build
+```
+
+### Optional: Synology DSM / Container Manager
+
+This is a practical step-by-step path for Synology DSM 7 with Container Manager.
+
+1. Install **Container Manager** from Package Center.
+2. Copy this repository to the NAS, for example in `/volume1/docker/XMSeries-MCP`.
+3. Open **Container Manager**.
+4. Go to **Project**.
+5. Click **Create**.
+6. Set the project path to the folder that contains this repository and its `docker-compose.yml`.
+7. Review the compose file and adjust these environment variables:
+
+```yaml
+HTTP_PUBLIC_HOST: 192.168.1.50
+MCP_AUTH_TOKEN: change-me
+OSC_HOST: 192.168.0.1
+OSC_PORT: 10023
+OSC_PROTOCOL: OSCX32M32
+```
+
+8. Set `HTTP_PUBLIC_HOST` to the NAS LAN IP or DNS name that your agent can reach.
+9. Set `OSC_HOST` to the mixer IP address.
+10. Create and start the project.
+11. Open the container logs. Copy the printed **Agent HTTP MCP config** block into your agent MCP config file.
+12. Test health from another machine on the LAN:
+
+```bash
+curl -H "Authorization: Bearer change-me" http://192.168.1.50:8787/health
+```
+
+If the NAS has a firewall enabled, allow TCP port `8787`. The mixer must also be reachable from the NAS on UDP port `10023`.
+
 ### 5. Verify Installation
 
 In Claude Desktop, start a new conversation and try:
