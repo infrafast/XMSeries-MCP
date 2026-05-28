@@ -120,6 +120,18 @@ export function decodeUserOutSource(n: number): string {
 
 export type OSCProtocol = "OSCX32M32" | "OSCXR";
 
+export function parseOscCountEnv(name: string, defaultValue: number): number {
+    const raw = process.env[name];
+    if (!raw) return defaultValue;
+
+    const parsed = parseInt(raw, 10);
+    if (!Number.isInteger(parsed) || parsed < 1) {
+        console.error(`Invalid ${name}="${raw}". Using default ${defaultValue}.`);
+        return defaultValue;
+    }
+    return parsed;
+}
+
 export class OSCClient {
     private osc: any;
     private host: string;
@@ -132,13 +144,22 @@ export class OSCClient {
     private mixerHealthCheckPromise: Promise<void> | null = null;
     private protocol: OSCProtocol;
     private debugOsc: boolean;
+    private channelCount: number;
+    private busCount: number;
     private oscCommandLog: string[] = [];
 
-    constructor(host: string, port: number, protocol: OSCProtocol = "OSCX32M32") {
+    constructor(
+        host: string,
+        port: number,
+        protocol: OSCProtocol = "OSCX32M32",
+        options: { channelCount?: number; busCount?: number } = {}
+    ) {
         this.host = host;
         this.port = port;
         this.protocol = protocol;
         this.debugOsc = process.env.DEBUG === "1" || process.env.DEBUG?.toLowerCase() === "true";
+        this.channelCount = options.channelCount ?? parseOscCountEnv("OSC_CHANNEL_COUNT", 32);
+        this.busCount = options.busCount ?? parseOscCountEnv("OSC_BUS_COUNT", 16);
 
         // Create OSC instance with UDP plugin
         const plugin = new (OSC as any).DatagramPlugin({
@@ -1088,7 +1109,7 @@ export class OSCClient {
 
         if (this.protocol === "OSCXR") {
             result.sends = [];
-            for (let b = 1; b <= 16; b++) {
+            for (let b = 1; b <= this.busCount; b++) {
                 const sendPath = `${path}/mix/${b.toString().padStart(2, "0")}`;
                 result.sends.push({
                     bus: b,
@@ -1115,9 +1136,9 @@ export class OSCClient {
         result.dynKnee = await this.safeRead(`${path}/dyn/knee`);
         result.dynGain = await this.safeRead(`${path}/dyn/gain`);
 
-        // Sends to buses (16 buses)
+        // Sends to buses
         result.sends = [];
-        for (let b = 1; b <= 16; b++) {
+        for (let b = 1; b <= this.busCount; b++) {
             const sendPath = `${path}/mix/${b.toString().padStart(2, "0")}`;
             result.sends.push({
                 bus: b,
@@ -1283,9 +1304,9 @@ export class OSCClient {
         }
         const overview: any = {};
 
-        // All 32 channels - name, fader, mute only for speed
+        // All channels - name, fader, mute only for speed
         overview.channels = [];
-        for (let ch = 1; ch <= 32; ch++) {
+        for (let ch = 1; ch <= this.channelCount; ch++) {
             const path = this.getChannelPath(ch);
             overview.channels.push({
                 ch,
@@ -1295,9 +1316,9 @@ export class OSCClient {
             });
         }
 
-        // 16 mix buses
+        // Mix buses
         overview.buses = [];
-        for (let b = 1; b <= 16; b++) {
+        for (let b = 1; b <= this.busCount; b++) {
             const path = this.getBusPath(b);
             overview.buses.push({
                 bus: b,

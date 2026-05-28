@@ -6,7 +6,15 @@ import { randomUUID } from "crypto";
 import os from "os";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
-import { connectOscDevice, createOscMcpServer, OSC_HOST, OSC_PORT, OSC_PROTOCOL } from "./index.js";
+import {
+    connectOscDevice,
+    createOscMcpServer,
+    OSC_BUS_COUNT,
+    OSC_CHANNEL_COUNT,
+    OSC_HOST,
+    OSC_PORT,
+    OSC_PROTOCOL,
+} from "./index.js";
 
 const HTTP_HOST = process.env.HTTP_HOST || "0.0.0.0";
 const HTTP_PORT = parseInt(process.env.HTTP_PORT || "8787", 10);
@@ -132,6 +140,7 @@ export async function startHttpServer(): Promise<void> {
         console.error(`Agent MCP URL: ${mcpUrl}`);
         console.error(`Agent health URL: ${healthUrl}`);
         console.error(`OSC: ${OSC_HOST}:${OSC_PORT} (${OSC_PROTOCOL})`);
+        console.error(`OSC limits: ${OSC_CHANNEL_COUNT} channel(s), ${OSC_BUS_COUNT} bus(es)`);
         if (MCP_AUTH_TOKEN) {
             console.error("HTTP auth: bearer token required");
         } else {

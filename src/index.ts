@@ -17,7 +17,7 @@ import {
     Tool,
 } from "@modelcontextprotocol/sdk/types.js";
 import { AutomationAction, AutomationCurve, AutomationEngine } from "./automation.js";
-import { coerceOscArg, OSCClient, OSCProtocol } from "./osc-client.js";
+import { coerceOscArg, OSCClient, OSCProtocol, parseOscCountEnv } from "./osc-client.js";
 import { dbToFaderLevel, faderLevelToDb, formatDb } from "./level-table.js";
 
 const execAsync = promisify(exec);
@@ -28,6 +28,8 @@ const __dirname = path.dirname(__filename);
 export const OSC_HOST = process.env.OSC_HOST || "192.168.1.17";
 export const OSC_PORT = parseInt(process.env.OSC_PORT || "10023");
 export const OSC_PROTOCOL = parseOscProtocol(process.env.OSC_PROTOCOL);
+export const OSC_CHANNEL_COUNT = parseOscCountEnv("OSC_CHANNEL_COUNT", 32);
+export const OSC_BUS_COUNT = parseOscCountEnv("OSC_BUS_COUNT", 16);
 const DEBUG_ENABLED = process.env.DEBUG === "1" || process.env.DEBUG?.toLowerCase() === "true";
 const PROMPT_RESOURCE_URI = "xmseries://prompt/system";
 const PROMPT_NAME = "xmseries_mixer_assistant";
@@ -40,7 +42,10 @@ async function readAgentPrompt(): Promise<string> {
 }
 
 // Initialize OSC client
-const osc = new OSCClient(OSC_HOST, OSC_PORT, OSC_PROTOCOL);
+const osc = new OSCClient(OSC_HOST, OSC_PORT, OSC_PROTOCOL, {
+    channelCount: OSC_CHANNEL_COUNT,
+    busCount: OSC_BUS_COUNT,
+});
 const automation = new AutomationEngine();
 let oscConnectPromise: Promise<void> | null = null;
 
@@ -191,8 +196,8 @@ async function readNamedTarget(family: NamedTargetFamily, index: number): Promis
 
 function namedTargetRange(family: NamedTargetFamily): number[] {
     const maxByFamily: Record<NamedTargetFamily, number> = {
-        channel: 32,
-        bus: 16,
+        channel: OSC_CHANNEL_COUNT,
+        bus: OSC_BUS_COUNT,
         fxreturn: 8,
         aux: OSC_PROTOCOL === "OSCXR" ? 1 : 8,
         dca: 8,
@@ -209,24 +214,31 @@ async function findNamedTargets(
     if (!normalizedQuery) return [];
 
     const candidates: Array<Omit<NamedTargetMatch, "matchType"> & { normalizedName: string }> = [];
+    const exactMatches: NamedTargetMatch[] = [];
+    const singleFamily = families.length === 1;
 
     for (const family of families) {
         for (const index of namedTargetRange(family)) {
             const name = await readNamedTarget(family, index);
             if (!name) continue;
+            const normalizedName = normalizeMixerName(name);
+
+            if (normalizedName === normalizedQuery) {
+                exactMatches.push({ family, index, name, matchType: "exact" });
+                if (singleFamily) {
+                    return exactMatches;
+                }
+                continue;
+            }
 
             candidates.push({
                 family,
                 index,
                 name,
-                normalizedName: normalizeMixerName(name),
+                normalizedName,
             });
         }
     }
-
-    const exactMatches = candidates
-        .filter((candidate) => candidate.normalizedName === normalizedQuery)
-        .map(({ normalizedName: _normalizedName, ...candidate }) => ({ ...candidate, matchType: "exact" as const }));
 
     if (exactMatches.length > 0) return exactMatches;
 
@@ -3129,9 +3141,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
             case "osc_mute_buses": {
                 const { buses, mute } = args as { buses: number[]; mute: boolean };
-                const uniqueBuses = Array.from(new Set(buses)).filter((bus) => Number.isInteger(bus) && bus >= 1 && bus <= 16);
+                const uniqueBuses = Array.from(new Set(buses)).filter((bus) => Number.isInteger(bus) && bus >= 1 && bus <= OSC_BUS_COUNT);
                 if (uniqueBuses.length === 0) {
-                    throw new Error("At least one valid bus number from 1 to 16 is required");
+                    throw new Error(`At least one valid bus number from 1 to ${OSC_BUS_COUNT} is required`);
                 }
                 await osc.assertMixerOnline();
                 for (const bus of uniqueBuses) {
@@ -3360,9 +3372,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
             case "osc_send_to_buses_db": {
                 const { channel, buses, db, includeMain } = args as { channel: number; buses: number[]; db: number; includeMain?: boolean };
-                const uniqueBuses = Array.from(new Set(buses)).filter((bus) => Number.isInteger(bus) && bus >= 1 && bus <= 16);
+                const uniqueBuses = Array.from(new Set(buses)).filter((bus) => Number.isInteger(bus) && bus >= 1 && bus <= OSC_BUS_COUNT);
                 if (uniqueBuses.length === 0) {
-                    throw new Error("At least one valid bus number from 1 to 16 is required");
+                    throw new Error(`At least one valid bus number from 1 to ${OSC_BUS_COUNT} is required`);
                 }
                 const converted = dbToFaderLevel(db);
                 await osc.assertMixerOnline();
@@ -4274,6 +4286,7 @@ return server;
 async function main() {
     console.error("Starting OSC MCP Server...");
     console.error(`Connecting to OSC device at ${OSC_HOST}:${OSC_PORT} (${OSC_PROTOCOL})`);
+    console.error(`OSC limits: ${OSC_CHANNEL_COUNT} channel(s), ${OSC_BUS_COUNT} bus(es)`);
 
     await connectOscDevice();
 

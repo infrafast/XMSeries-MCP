@@ -18,5 +18,8 @@ services:
       OSC_HOST: 192.168.0.1
       OSC_PORT: 10023
       OSC_PROTOCOL: OSCX32M32
+      # X32/M32 defaults are 32 channels and 16 buses; override for smaller OSCXR consoles.
+      OSC_CHANNEL_COUNT: 32
+      OSC_BUS_COUNT: 16
       # Enable [OSC READ] and [OSC WRITE] traces in container logs.
       DEBUG: "false"

@@ -99,6 +99,8 @@ HTTP mode reads these additional variables:
 | `HTTP_PORT` | `8787` | HTTP MCP port |
 | `HTTP_PUBLIC_HOST` | auto-detected | Optional LAN IP or hostname to print in the agent JSON config. Useful in Docker, where auto-detection may otherwise find the container IP. |
 | `MCP_AUTH_TOKEN` | unset | Optional bearer token required on `/mcp` and `/health` when set |
+| `OSC_CHANNEL_COUNT` | `32` | Number of mixer input channels to scan for name resolution and overview reads. Override for smaller OSCXR consoles. |
+| `OSC_BUS_COUNT` | `16` | Number of mix buses to scan/use for name resolution and all-bus commands. Override for smaller OSCXR consoles. |
 
 The HTTP MCP endpoint is `/mcp`; a health endpoint is available at `/health`. If `MCP_AUTH_TOKEN` is set, remote agents must send `Authorization: Bearer <token>` or `x-mcp-auth-token: <token>`.
 
@@ -134,6 +136,8 @@ docker run --rm -p 8787:8787 \
   -e OSC_HOST=192.168.0.1 \
   -e OSC_PORT=10023 \
   -e OSC_PROTOCOL=OSCX32M32 \
+  -e OSC_CHANNEL_COUNT=32 \
+  -e OSC_BUS_COUNT=16 \
   -e DEBUG=false \
   xmseries-mcp:latest
 ```
