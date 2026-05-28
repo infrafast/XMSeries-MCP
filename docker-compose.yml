@@ -1,0 +1,20 @@
+services:
+  xmseries-mcp:
+    build:
+      context: .
+    image: xmseries-mcp:latest
+    container_name: xmseries-mcp
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    environment:
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: 8787
+      # Set this to the LAN IP or DNS name clients should use to reach the NAS/container host.
+      HTTP_PUBLIC_HOST: 192.168.1.50
+      # Change this token before exposing the service on your LAN.
+      MCP_AUTH_TOKEN: change-me
+      # Mixer OSC endpoint.
+      OSC_HOST: 192.168.0.1
+      OSC_PORT: 10023
+      OSC_PROTOCOL: OSCX32M32

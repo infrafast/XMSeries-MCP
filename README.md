@@ -97,6 +97,7 @@ HTTP mode reads these additional variables:
 |---|---:|---|
 | `HTTP_HOST` | `0.0.0.0` | Interface for the HTTP MCP server. Use `0.0.0.0` to accept connections from other machines on the LAN. |
 | `HTTP_PORT` | `8787` | HTTP MCP port |
+| `HTTP_PUBLIC_HOST` | auto-detected | Optional LAN IP or hostname to print in the agent JSON config. Useful in Docker, where auto-detection may otherwise find the container IP. |
 | `MCP_AUTH_TOKEN` | unset | Optional bearer token required on `/mcp` and `/health` when set |
 
 The HTTP MCP endpoint is `/mcp`; a health endpoint is available at `/health`. If `MCP_AUTH_TOKEN` is set, remote agents must send `Authorization: Bearer <token>` or `x-mcp-auth-token: <token>`.
@@ -120,6 +121,23 @@ Example remote-agent configuration:
 Replace `192.168.1.50` with the IP address of the computer running XMSeries-MCP. A copy of this example is provided in `mcp_http_agent_config.example.json`.
 
 Because this server can control live mixer state, avoid exposing HTTP mode directly to the public internet. Prefer a trusted LAN, VPN, or authenticated reverse proxy.
+
+**Docker / Synology Container Manager**
+
+Build and run locally:
+
+```bash
+docker build -t xmseries-mcp:latest .
+docker run --rm -p 8787:8787 \
+  -e HTTP_PUBLIC_HOST=192.168.1.50 \
+  -e MCP_AUTH_TOKEN=change-me \
+  -e OSC_HOST=192.168.0.1 \
+  -e OSC_PORT=10023 \
+  -e OSC_PROTOCOL=OSCX32M32 \
+  xmseries-mcp:latest
+```
+
+Or use the included `docker-compose.yml` as a starting point. On Synology, set `HTTP_PUBLIC_HOST` to the NAS LAN IP or DNS name that agents should use. The official Node base image supports common Synology architectures such as `linux/amd64` and `linux/arm64`; build on the target NAS or publish a multi-architecture image with `docker buildx`.
 
 ### Protocol support
 
