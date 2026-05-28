@@ -190,6 +190,12 @@ If everything is working, you should see the mixer status information!
 
 The status tool uses `/xinfo` and `/status`, so a successful response should include connection state plus identity fields such as network address, mixer network name, console model, and console version when the mixer provides them.
 
+### Transactional writes
+
+Dedicated readable write tools verify their writes by reading the same OSC address back. If the mixer does not answer, the tool reports that the mixer is disconnected. If the value read back is different from the value sent, the tool reports that the command was not executed correctly.
+
+Ramp automations verify the final value when the ramp completes. Raw custom OSC writes and scene recall/save are address-specific and are not generically verified; use explicit reads when you need to validate those.
+
 ## Example Commands
 
 Once configured, you can control your mixer using natural language:

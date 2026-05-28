@@ -246,7 +246,7 @@ Full list is visible to Claude; high-level groupings:
 |---|---|
 | **Channel strips** | headamp/preamp context, gate, comp, EQ (4 bands), fader, pan, mute, name, color, icon, source, bus sends |
 | **Bus / Matrix / Aux / FX-Return / DCA / Main** | faders, mutes, names, pan where mapped, EQ where mapped, focused strip reads |
-| **Identity / status** | `osc_get_mixer_status` uses `/xinfo` for network address, mixer network name, console model, and console version, plus `/status`; periodic health checks put writes in offline mode when `/xinfo` times out |
+| **Identity / status** | `osc_get_mixer_status` uses `/xinfo` for network address, mixer network name, console model, and console version |
 | **Routing** | block-level in/out/AES50/Card, User In (32 slots), User Out (48 slots), decoded labels, one-call overview |
 | **FX** | per-slot type, 16 params each, source, full-chain read |
 | **Scenes / snippets** | recall, save, name |
@@ -255,6 +255,14 @@ Full list is visible to Claude; high-level groupings:
 | **Fader dB conversion** | `osc_db_to_fader_level`, `osc_fader_level_to_db`, channel/bus/aux/main/matrix `*_fader_db` setters/getters |
 | **Automation** | `osc_automation_ramp`, `osc_automation_delayed_command`, `osc_automation_macro`, `osc_automation_list`, `osc_automation_cancel` for background fades, delayed actions, and timed sequences |
 | **Raw escape hatch** | `osc_custom_command` with typed args and read-back |
+
+## Transactional Writes
+
+Dedicated direct-control write tools use transactional OSC write-back verification where the target address is readable: the server writes one value, reads the same OSC address back, and verifies the returned value. Numeric values use a small tolerance and a few short read retries to tolerate mixer update latency. If the mixer does not answer, the tool reports `Le mixeur est deconnecté`; if the value read back differs, the tool reports that the OSC command was not executed correctly.
+
+Batch bus mute tools verify each bus write and report partial failures instead of silently claiming success. Ramp automations do not read after every step, but they verify the final value before marking the job completed.
+
+Scene recall/save and `osc_custom_command` writes remain intentionally outside this generic transaction layer because their OSC acknowledgement/read-back behavior is address-specific. Use explicit reads when validating raw or scene-style operations.
 
 ## Fader Levels in dB
 
@@ -313,7 +321,7 @@ Examples:
 }
 ```
 
-For write-heavy ramps, the server performs the mixer connectivity check once at automation start, then sends the timed OSC writes without probing `/xinfo` at every step. This keeps fades smooth and avoids unnecessary network load.
+For write-heavy ramps, the server sends timed OSC writes without probing `/xinfo` at every step, then verifies the final target value. This keeps fades smooth while still detecting failed end states.
 
 ## Custom OSC commands
 
@@ -418,8 +426,8 @@ OSC_HOST=192.168.0.16 OSC_PORT=10024 OSC_PROTOCOL=OSCXR npm test
 - OSC transport: `osc-js` `DatagramPlugin` over UDP
 - HTTP bridge dependencies: `express` and `cors`
 - Language/tooling: TypeScript, Node 18+
-- Health check: write tools probe `/xinfo` on demand before sending writes; automation jobs probe once when the job starts
-- Offline write guard: if the on-demand `/xinfo` health check fails, write tools return `Le mixeur est deconnecté`
+- Transactional writes: dedicated readable write tools write the value, read the same OSC address back, and verify the result
+- Offline detection: if the write-back read times out, write tools return `Le mixeur est deconnecté`
 - Reply handling: stores one pending callback per OSC address and times out reads after 1 second
 
 ## Troubleshooting

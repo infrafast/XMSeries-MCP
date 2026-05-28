@@ -193,7 +193,11 @@ async function readNamedTarget(family: NamedTargetFamily, index: number): Promis
             case "matrix":
                 return await osc.getMatrixName(index);
         }
-    } catch {
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.toLowerCase().includes("timeout waiting for response")) {
+            throw new Error(`Le mixeur est deconnecté: impossible de lire les noms OSC (${family} ${index})`);
+        }
         return null;
     }
 }
