@@ -17,7 +17,7 @@ import {
     Tool,
 } from "@modelcontextprotocol/sdk/types.js";
 import { AutomationAction, AutomationCurve, AutomationEngine } from "./automation.js";
-import { coerceOscArg, OSCClient, OSCProtocol, parseOscCountEnv } from "./osc-client.js";
+import { coerceOscArg, MixerDisconnectedError, OSCClient, OSCProtocol, parseOscCountEnv } from "./osc-client.js";
 import { dbToFaderLevel, faderLevelToDb, formatDb } from "./level-table.js";
 
 const execAsync = promisify(exec);
@@ -194,8 +194,7 @@ async function readNamedTarget(family: NamedTargetFamily, index: number): Promis
                 return await osc.getMatrixName(index);
         }
     } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        if (message.toLowerCase().includes("timeout waiting for response")) {
+        if (error instanceof MixerDisconnectedError) {
             throw new Error(`Le mixeur est deconnecté: impossible de lire les noms OSC (${family} ${index})`);
         }
         return null;
@@ -4325,12 +4324,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return appendOscTrace(result, osc.drainOscCommandLog(), name);
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        if (message === "Le mixeur est deconnecté") {
+        if (error instanceof MixerDisconnectedError || message.startsWith("Le mixeur est deconnecté")) {
             return appendOscTrace({
                 content: [
                     {
                         type: "text",
-                        text: "Le mixeur est deconnecté",
+                        text: message,
                     },
                 ],
                 isError: true,

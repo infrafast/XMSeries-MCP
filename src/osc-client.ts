@@ -120,6 +120,13 @@ export function decodeUserOutSource(n: number): string {
 
 export type OSCProtocol = "OSCX32M32" | "OSCXR";
 
+export class MixerDisconnectedError extends Error {
+    constructor(address: string) {
+        super(`Le mixeur est deconnecté: timeout OSC sur ${address}`);
+        this.name = "MixerDisconnectedError";
+    }
+}
+
 export function parseOscCountEnv(name: string, defaultValue: number): number {
     const raw = process.env[name];
     if (!raw) return defaultValue;
@@ -280,12 +287,15 @@ export class OSCClient {
             try {
                 actual = await this.sendAndReceive(address);
                 this.mixerOnline = true;
-                this.lastHealthError = null;
-            } catch (error) {
-                this.mixerOnline = false;
-                this.lastHealthError = error instanceof Error ? error.message : String(error);
+            this.lastHealthError = null;
+        } catch (error) {
+            this.mixerOnline = false;
+            this.lastHealthError = error instanceof Error ? error.message : String(error);
+            if (error instanceof MixerDisconnectedError) {
                 throw new Error(`Le mixeur est deconnecté: impossible de confirmer l'ecriture OSC ${address}`);
             }
+            throw error;
+        }
 
             if (this.valuesMatch(expected, actual, options?.tolerance)) {
                 this.recordOscCommand(`[OSC VERIFY] ${this.protocol} ${this.host}:${this.port} ${address} confirmed ${this.formatOscValue(actual)}${attempt > 1 ? ` after ${attempt} reads` : ""}`);
@@ -376,7 +386,7 @@ export class OSCClient {
             setTimeout(() => {
                 if (this.responseCallbacks.has(address)) {
                     this.responseCallbacks.delete(address);
-                    reject(new Error(`Timeout waiting for response from ${address}`));
+                    reject(new MixerDisconnectedError(address));
                 }
             }, 1000);
         });
@@ -393,7 +403,7 @@ export class OSCClient {
             setTimeout(() => {
                 if (this.responseCallbacks.has(address)) {
                     this.responseCallbacks.delete(address);
-                    reject(new Error(`Timeout waiting for response from ${address}`));
+                    reject(new MixerDisconnectedError(address));
                 }
             }, 1000);
         });
