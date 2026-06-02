@@ -13,7 +13,7 @@ services:
       # Set this to the LAN IP or DNS name clients should use to reach the NAS/container host.
       HTTP_PUBLIC_HOST: 192.168.1.50
       # Change this token before exposing the service on your LAN.
-      MCP_AUTH_TOKEN: change-me
+      MCP_AUTH_TOKEN: 
       # Mixer OSC endpoint.
       OSC_HOST: 192.168.0.1
       OSC_PORT: 10023

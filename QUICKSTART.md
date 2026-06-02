@@ -152,6 +152,7 @@ This is a practical step-by-step path for Synology DSM 7 with Container Manager.
 5. Click **Create**.
 6. Set the project path to the folder that contains this repository and its `docker-compose.yml`.
 7. Review the compose file and adjust these environment variables:
+  MCP_AUTH_TOKEN=change-me  or left empty for no auth
 
 ```yaml
 HTTP_PUBLIC_HOST: 192.168.1.50
