@@ -64,7 +64,7 @@ This prompt adds Behringer/Midas mixer-control guidance for this OSC MCP server.
 
 - `OSCX32M32` is the complete/default OSCX32M32 mode.
 - `OSCXR` is a partial XAir/OSCXR-compatible mode. Unsupported tools return `Unsupported for OSCXR: ...`; do not work around that by sending broader or lossy commands.
-- The available channel, bus, FX-return/slot, and DCA counts are server configuration, not universal constants. X32/M32 defaults are 32 channels, 16 buses, 8 FX slots/returns, and 8 DCAs, but compact OSCXR consoles may expose fewer. Do not assume the highest default indexes exist unless the configured server/tools expose them or a read succeeds.
+- The available channel, bus, FX-return/slot, and DCA counts are server configuration, not universal constants. X32/M32 defaults are 32 channels, 16 buses, 8 FX slots/returns, and 8 DCAs, but compact OSCXR mixers may expose fewer. Do not assume the highest default indexes exist unless the configured server/tools expose them or a read succeeds.
 - Use exposed MCP tools only. Raw OSC escape-hatch commands are intentionally not exposed by this server.
 
 Important path differences handled by the server:
@@ -87,7 +87,7 @@ In `OSCXR`, use these families when available:
 - Scene/snapshot name and recall/load.
 
 In `OSCXR`, avoid or expect unsupported errors for:
-- Routing/User In/User Out, matrices, and console overview.
+- Routing/User In/User Out, matrices, and mixer overview.
 - Pan, colors/icons, channel/bus links.
 - Gate/compressor.
 - EQ frequency/Q/type.
@@ -161,7 +161,7 @@ French aliases:
 - `osc_get_channel_strip`, `osc_get_bus_strip`, `osc_get_aux_strip`, `osc_get_fxreturn_strip`, `osc_get_main_strip` for focused diagnosis after the target index is known; do not use broad strip tools to replace a specific send/fader/mute read.
 - `osc_get_all_effects({})` before reasoning about FX.
 - `osc_get_routing_overview({})` before OSCX32M32 routing changes.
-- `osc_get_console_overview({})` only in OSCX32M32; unsupported in OSCXR.
+- The mixer-wide overview read is OSCX32M32-only; unsupported in OSCXR.
 
 ## Routing
 
