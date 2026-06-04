@@ -67,7 +67,7 @@ Once configured, you can use natural language commands in Claude Desktop:
 
 ### System Prompt (Optional)
 
-For better results, inject the server-provided prompt into the agent context. The server exposes `PROMPT.md` as MCP prompt `xmseries_mixer_assistant`, MCP resource `xmseries://prompt/system`, and fallback tool `osc_get_agent_prompt`. The agent/client is responsible for fetching it and applying it as instructions; MCP cannot force system-prompt injection from the server side.
+For better results, inject the server-provided prompt into the agent context. The server exposes `PROMPT.md` as MCP prompt `xmseries_mixer_assistant`, MCP resource `xmseries://prompt/system`, and standard fallback tool `get_agent_prompt`. The agent/client is responsible for fetching it and applying it as instructions; MCP cannot force system-prompt injection from the server side.
 
 ## Cline (VS Code Extension)
 

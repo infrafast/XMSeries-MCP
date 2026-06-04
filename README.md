@@ -178,7 +178,7 @@ Call `osc_get_routing_overview` first for any routing work. It shows both layers
 
 ## Agent prompt
 
-At startup, the server exposes the recommended agent instructions from `PROMPT.md` in three MCP-compatible ways: prompt `xmseries_mixer_assistant`, resource `xmseries://prompt/system`, and fallback tool `osc_get_agent_prompt`. The MCP client or host agent must still decide to fetch and inject that content into the LLM context; the server cannot force system-prompt injection by itself.
+At startup, the server exposes the recommended agent instructions from `PROMPT.md` in three MCP-compatible ways: prompt `xmseries_mixer_assistant`, resource `xmseries://prompt/system`, and standard fallback tool `get_agent_prompt`. The MCP client or host agent must still decide to fetch and inject that content into the LLM context; the server cannot force system-prompt injection by itself.
 
 For a custom prompt, set `MCP_PROMPT_FILE` in the MCP server `env` to an absolute path.
 

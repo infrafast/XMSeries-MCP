@@ -531,7 +531,7 @@ function macroActions(steps: AutomationMacroStepInput[]): AutomationAction[] {
 const TOOLS: Tool[] = [
     // ========== Agent Guidance ==========
     {
-        name: "osc_get_agent_prompt",
+        name: "get_agent_prompt",
         description: "Return the recommended system prompt for agents using this OSC MCP server. Use it to inject mixer-specific aliases, safety rules, ranges, and OSCXR/OSCX32M32 guidance into the LLM context when the host agent supports that workflow.",
         inputSchema: {
             type: "object",
@@ -2313,7 +2313,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         osc.clearOscCommandLog();
         const result = await (async () => {
         switch (name) {
-            case "osc_get_agent_prompt": {
+            case "get_agent_prompt": {
                 const prompt = await readAgentPrompt();
                 return {
                     content: [

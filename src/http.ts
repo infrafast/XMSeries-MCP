@@ -134,7 +134,6 @@ export async function startHttpServer(): Promise<void> {
                     assistantPrompt: {
                         promptName: "xmseries_mixer_assistant",
                         resourceUri: "xmseries://prompt/system",
-                        tool: "osc_get_agent_prompt",
                     },
                 },
             },

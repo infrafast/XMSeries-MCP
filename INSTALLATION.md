@@ -160,7 +160,7 @@ Once configured, you can use natural language commands like:
 ### Agent Prompt Exposure:
 - Prompt name: `xmseries_mixer_assistant` via MCP `prompts/list` and `prompts/get`
 - Resource URI: `xmseries://prompt/system` via MCP `resources/list` and `resources/read`
-- Fallback tool: `osc_get_agent_prompt` for clients that expose only tools
+- Standard fallback tool: `get_agent_prompt` for clients that expose only tools
 - The MCP host/agent is responsible for reading this content and injecting it into the LLM context; the server only exposes it.
 
 ### OSCXR Coverage:
