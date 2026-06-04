@@ -158,8 +158,8 @@ Once configured, you can use natural language commands like:
 - Use `MCP_AUTH_TOKEN` and a trusted LAN/VPN/reverse proxy when exposing HTTP mode, because the server can control live mixer state
 
 ### Agent Prompt Exposure:
-- Prompt name: `xmseries_mixer_assistant` via MCP `prompts/list` and `prompts/get`
-- Resource URI: `xmseries://prompt/system` via MCP `resources/list` and `resources/read`
+- Standard prompt name: `agent_prompt` via MCP `prompts/list` and `prompts/get`
+- Standard resource URI: `agent://prompt/system` via MCP `resources/list` and `resources/read`
 - Standard fallback tool: `get_agent_prompt` for clients that expose only tools
 - The MCP host/agent is responsible for reading this content and injecting it into the LLM context; the server only exposes it.
 

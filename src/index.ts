@@ -30,8 +30,10 @@ export const OSC_BUS_COUNT = parseOscCountEnv("OSC_BUS_COUNT", 16);
 export const OSC_FX_COUNT = parseOscCountEnv("OSC_FX_COUNT", 8);
 export const OSC_DCA_COUNT = parseOscCountEnv("OSC_DCA_COUNT", 8);
 const DEBUG_ENABLED = process.env.DEBUG === "1" || process.env.DEBUG?.toLowerCase() === "true";
-const PROMPT_RESOURCE_URI = "xmseries://prompt/system";
-const PROMPT_NAME = "xmseries_mixer_assistant";
+const PROMPT_RESOURCE_URI = "agent://prompt/system";
+const PROMPT_NAME = "agent_prompt";
+const LEGACY_PROMPT_RESOURCE_URI = "xmseries://prompt/system";
+const LEGACY_PROMPT_NAME = "xmseries_mixer_assistant";
 const PROMPT_FILE = process.env.MCP_PROMPT_FILE
     ? path.resolve(process.env.MCP_PROMPT_FILE)
     : path.resolve(__dirname, "..", "PROMPT.md");
@@ -2245,12 +2247,17 @@ server.setRequestHandler(ListPromptsRequestSchema, async () => {
                 title: "XMSeries Mixer Assistant",
                 description: "Recommended system prompt for agents controlling mixers through this OSC MCP server.",
             },
+            {
+                name: LEGACY_PROMPT_NAME,
+                title: "XMSeries Mixer Assistant",
+                description: "Legacy prompt name for agents controlling mixers through this OSC MCP server.",
+            },
         ],
     };
 });
 
 server.setRequestHandler(GetPromptRequestSchema, async (request) => {
-    if (request.params.name !== PROMPT_NAME) {
+    if (![PROMPT_NAME, LEGACY_PROMPT_NAME].includes(request.params.name)) {
         throw new Error(`Unknown prompt: ${request.params.name}`);
     }
 
@@ -2279,12 +2286,19 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => {
                 description: "Contents of PROMPT.md for agents that inject MCP resources into model instructions.",
                 mimeType: "text/markdown",
             },
+            {
+                uri: LEGACY_PROMPT_RESOURCE_URI,
+                name: "XMSeries MCP Agent Prompt Legacy URI",
+                title: "XMSeries Mixer Assistant Prompt",
+                description: "Legacy resource URI for PROMPT.md.",
+                mimeType: "text/markdown",
+            },
         ],
     };
 });
 
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-    if (request.params.uri !== PROMPT_RESOURCE_URI) {
+    if (![PROMPT_RESOURCE_URI, LEGACY_PROMPT_RESOURCE_URI].includes(request.params.uri)) {
         throw new Error(`Unknown resource: ${request.params.uri}`);
     }
 
@@ -2292,7 +2306,7 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
     return {
         contents: [
             {
-                uri: PROMPT_RESOURCE_URI,
+                uri: request.params.uri,
                 mimeType: "text/markdown",
                 text: prompt,
             },
