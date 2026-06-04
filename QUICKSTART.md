@@ -133,7 +133,7 @@ Replace:
 - `OSC_CHANNEL_COUNT`, `OSC_BUS_COUNT`, `OSC_FX_COUNT`, and `OSC_DCA_COUNT` with smaller values for compact OSCXR consoles
 - `DEBUG` with `true` when you want `[OSC READ]` and `[OSC WRITE]` traces in the container logs
 
-The container logs print the ready-to-use MCP JSON config, including the real URL, bearer token, and `assistantPrompt` block.
+The container logs print the ready-to-use MCP JSON config, including the real URL, bearer token, and `assistantOptions` block.
 
 You can also start from the included `docker-compose.yml`:
 

@@ -131,7 +131,7 @@ export async function startHttpServer(): Promise<void> {
                     type: "streamable-http",
                     url: mcpUrl,
                     headers: MCP_AUTH_TOKEN ? { Authorization: `Bearer ${MCP_AUTH_TOKEN}` } : undefined,
-                    assistantPrompt: {
+                    assistantOptions: {
                         promptName: "xmseries_mixer_assistant",
                         resourceUri: "xmseries://prompt/system",
                     },
