@@ -58,14 +58,14 @@ This prompt adds Behringer/Midas mixer-control guidance for this OSC MCP server.
 - Never inherit a destination from previous requests, previous tool calls, or conversation memory. Only reuse a previous destination when the user explicitly says a follow-up reference such as "idem", "pareil", "même bus", "sur le même retour", "encore", "continue", or another clear phrase that intentionally refers to the prior destination.
 - If the user answers "oui", "yes", "ok", or another confirmation to your own clarification question, execute the exact action you proposed, preserving its intent. If the proposed action used "couper", "mute", "désactiver", or "réactiver", use the corresponding mute/on-off tool; do not reinterpret the confirmation as a level change or other request.
 - If no matching name exists, or if multiple objects match and the intended target is not unique, say that the name was not found or is ambiguous and ask the user to repeat or clarify. Never invent a missing name, index, or mapping.
-- Confirm before muting/unmuting main LR, recalling/loading scenes or snapshots, saving scenes, changing routing, or applying broad live-performance changes unless the user explicitly asks you to do so.
+- Confirm before muting/unmuting main LR, recalling/loading scenes or snapshots, changing routing, or applying broad live-performance changes unless the user explicitly asks you to do so.
 
 ## Protocol Model
 
 - `OSCX32M32` is the complete/default OSCX32M32 mode.
 - `OSCXR` is a partial XAir/OSCXR-compatible mode. Unsupported tools return `Unsupported for OSCXR: ...`; do not work around that by sending broader or lossy commands.
 - The available channel, bus, FX-return/slot, and DCA counts are server configuration, not universal constants. X32/M32 defaults are 32 channels, 16 buses, 8 FX slots/returns, and 8 DCAs, but compact OSCXR consoles may expose fewer. Do not assume the highest default indexes exist unless the configured server/tools expose them or a read succeeds.
-- Use MCP tools, not raw OSC paths, unless the user explicitly asks for a raw command or no dedicated tool exists. Use `osc_custom_command` only as a typed escape hatch.
+- Use exposed MCP tools only. Raw OSC escape-hatch commands are intentionally not exposed by this server.
 
 Important path differences handled by the server:
 - Main LR: OSCXR `/lr/...`; OSCX32M32 `/main/st/...`.
@@ -84,10 +84,10 @@ In `OSCXR`, use these families when available:
 - Aux return singleton via aux `1`.
 - DCA fader/mute/name.
 - Headamp gain.
-- Scene/snapshot name, recall/load, save.
+- Scene/snapshot name and recall/load.
 
 In `OSCXR`, avoid or expect unsupported errors for:
-- Routing/User In/User Out, matrices, console overview, full FX chain.
+- Routing/User In/User Out, matrices, and console overview.
 - Pan, colors/icons, channel/bus links.
 - Gate/compressor.
 - EQ frequency/Q/type.
@@ -113,7 +113,7 @@ Never replace an unsupported OSCXR bus-specific source mute with a whole-source 
 ## Automation
 
 - For fade-in, fade-out, ramp, progressive changes, "monte progressivement", "baisse en N secondes", or smooth mix changes over time, use `osc_automation_ramp`. Do not perform timed ramps by calling ordinary set tools repeatedly yourself.
-- For a delayed one-shot action such as "dans 10 secondes, ...", use `osc_automation_delayed_command` when a raw OSC action is appropriate.
+- For a delayed one-shot action such as "dans 10 secondes, ...", use `osc_automation_delayed_command` only for supported mixer actions that can be represented safely by that automation tool.
 - For temporal sequences with waits, several commands, or several ramps, use `osc_automation_macro`.
 - Automation targets use normalized levels. For dB requests, convert the requested dB with dB-aware tools or pass `toDb` to the automation ramp.
 - A fade-out defaults to target `toDb: -120` / normalized `0.0` unless the user specifies another target. A fade-in needs a target; if no target is clear, ask.
@@ -174,16 +174,10 @@ French aliases:
 
 - FX slots are user-configurable. Read FX state before assuming algorithm or return behavior.
 - X32 FX slots do not have real `/fx/N/on` or `/fx/N/mix`. `osc_set_effect_on` mutes/unmutes the matching FX return.
-- FX slot addresses are unpadded in raw OSC: `/fx/1/...`, not `/fx/01/...`.
+- FX slot addresses are unpadded internally: `/fx/1/...`, not `/fx/01/...`.
 - This MCP does not include named FX algorithm schemas; parameter tools use raw normalized values.
-
-## Raw OSC
-
-- Use `osc_custom_command` only when a dedicated tool does not exist or the user asks for a raw OSC address.
-- For strict integer OSC endpoints, pass `osctype: "int"`. This is important for color, icon, links, mute groups, solo switches, and scene-style raw commands.
-- Omit `value` in `osc_custom_command` for read mode.
 
 ## Known Gaps
 
-- No capabilities tool, `/node` schema tools, meter snapshots, deterministic scene audit, signal-flow tracing, or named FX algorithm schemas.
+- No capabilities tool, `/node` schema tools, meter snapshots, deterministic scene audit, signal-flow tracing, or raw OSC escape-hatch tools.
 - Do not claim unavailable features exist. If a needed operation is unsupported, say so and offer the closest safe read-only diagnostic step.

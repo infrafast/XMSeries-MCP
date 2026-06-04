@@ -10,7 +10,7 @@ For developpers: https://deepwiki.com/infrafast/XMSeries-MCP
 
 MCP tools organized into groups. Highlights beyond the original small MCP server:
 
-- **Deep channel strips** — headamp/preamp context, gate, compressor, EQ (all 4 bands with freq/Q/type/on in X32 mode), fader, pan, name, color, icon, sends, and mute
+- **Deep channel strips** — headamp/preamp context, gate, EQ (all 4 bands with freq/Q/type/on in X32 mode), fader, pan, name, sends, and mute
 - **Broad bus / matrix / aux / FX-return / DCA / main coverage** — faders, mutes, names, pan where mapped, EQ where mapped, and focused strip reads
 - **FX chain visibility** — type + all 16 params per slot, source assignment, return-channel state
 - **Firmware 4.0+ user routing** — per-channel 1:1 physical input mapping with decoded labels ("Card 1" / "AES50A 5" / "Local 27"), not raw ints
@@ -18,12 +18,11 @@ MCP tools organized into groups. Highlights beyond the original small MCP server
 - **Bulk section reads** — `osc_get_channel_strip`, `osc_get_bus_strip`, `osc_get_console_overview`, etc., so Claude can grab a coherent snapshot in one shot instead of 40 round-trips
 - **dB-aware fader helpers** — `osc_db_to_fader_level`, `osc_fader_level_to_db`, and `*_fader_db` tools use the X32/M32 161-point pseudo-log Level table (`0.7500 = 0 dB`, `1.0000 = +10 dB`)
 - **Timed automation** — background ramps/fades, delayed OSC actions, and temporal macros through `osc_automation_*` tools, so agents do not perform timing-sensitive work with repeated LLM tool calls
-- **Typed custom commands** — `osc_custom_command` accepts an `osctype` override (`int`/`float`/`string`/`bool`) because X32 silently drops type mismatches on strict addresses like `/config/color`
 
 ## Primary use cases
 
 - **LLM-assisted mixer inspection** — ask the agent to inspect routing, channel strips, bus sends, FX returns, DCA state, and obvious setup inconsistencies using the bulk read tools.
-- **Controlled fixes** — every major readable direct-control parameter in this implementation has a matching write path or a typed `osc_custom_command` escape hatch.
+- **Controlled fixes** — common readable direct-control parameters are exposed as dedicated typed MCP tools rather than raw OSC escape hatches.
 - **Volunteer-friendly operation** — natural-language commands can cover common worship, rehearsal, broadcast, and small-venue tasks without requiring the operator to remember OSC paths.
 - **Protocol experimentation** — `OSCXR` mode makes the XAir/XR-compatible subset explicit and fails fast for unmapped features instead of silently sending lossy commands.
 
@@ -68,7 +67,7 @@ Both MCP transports read these values at startup:
 
 | Variable | Default | Purpose |
 |---|---:|---|
-| `OSC_HOST` | `192.168.1.17` | Mixer or emulator IP address |
+| `OSC_HOST` | `192.168.1.17` | Mixer IP address |
 | `OSC_PORT` | `10023` | Mixer OSC UDP port |
 | `OSC_PROTOCOL` | `OSCX32M32` | Address mapping mode: `OSCX32M32` or `OSCXR` |
 | `MCP_PROMPT_FILE` | repository `PROMPT.md` | Optional absolute path to the prompt exposed through MCP |
@@ -152,7 +151,7 @@ Or use the included `docker-compose.yml` as a starting point. On Synology, set `
 
 `OSCX32M32` is the complete/default mode. `OSCXR` is now partially effective for the command families currently mapped in `PROTOCOL.md`: channel fader/mute/name, EQ gain/on, channel sends to bus level, bus fader/mute/name, main LR, FX return, aux return via `/rtn/aux`, DCA fader/mute/name, headamp gain, and scenes.
 
-When `OSC_PROTOCOL` is `OSCXR`, commands that are still X32-only or not yet mapped return an explicit `Unsupported for OSCXR: ...` error instead of waiting for an OSC timeout. This includes routing/user routing, matrices, console overview, full FX chain, colors/icons, gate/compressor, pan, EQ frequency/Q/type, and other features not covered by `PROTOCOL.md` yet. Bus-specific source mute operations are also guarded: X32 can mute channel/FX/aux sends to one bus, while XR exposes only global source mute paths, so those lossy translations are rejected instead of silently muting the whole source.
+When `OSC_PROTOCOL` is `OSCXR`, commands that are still X32-only or not yet mapped return an explicit `Unsupported for OSCXR: ...` error instead of waiting for an OSC timeout. This includes routing/user routing, matrices, console overview, colors/icons, gate/compressor, pan, EQ frequency/Q/type, and other features not covered by `PROTOCOL.md` yet. Bus-specific source mute operations are also guarded: X32 can mute channel/FX/aux sends to one bus, while XR exposes only global source mute paths, so those lossy translations are rejected instead of silently muting the whole source.
 
 > **Windows MSIX note:** if you installed Claude Desktop from the Microsoft Store, the config path is `%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\claude_desktop_config.json`, not the standard `%APPDATA%\Claude\` path.
 
@@ -167,17 +166,15 @@ A few X32/M32 quirks that will bite you if you do not know them. These mostly ap
 
 Call `osc_get_routing_overview` first for any routing work. It shows both layers decoded to human labels.
 
-**2. FX racks are user-configurable.** Do not assume slot 1 is always a reverb or slot 5 is always a GEQ. Read `osc_get_effect_type`, `osc_get_all_effects`, or `osc_get_full_fx_chain` before reasoning about an FX slot.
+**2. FX racks are user-configurable.** Do not assume slot 1 is always a reverb or slot 5 is always a GEQ. Read `osc_get_all_effects` before reasoning about FX slots.
 
 **3. FX slots have no `/on` or `/mix` addresses.** FX are always instantiated on X32. "Turn off FX 3" really means "mute the FX 3 return channel." `osc_set_effect_on` does this automatically. Wet/dry varies by FX algorithm and lives in the per-slot params, not a global mix.
 
 **4. FX slot numbers are unpadded.** `/fx/1/type` works; `/fx/01/type` silently fails. Every other numeric address in X32 uses zero-padded 2-digit numbers (`/ch/05/...`, `/bus/12/...`) — FX is the exception.
 
-**5. FX parameter tools use raw OSC values.** This repository exposes FX type/parameter reads and writes, but it does not include a named FX algorithm schema. `osc_set_effect_param` writes the raw normalized parameter value expected by `/fx/N/par/PP`.
+**5. FX parameter tools use normalized OSC values.** This repository exposes FX overview reads and parameter writes, but it does not include a named FX algorithm schema. `osc_set_effect_param` writes the normalized parameter value expected by `/fx/N/par/PP`.
 
-**6. OSC types are strict.** X32 silently drops messages where the type tag doesn't match. `/config/color`, `/config/icon`, `/config/chlink/*`, scene recall, mute-group, and solo switches all require int (`,i`). Some of these are exposed only through `osc_custom_command`; pass `osctype: "int"` if you're not sure the value will be sent as an int.
-
-**7. Channel links are per-pair, not a bitmask.** `/config/chlink/1-2`, `/config/chlink/3-4`, etc. — each returns 0 or 1. Use `osc_get_channel_links` to see all 16 pairs at once.
+**6. OSC types are strict.** X32 silently drops messages where the type tag does not match. This server now exposes only dedicated typed tools for supported operations; raw OSC custom writes are intentionally not available.
 
 ## Agent prompt
 
@@ -194,7 +191,7 @@ For broad inspection, start with low-risk read tools:
 1. `osc_get_mixer_status`
 2. `osc_get_console_overview`
 3. `osc_get_routing_overview`
-4. Focused strip reads such as `osc_get_channel_strip`, `osc_get_bus_strip`, `osc_get_main_strip`, and `osc_get_full_fx_chain`
+4. Focused strip reads such as `osc_get_channel_strip`, `osc_get_bus_strip`, and `osc_get_main_strip`
 
 For routing changes, read `osc_get_routing_overview` first so the agent can tell whether a channel is fed by legacy 8-channel blocks or firmware-4.0+ User In slots. For XAir/XR-compatible targets, expect unsupported X32-only requests to return `Unsupported for OSCXR: ...`.
 
@@ -207,11 +204,9 @@ Once wired up to LLM, natural language works:
 "Why isn't channel 5 working?"
 "Compare channel 1 and channel 2 using their strip reads."
 "Show me the routing topology."
-"Copy channel 1's EQ settings to channel 3."
 "Set channel 27's input to Card 1."
 "Review my FX setup — anything redundant?"
 "Mute all channels except kick, snare, and overheads."
-"Save the current state as scene 12 named 'Soundcheck'."
 "What's plugged into the console right now?"
 "Fade out Voc-Claude in 10 seconds."
 "In 5 seconds, mute the main LR."
@@ -244,17 +239,15 @@ Full list is visible to Claude; high-level groupings:
 
 | Group | Coverage |
 |---|---|
-| **Channel strips** | headamp/preamp context, gate, comp, EQ (4 bands), fader, pan, mute, name, color, icon, source, bus sends |
+| **Channel strips** | headamp/preamp context, gate, EQ (4 bands), fader, pan, mute, name, source, bus sends |
 | **Bus / Matrix / Aux / FX-Return / DCA / Main** | faders, mutes, names, pan where mapped, EQ where mapped, focused strip reads |
 | **Identity / status** | `osc_get_mixer_status` uses `/xinfo` for network address, mixer network name, console model, and console version |
 | **Routing** | block-level in/out/AES50/Card, User In (32 slots), User Out (48 slots), decoded labels, one-call overview |
-| **FX** | per-slot type, 16 params each, source, full-chain read |
-| **Scenes / snippets** | recall, save, name |
-| **Linking** | per-pair channel and bus links |
-| **Bulk reads** | `channel_strip`, `bus_strip`, `aux_strip`, `matrix_strip`, `fx_return_strip`, `main_strip`, `dca`, `headamp`, `console_overview`, `routing_overview`, `full_fx_chain`, `user_routing` |
+| **FX** | all-effects overview and FX return on/off plus parameter writes |
+| **Scenes / snippets** | recall and name reads |
+| **Bulk reads** | `channel_strip`, `bus_strip`, `aux_strip`, `matrix_strip`, `fx_return_strip`, `main_strip`, `dca`, `headamp`, `console_overview`, `routing_overview`, `user_routing` |
 | **Fader dB conversion** | `osc_db_to_fader_level`, `osc_fader_level_to_db`, channel/bus/aux/main/matrix `*_fader_db` setters/getters |
 | **Automation** | `osc_automation_ramp`, `osc_automation_delayed_command`, `osc_automation_macro`, `osc_automation_list`, `osc_automation_cancel` for background fades, delayed actions, and timed sequences |
-| **Raw escape hatch** | `osc_custom_command` with typed args and read-back |
 
 ## Transactional Writes
 
@@ -262,7 +255,7 @@ Dedicated direct-control write tools use transactional OSC write-back verificati
 
 Batch bus mute tools verify each bus write and report partial failures instead of silently claiming success. Ramp automations do not read after every step, but they verify the final value before marking the job completed.
 
-Scene recall/save and `osc_custom_command` writes remain intentionally outside this generic transaction layer because their OSC acknowledgement/read-back behavior is address-specific. Use explicit reads when validating raw or scene-style operations.
+Scene recall remains intentionally outside this generic transaction layer because its OSC acknowledgement behavior is address-specific. Use explicit reads when validating scene-style operations.
 
 ## Fader Levels in dB
 
@@ -285,7 +278,7 @@ The MCP server includes a small background automation engine for timing-sensitiv
 Available tools:
 
 - `osc_automation_ramp` starts a fade/ramp on one numeric target and returns immediately with a job id.
-- `osc_automation_delayed_command` sends one raw OSC command after a delay.
+- `osc_automation_delayed_command` schedules one delayed supported mixer command.
 - `osc_automation_macro` runs a sequence of waits, raw commands, and ramps.
 - `osc_automation_list` lists running, completed, failed, and cancelled jobs.
 - `osc_automation_cancel` cancels a running job by id.
@@ -323,40 +316,6 @@ Examples:
 
 For write-heavy ramps, the server sends timed OSC writes without probing `/xinfo` at every step, then verifies the final target value. This keeps fades smooth while still detecting failed end states.
 
-## Custom OSC commands
-
-`osc_custom_command` can read or write addresses that do not have a dedicated tool. Omit `value` to query an address and return the first reply value. Include `value` to write. Use `osctype` when an address is strict about OSC type tags.
-
-Valid examples:
-
-```json
-{ "address": "/ch/01/config/name", "value": "Lead Vocal" }
-{ "address": "/ch/05/config/color", "value": 3, "osctype": "int" }
-{ "address": "/ch/03/preamp/trim", "value": 0.5, "osctype": "float" }
-{ "address": "/ch/02/preamp/hpon", "value": 1, "osctype": "int" }
-{ "address": "/ch/02/preamp/hpf", "value": 0.35, "osctype": "float" }
-{ "address": "/bus/02/config/name", "value": "Monitor" }
-{ "address": "/mtx/01/config/name", "value": "Recording" }
-{ "address": "/fx/1/par/01", "value": 0.75, "osctype": "float" }
-{ "address": "/ch/01/mix/solo", "value": 1, "osctype": "int" }
-{ "address": "/-stat/solosw" }
-```
-
-Use unpadded FX slot numbers (`/fx/1/...`, not `/fx/01/...`). Also remember that X32 FX slots do not expose real `/fx/N/on` or `/fx/N/mix` paths; use `osc_set_effect_on` to mute/unmute the matching FX return channel.
-
-For multi-argument custom commands, pass typed entries:
-
-```json
-{
-  "address": "/custom/path",
-  "value": [
-    { "type": "float", "value": 0.5 },
-    { "type": "string", "value": "text" },
-    { "type": "int", "value": 42 }
-  ]
-}
-```
-
 ## Status
 
 Works. Tested against:
@@ -384,7 +343,7 @@ Other out-of-scope mixer areas:
 - Monitor / headphone (`/-stat/monitor/*`)
 - Custom user-assignable controls (`/config/userctrl/*`)
 - Meters (`/meters/*` — uses a different subscribe-based binary protocol)
-- Show/library file management (`/-show/*`, `/-libs/*`, deeper `/-snap/*` management beyond the implemented scene name/recall/save helpers)
+- Show/library file management (`/-show/*`, `/-libs/*`, deeper `/-snap/*` management beyond the implemented scene name/recall helpers)
 - Console preferences (`/-prefs/*`)
 - USB recorder and file browser operations
 - DP48 personal mixer workflows

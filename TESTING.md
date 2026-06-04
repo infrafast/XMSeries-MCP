@@ -1,17 +1,17 @@
 # Testing Guide
 
-This guide explains how to test the OSC MCP server using an external emulator (e.g., X32-Edit).
+This guide explains how to test the OSC MCP server against a real mixer or another compatible OSC endpoint.
 
 ## Overview
 
-Since we are using an external application to emulate the X32 mixer, you will need to:
+To test against a mixer, you will need to:
 
-1.  **Install and Run the Emulator**: Download and install the X32-Edit application (or similar emulator) from the Behringer website.
-2.  **Configure the Emulator**:
-    *   Ensure the emulator is running and listening for OSC commands.
-    *   Note the IP address and Port the emulator is using (usually UDP port 10023).
-3.  **Configure the MCP Server**:
-    *   Update your `claude_desktop_config.json` to point to the emulator's IP and Port.
+1.  **Prepare the mixer**: power it on, connect it to the network, and enable OSC control.
+2.  **Note the OSC connection details**:
+    *   Use the mixer IP address.
+    *   Use the mixer OSC UDP port, usually `10023` for X32/M32.
+3.  **Configure the MCP server**:
+    *   Update your `claude_desktop_config.json` to point to the mixer IP and OSC port.
 
 ## Configuration
 
@@ -30,8 +30,8 @@ Add or update the configuration:
         "/Users/ts/Documents/PlatformIO/Projects/XMSeries-MCP/dist/index.js"
       ],
       "env": {
-        "OSC_HOST": "127.0.0.1", // Or the IP of your emulator
-        "OSC_PORT": "10023",     // The port your emulator is listening on
+        "OSC_HOST": "192.168.1.70", // Mixer IP address
+        "OSC_PORT": "10023",     // Mixer OSC port
         "OSC_PROTOCOL": "OSCX32M32",
         "MCP_PROMPT_FILE": "/Users/ts/Documents/PlatformIO/Projects/XMSeries-MCP/PROMPT.md"
       }
@@ -48,7 +48,7 @@ In XR mode, start with supported smoke tests such as main fader/mute, channel fa
 
 ## Running Tests
 
-You can run the connection test script to verify connectivity to the emulator or mixer:
+You can run the connection test script to verify connectivity to the mixer:
 
 ```bash
 npm test
@@ -88,10 +88,10 @@ The editable test data is intentionally near the top of `test-llm-tools.js`:
 
 ## Manual Testing
 
-Once connected, you can use Claude Desktop to control the emulator. Try commands like:
+Once connected, you can use Claude Desktop to control the mixer. Try commands like:
 
 *   "Set channel 1 fader to 75%"
 *   "Mute channel 3"
 *   "Pan channel 2 to the left"
 
-Verify the changes are reflected in the emulator's interface.
+Verify the changes are reflected on the mixer or its control application.

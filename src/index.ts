@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 
-import { exec, spawn } from "child_process";
 import { readFile } from "fs/promises";
-import { promisify } from "util";
 import path from "path";
 import { fileURLToPath } from "url";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -20,7 +18,6 @@ import { AutomationAction, AutomationCurve, AutomationEngine } from "./automatio
 import { coerceOscArg, MixerDisconnectedError, OSCClient, OSCProtocol, parseOscCountEnv } from "./osc-client.js";
 import { dbToFaderLevel, faderLevelToDb, formatDb } from "./level-table.js";
 
-const execAsync = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -530,10 +527,6 @@ function macroActions(steps: AutomationMacroStepInput[]): AutomationAction[] {
     });
 }
 
-// Emulator process management
-let emulatorProcess: ReturnType<typeof spawn> | null = null;
-let emulatorPid: number | null = null;
-
 // Define available tools
 const TOOLS: Tool[] = [
     // ========== Agent Guidance ==========
@@ -1030,28 +1023,6 @@ const TOOLS: Tool[] = [
         },
     },
     {
-        name: "osc_copy_eq",
-        description: "Copy all EQ settings (gain, frequency, Q, type, on/off) from one channel to another",
-        inputSchema: {
-            type: "object",
-            properties: {
-                source_channel: {
-                    type: "number",
-                    description: "Source channel number (1-32)",
-                    minimum: 1,
-                    maximum: 32,
-                },
-                target_channel: {
-                    type: "number",
-                    description: "Target channel number (1-32)",
-                    minimum: 1,
-                    maximum: 32,
-                },
-            },
-            required: ["source_channel", "target_channel"],
-        },
-    },
-    {
         name: "osc_set_eq_frequency",
         description: "Set EQ frequency for a channel band",
         inputSchema: {
@@ -1169,98 +1140,6 @@ const TOOLS: Tool[] = [
     {
         name: "osc_set_gate_on",
         description: "Enable or disable gate for a channel",
-        inputSchema: {
-            type: "object",
-            properties: {
-                channel: {
-                    type: "number",
-                    description: "Channel number (1-32)",
-                    minimum: 1,
-                    maximum: 32,
-                },
-                on: {
-                    type: "boolean",
-                    description: "True to enable, false to disable",
-                },
-            },
-            required: ["channel", "on"],
-        },
-    },
-    {
-        name: "osc_set_compressor",
-        description: "Set compressor threshold and ratio for a channel",
-        inputSchema: {
-            type: "object",
-            properties: {
-                channel: {
-                    type: "number",
-                    description: "Channel number (1-32)",
-                    minimum: 1,
-                    maximum: 32,
-                },
-                threshold: {
-                    type: "number",
-                    description: "Compressor threshold in dB (-60 to 0)",
-                    minimum: -60,
-                    maximum: 0,
-                },
-                ratio: {
-                    type: "number",
-                    description: "Compression ratio (1.0 to 20.0)",
-                    minimum: 1,
-                    maximum: 20,
-                },
-            },
-            required: ["channel", "threshold", "ratio"],
-        },
-    },
-    {
-        name: "osc_set_compressor_attack",
-        description: "Set compressor attack time for a channel",
-        inputSchema: {
-            type: "object",
-            properties: {
-                channel: {
-                    type: "number",
-                    description: "Channel number (1-32)",
-                    minimum: 1,
-                    maximum: 32,
-                },
-                attack: {
-                    type: "number",
-                    description: "Attack time (0.0 to 1.0)",
-                    minimum: 0,
-                    maximum: 1,
-                },
-            },
-            required: ["channel", "attack"],
-        },
-    },
-    {
-        name: "osc_set_compressor_release",
-        description: "Set compressor release time for a channel",
-        inputSchema: {
-            type: "object",
-            properties: {
-                channel: {
-                    type: "number",
-                    description: "Channel number (1-32)",
-                    minimum: 1,
-                    maximum: 32,
-                },
-                release: {
-                    type: "number",
-                    description: "Release time (0.0 to 1.0)",
-                    minimum: 0,
-                    maximum: 1,
-                },
-            },
-            required: ["channel", "release"],
-        },
-    },
-    {
-        name: "osc_set_compressor_on",
-        description: "Enable or disable compressor for a channel",
         inputSchema: {
             type: "object",
             properties: {
@@ -1420,48 +1299,6 @@ const TOOLS: Tool[] = [
                 mute: { type: "boolean", description: "True to mute all other buses, false to unmute all other buses" },
             },
             required: ["exceptBuses", "mute"],
-        },
-    },
-    {
-        name: "osc_set_bus_pan",
-        description: "Set the pan position for a mix bus",
-        inputSchema: {
-            type: "object",
-            properties: {
-                bus: {
-                    type: "number",
-                    description: "Bus number (1-16)",
-                    minimum: 1,
-                    maximum: 16,
-                },
-                pan: {
-                    type: "number",
-                    description: "Pan position (-1.0 to 1.0)",
-                    minimum: -1,
-                    maximum: 1,
-                },
-            },
-            required: ["bus", "pan"],
-        },
-    },
-    {
-        name: "osc_set_bus_name",
-        description: "Set the name of a mix bus",
-        inputSchema: {
-            type: "object",
-            properties: {
-                bus: {
-                    type: "number",
-                    description: "Bus number (1-16)",
-                    minimum: 1,
-                    maximum: 16,
-                },
-                name: {
-                    type: "string",
-                    description: "Bus name (max 6 characters)",
-                },
-            },
-            required: ["bus", "name"],
         },
     },
     // ========== Aux Controls ==========
@@ -2021,22 +1858,6 @@ const TOOLS: Tool[] = [
     },
     // ========== Effects ==========
     {
-        name: "osc_get_effect_type",
-        description: "Get the effect type/algorithm loaded in an FX slot",
-        inputSchema: {
-            type: "object",
-            properties: {
-                effect: {
-                    type: "number",
-                    description: `Effect number (1-${OSC_FX_COUNT})`,
-                    minimum: 1,
-                    maximum: OSC_FX_COUNT,
-                },
-            },
-            required: ["effect"],
-        },
-    },
-    {
         name: "osc_get_effect_on",
         description: "Get whether an FX return channel is unmuted (X32 FX slots are always instantiated; this checks the FX return mute state)",
         inputSchema: {
@@ -2050,28 +1871,6 @@ const TOOLS: Tool[] = [
                 },
             },
             required: ["effect"],
-        },
-    },
-    {
-        name: "osc_get_effect_param",
-        description: "Get a parameter value for an effect",
-        inputSchema: {
-            type: "object",
-            properties: {
-                effect: {
-                    type: "number",
-                    description: `Effect number (1-${OSC_FX_COUNT})`,
-                    minimum: 1,
-                    maximum: OSC_FX_COUNT,
-                },
-                param: {
-                    type: "number",
-                    description: "Parameter number (1-16)",
-                    minimum: 1,
-                    maximum: 16,
-                },
-            },
-            required: ["effect", "param"],
         },
     },
     {
@@ -2255,39 +2054,9 @@ const TOOLS: Tool[] = [
         inputSchema: { type: "object", properties: {} },
     },
     {
-        name: "osc_get_channel_color",
-        description: "Get channel strip color (0-15)",
-        inputSchema: { type: "object", properties: { channel: { type: "number", minimum: 1, maximum: 32 } }, required: ["channel"] },
-    },
-    {
-        name: "osc_get_channel_icon",
-        description: "Get channel strip icon index",
-        inputSchema: { type: "object", properties: { channel: { type: "number", minimum: 1, maximum: 32 } }, required: ["channel"] },
-    },
-    {
         name: "osc_set_channel_icon",
         description: "Set channel strip icon (int enum, 1-74 approximately; see X32 icon list)",
         inputSchema: { type: "object", properties: { channel: { type: "number", minimum: 1, maximum: 32 }, icon: { type: "number" } }, required: ["channel", "icon"] },
-    },
-    {
-        name: "osc_get_channel_links",
-        description: "Get stereo-link state for each channel pair (1-2, 3-4, ..., 31-32). Returns 16 per-pair booleans.",
-        inputSchema: { type: "object", properties: {} },
-    },
-    {
-        name: "osc_set_channel_link",
-        description: "Link or unlink a channel pair for stereo operation. Pair format: '1-2', '3-4', ..., '31-32'.",
-        inputSchema: { type: "object", properties: { pair: { type: "string" }, linked: { type: "boolean" } }, required: ["pair", "linked"] },
-    },
-    {
-        name: "osc_get_bus_links",
-        description: "Get stereo-link state for each bus pair (1-2, 3-4, ..., 15-16).",
-        inputSchema: { type: "object", properties: {} },
-    },
-    {
-        name: "osc_set_bus_link",
-        description: "Link or unlink a bus pair for stereo operation. Pair format: '1-2', '3-4', ..., '15-16'.",
-        inputSchema: { type: "object", properties: { pair: { type: "string" }, linked: { type: "boolean" } }, required: ["pair", "linked"] },
     },
     {
         name: "osc_list_routing_sources",
@@ -2315,14 +2084,6 @@ const TOOLS: Tool[] = [
                 source: { type: "number", description: "Source index (see X32 OSC spec for values)", minimum: 0 },
             },
             required: ["slot", "source"],
-        },
-    },
-    {
-        name: "osc_get_full_fx_chain",
-        description: `Get the complete FX signal chain: for each configured FX slot (${OSC_FX_COUNT}), returns the FX type, all 16 parameters, source assignment (which bus feeds it), and the FX return channel state (fader/mute/name). This is the full picture of what effects are loaded, how they're configured, what feeds them, and whether the return is active.`,
-        inputSchema: {
-            type: "object",
-            properties: {},
         },
     },
     {
@@ -2376,7 +2137,7 @@ const TOOLS: Tool[] = [
     // ========== Routing ==========
     {
         name: "osc_set_channel_source",
-        description: "Set the channel-strip input tap (/ch/NN/config/source). Value selects a tap WITHIN whatever source group is currently feeding this channel's 8-ch routing block — NOT a direct physical input picker. Source map: 0=OFF, 1-32=Input N (routed via the active block), 33-40=AUX/USB in, 41-48=FX return L/R. \n\nIMPORTANT: For per-channel 1:1 physical input mapping (firmware 4.0+), this is usually NOT the right tool. Instead: (a) set the input routing block to 'User In' with osc_custom_command /config/routing/IN/N-M as int, and (b) use osc_set_user_routing_in to patch each of the 32 User In slots to any physical source (Local/AES50A/AES50B/Card/AuxIn). Call osc_get_routing_overview first to see the current topology.",
+        description: "Set the channel-strip input tap (/ch/NN/config/source). Value selects a tap WITHIN whatever source group is currently feeding this channel's 8-ch routing block — NOT a direct physical input picker. Source map: 0=OFF, 1-32=Input N (routed via the active block), 33-40=AUX/USB in, 41-48=FX return L/R. \n\nIMPORTANT: For per-channel 1:1 physical input mapping (firmware 4.0+), this is usually NOT the right tool. Prefer osc_get_routing_overview first, then osc_set_user_routing_in when the relevant input block is already configured for User In routing.",
         inputSchema: {
             type: "object",
             properties: {
@@ -2430,26 +2191,6 @@ const TOOLS: Tool[] = [
         },
     },
     {
-        name: "osc_scene_save",
-        description: "Save the current mixer state as a scene",
-        inputSchema: {
-            type: "object",
-            properties: {
-                scene: {
-                    type: "number",
-                    description: "Scene number (1-100)",
-                    minimum: 1,
-                    maximum: 100,
-                },
-                name: {
-                    type: "string",
-                    description: "Scene name (optional)",
-                },
-            },
-            required: ["scene"],
-        },
-    },
-    {
         name: "osc_get_scene_name",
         description: "Get the name of a saved scene",
         inputSchema: {
@@ -2475,63 +2216,7 @@ const TOOLS: Tool[] = [
         },
     },
     // ========== Custom Commands ==========
-    {
-        name: "osc_custom_command",
-        description: "Send a raw OSC command. TWO modes:\n  (1) WRITE: pass 'value'. Include 'osctype' ('int'|'float'|'string'|'bool') when the address requires a specific OSC type tag — X32 silently drops type mismatches (e.g., /ch/NN/config/color REQUIRES int; passing '6' as string fails silently). For multiple args, pass value as an array of {type, value} objects.\n  (2) READ: omit 'value' — the tool sends a query and returns the mixer's reply (or null on timeout). Use this to verify writes or to read addresses that have no dedicated getter.\n\nCommon X32 addresses that REQUIRE osctype='int': /ch/NN/config/color, /ch/NN/config/icon, /config/chlink, /config/buslink, /config/mute/N, /-stat/solosw/NN, scene recall indices.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                address: {
-                    type: "string",
-                    description: "OSC address (e.g., /ch/01/mix/fader)",
-                },
-                value: {
-                    description: "Value to send. Omit to READ the address and get the mixer's reply. Can be a scalar (number/string/bool) or an array of {type, value} objects for multi-arg messages.",
-                },
-                osctype: {
-                    type: "string",
-                    enum: ["int", "float", "string", "bool"],
-                    description: "Force the OSC type tag for 'value'. Use 'int' for color/icon/chlink/mute-group/solosw/scene addresses. When omitted, type is inferred from JSON type.",
-                },
-            },
-            required: ["address"],
-        },
-    },
     // ========== Application Controls ==========
-    {
-        name: "osc_open_x32_edit",
-        description:
-            "Open the X32-Edit application to manually control the mixer or verify commands",
-        inputSchema: {
-            type: "object",
-            properties: {},
-        },
-    },
-    {
-        name: "osc_start_emulator",
-        description:
-            "Start the local X32 emulator server from the emulator/X32 binary so you can test without a physical mixer",
-        inputSchema: {
-            type: "object",
-            properties: {},
-        },
-    },
-    {
-        name: "osc_stop_emulator",
-        description: "Stop the running X32 emulator server",
-        inputSchema: {
-            type: "object",
-            properties: {},
-        },
-    },
-    {
-        name: "osc_get_emulator_status",
-        description: "Check if the X32 emulator is currently running",
-        inputSchema: {
-            type: "object",
-            properties: {},
-        },
-    },
 ];
 
 // Create MCP server
@@ -2926,34 +2611,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 };
             }
 
-            case "osc_copy_eq": {
-                const { source_channel, target_channel } = args as { source_channel: number; target_channel: number };
-                const results: string[] = [];
-
-                // Copy EQ on/off state
-                const eqOn = await osc.getEQOn(source_channel);
-                await osc.setEQOn(target_channel, eqOn);
-                results.push(`EQ enabled: ${eqOn}`);
-
-                // Copy all 4 bands
-                for (let band = 1; band <= 4; band++) {
-                    const gain = await osc.getEQ(source_channel, band);
-                    const freq = await osc.getEQFrequency(source_channel, band);
-                    const q = await osc.getEQQ(source_channel, band);
-                    const type = await osc.getEQType(source_channel, band);
-
-                    await osc.setEQ(target_channel, band, gain);
-                    await osc.setEQFrequency(target_channel, band, freq);
-                    await osc.setEQQ(target_channel, band, q);
-                    await osc.setEQType(target_channel, band, type);
-
-                    results.push(`Band ${band}: gain=${gain.toFixed(1)}dB, freq=${freq}, Q=${q}, type=${type}`);
-                }
-
-                return {
-                    content: [{ type: "text", text: `Copied EQ from channel ${source_channel} to channel ${target_channel}:\n${results.join("\n")}` }],
-                };
-            }
 
             case "osc_set_eq_frequency": {
                 const { channel, band, frequency } = args as {
@@ -3045,67 +2702,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 };
             }
 
-            case "osc_set_compressor": {
-                const { channel, threshold, ratio } = args as {
-                    channel: number;
-                    threshold: number;
-                    ratio: number;
-                };
-                await osc.setCompressor(channel, threshold, ratio);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Set channel ${channel} compressor: ${threshold}dB threshold, ${ratio}:1 ratio`,
-                        },
-                    ],
-                };
-            }
 
-            case "osc_set_compressor_attack": {
-                const { channel, attack } = args as {
-                    channel: number;
-                    attack: number;
-                };
-                await osc.setCompressorAttack(channel, attack);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Set channel ${channel} compressor attack to ${(attack * 100).toFixed(1)}%`,
-                        },
-                    ],
-                };
-            }
 
-            case "osc_set_compressor_release": {
-                const { channel, release } = args as {
-                    channel: number;
-                    release: number;
-                };
-                await osc.setCompressorRelease(channel, release);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Set channel ${channel} compressor release to ${(release * 100).toFixed(1)}%`,
-                        },
-                    ],
-                };
-            }
 
-            case "osc_set_compressor_on": {
-                const { channel, on } = args as { channel: number; on: boolean };
-                await osc.setCompressorOn(channel, on);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Channel ${channel} compressor ${on ? "enabled" : "disabled"}`,
-                        },
-                    ],
-                };
-            }
 
             // ========== Bus Controls ==========
             case "osc_set_bus_fader": {
@@ -3244,33 +2843,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 };
             }
 
-            case "osc_set_bus_pan": {
-                const { bus, pan } = args as { bus: number; pan: number };
-                await osc.setBusPan(bus, pan);
-                const panText =
-                    pan < -0.1 ? "left" : pan > 0.1 ? "right" : "center";
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Set bus ${bus} pan to ${panText} (${pan.toFixed(2)})`,
-                        },
-                    ],
-                };
-            }
 
-            case "osc_set_bus_name": {
-                const { bus, name } = args as { bus: number; name: string };
-                await osc.setBusName(bus, name);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Set bus ${bus} name to "${name}"`,
-                        },
-                    ],
-                };
-            }
 
             // ========== Aux Controls ==========
             case "osc_set_aux_fader": {
@@ -3714,13 +3287,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
 
             // ========== Effects ==========
-            case "osc_get_effect_type": {
-                const { effect } = args as { effect: number };
-                const fxType = await osc.getEffectType(effect);
-                return {
-                    content: [{ type: "text", text: `FX slot ${effect} type: ${fxType}` }],
-                };
-            }
 
             case "osc_get_effect_on": {
                 const { effect } = args as { effect: number };
@@ -3730,13 +3296,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 };
             }
 
-            case "osc_get_effect_param": {
-                const { effect, param } = args as { effect: number; param: number };
-                const paramVal = await osc.getEffectParam(effect, param);
-                return {
-                    content: [{ type: "text", text: `FX slot ${effect} param ${param}: ${paramVal}` }],
-                };
-            }
 
             case "osc_get_all_effects": {
                 const allFx = await osc.getAllEffects();
@@ -3850,17 +3409,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 return { content: [{ type: "text", text: `Routing overview:\n${JSON.stringify(ov, null, 2)}` }] };
             }
 
-            case "osc_get_channel_color": {
-                const { channel } = args as { channel: number };
-                const c = await osc.getChannelColor(channel);
-                return { content: [{ type: "text", text: `Channel ${channel} color: ${c}` }] };
-            }
 
-            case "osc_get_channel_icon": {
-                const { channel } = args as { channel: number };
-                const i = await osc.getChannelIcon(channel);
-                return { content: [{ type: "text", text: `Channel ${channel} icon: ${i}` }] };
-            }
 
             case "osc_set_channel_icon": {
                 const { channel, icon } = args as { channel: number; icon: number };
@@ -3868,27 +3417,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 return { content: [{ type: "text", text: `Set channel ${channel} icon to ${icon}` }] };
             }
 
-            case "osc_get_channel_links": {
-                const links = await osc.getChannelLinks();
-                return { content: [{ type: "text", text: `Channel links:\n${JSON.stringify(links, null, 2)}` }] };
-            }
 
-            case "osc_set_channel_link": {
-                const { pair, linked } = args as { pair: string; linked: boolean };
-                await osc.setChannelLink(pair, linked);
-                return { content: [{ type: "text", text: `Channel pair ${pair} ${linked ? "linked" : "unlinked"}` }] };
-            }
 
-            case "osc_get_bus_links": {
-                const links = await osc.getBusLinks();
-                return { content: [{ type: "text", text: `Bus links:\n${JSON.stringify(links, null, 2)}` }] };
-            }
 
-            case "osc_set_bus_link": {
-                const { pair, linked } = args as { pair: string; linked: boolean };
-                await osc.setBusLink(pair, linked);
-                return { content: [{ type: "text", text: `Bus pair ${pair} ${linked ? "linked" : "unlinked"}` }] };
-            }
 
             case "osc_list_routing_sources": {
                 const userIn: Record<string, number> = { OFF: 0 };
@@ -3923,12 +3454,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 };
             }
 
-            case "osc_get_full_fx_chain": {
-                const fxChain = await osc.getFullFxChain();
-                return {
-                    content: [{ type: "text", text: `Full FX chain:\n${JSON.stringify(fxChain, null, 2)}` }],
-                };
-            }
 
             case "osc_set_effect_on": {
                 const { effect, on } = args as {
@@ -4007,21 +3532,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 };
             }
 
-            case "osc_scene_save": {
-                const { scene, name } = args as {
-                    scene: number;
-                    name?: string;
-                };
-                await osc.saveScene(scene, name);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Saved scene ${scene}${name ? ` as "${name}"` : ""}`,
-                        },
-                    ],
-                };
-            }
 
             case "osc_get_scene_name": {
                 const { scene } = args as { scene: number };
@@ -4050,264 +3560,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
 
             // ========== Custom Commands ==========
-            case "osc_custom_command": {
-                const { address, value, osctype } = args as {
-                    address: string;
-                    value?: any;
-                    osctype?: "int" | "float" | "string" | "bool";
-                };
-                const result = await osc.sendCustomCommand(address, value, osctype);
-                if (value === undefined) {
-                    return {
-                        content: [{ type: "text", text: `READ ${address} => ${JSON.stringify(result)}` }],
-                    };
-                }
-                return {
-                    content: [{ type: "text", text: `WROTE ${address} = ${JSON.stringify(value)}${osctype ? ` (forced ${osctype})` : ""}` }],
-                };
-            }
 
             // ========== Application Controls ==========
-            case "osc_open_x32_edit": {
-                try {
-                    await execAsync("open /Applications/X32-Edit.app");
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: "X32-Edit application opened successfully. You can now manually control the mixer or verify that commands were applied.",
-                            },
-                        ],
-                    };
-                } catch (error) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `Failed to open X32-Edit: ${error instanceof Error ? error.message : String(error)}. Make sure X32-Edit.app is installed at /Applications/X32-Edit.app`,
-                            },
-                        ],
-                        isError: true,
-                    };
-                }
-            }
 
-            case "osc_start_emulator": {
-                try {
-                    // Check if emulator is already running
-                    if (emulatorPid !== null) {
-                        try {
-                            // Check if process is still alive (signal 0 doesn't kill, just checks)
-                            process.kill(emulatorPid, 0);
-                            return {
-                                content: [
-                                    {
-                                        type: "text",
-                                        text: `X32 emulator is already running (PID: ${emulatorPid}). No need to start it again.`,
-                                    },
-                                ],
-                            };
-                        } catch {
-                            // Process doesn't exist, reset variables
-                            emulatorProcess = null;
-                            emulatorPid = null;
-                        }
-                    }
 
-                    const emulatorPath = path.resolve(__dirname, "../emulator/X32");
 
-                    const child = spawn(emulatorPath, [], {
-                        detached: true,
-                        stdio: "ignore",
-                    });
-
-                    emulatorProcess = child;
-                    emulatorPid = child.pid || null;
-
-                    child.unref();
-
-                    // Wait a moment to check if process started successfully
-                    await new Promise((resolve) => setTimeout(resolve, 500));
-
-                    // Verify process is still running
-                    if (emulatorPid !== null) {
-                        try {
-                            process.kill(emulatorPid, 0);
-                            return {
-                                content: [
-                                    {
-                                        type: "text",
-                                        text: `X32 emulator started successfully (PID: ${emulatorPid}) from ${emulatorPath}. It is now running in the background so you can test without connecting to a physical mixer.`,
-                                    },
-                                ],
-                            };
-                        } catch {
-                            return {
-                                content: [
-                                    {
-                                        type: "text",
-                                        text: `X32 emulator process started but appears to have exited immediately. Check if the emulator binary exists at ${emulatorPath} and is executable (chmod +x emulator/X32).`,
-                                    },
-                                ],
-                                isError: true,
-                            };
-                        }
-                    } else {
-                        return {
-                            content: [
-                                {
-                                    type: "text",
-                                    text: `Failed to get PID from emulator process. The emulator may not have started correctly.`,
-                                },
-                            ],
-                            isError: true,
-                        };
-                    }
-                } catch (error) {
-                    emulatorProcess = null;
-                    emulatorPid = null;
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `Failed to start X32 emulator: ${
-                                    error instanceof Error ? error.message : String(error)
-                                }. Make sure the emulator binary exists at emulator/X32 and is executable (chmod +x emulator/X32).`,
-                            },
-                        ],
-                        isError: true,
-                    };
-                }
-            }
-
-            case "osc_stop_emulator": {
-                try {
-                    if (emulatorPid === null || emulatorProcess === null) {
-                        return {
-                            content: [
-                                {
-                                    type: "text",
-                                    text: "X32 emulator is not running. Nothing to stop.",
-                                },
-                            ],
-                        };
-                    }
-
-                    // Check if process is still alive
-                    try {
-                        process.kill(emulatorPid, 0);
-                    } catch {
-                        // Process already dead
-                        emulatorProcess = null;
-                        emulatorPid = null;
-                        return {
-                            content: [
-                                {
-                                    type: "text",
-                                    text: "X32 emulator process was not running (may have already stopped).",
-                                },
-                            ],
-                        };
-                    }
-
-                    // Try to kill the process gracefully first (SIGTERM)
-                    try {
-                        process.kill(emulatorPid, "SIGTERM");
-                        // Wait a bit for graceful shutdown
-                        await new Promise((resolve) => setTimeout(resolve, 1000));
-
-                        // Check if still running
-                        try {
-                            process.kill(emulatorPid, 0);
-                            // Still running, force kill
-                            process.kill(emulatorPid, "SIGKILL");
-                        } catch {
-                            // Process terminated successfully
-                        }
-                    } catch (killError) {
-                        // If kill fails, process might already be dead
-                        try {
-                            process.kill(emulatorPid, 0);
-                            // Still alive, try force kill
-                            process.kill(emulatorPid, "SIGKILL");
-                        } catch {
-                            // Process is dead
-                        }
-                    }
-
-                    emulatorProcess = null;
-                    emulatorPid = null;
-
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: "X32 emulator stopped successfully.",
-                            },
-                        ],
-                    };
-                } catch (error) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `Failed to stop X32 emulator: ${error instanceof Error ? error.message : String(error)}`,
-                            },
-                        ],
-                        isError: true,
-                    };
-                }
-            }
-
-            case "osc_get_emulator_status": {
-                try {
-                    if (emulatorPid === null) {
-                        return {
-                            content: [
-                                {
-                                    type: "text",
-                                    text: "X32 emulator is not running.",
-                                },
-                            ],
-                        };
-                    }
-
-                    // Check if process is still alive
-                    try {
-                        process.kill(emulatorPid, 0);
-                        return {
-                            content: [
-                                {
-                                    type: "text",
-                                    text: `X32 emulator is running (PID: ${emulatorPid}).`,
-                                },
-                            ],
-                        };
-                    } catch {
-                        // Process is dead, reset variables
-                        emulatorProcess = null;
-                        emulatorPid = null;
-                        return {
-                            content: [
-                                {
-                                    type: "text",
-                                    text: "X32 emulator is not running (process has terminated).",
-                                },
-                            ],
-                        };
-                    }
-                } catch (error) {
-                    return {
-                        content: [
-                            {
-                                type: "text",
-                                text: `Error checking emulator status: ${error instanceof Error ? error.message : String(error)}`,
-                            },
-                        ],
-                        isError: true,
-                    };
-                }
-            }
 
             default:
                 return {

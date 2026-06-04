@@ -1,1 +1,0 @@
-In order to use x32 on MacOS, you must first run xattr -d com.apple.quarantine X32, otherwise macOS will block

@@ -25,7 +25,7 @@ XMSeries-MCP/
 
 ## 🎯 Features Implemented
 
-### Mixer Control Tools (12 total):
+### Mixer Control Tools (representative subset):
 
 1. **osc_set_fader** - Set channel fader levels
 2. **osc_get_fader** - Get current fader levels
@@ -33,12 +33,10 @@ XMSeries-MCP/
 4. **osc_set_pan** - Control stereo panning
 5. **osc_set_eq** - Adjust 4-band parametric EQ
 6. **osc_set_gate** - Control noise gates
-7. **osc_set_compressor** - Adjust compression
-8. **osc_send_to_bus** - Control aux sends
-9. **osc_scene_recall** - Load saved scenes
-10. **osc_get_mixer_status** - Get mixer status and identity via `/xinfo` plus `/status`
-11. **osc_set_main_fader** - Control main LR fader
-12. **osc_custom_command** - Send any OSC command
+7. **osc_send_to_bus** - Control aux sends
+8. **osc_scene_recall** - Load saved scenes
+9. **osc_get_mixer_status** - Get mixer status and identity via `/xinfo` plus `/status`
+10. **osc_set_main_fader** - Control main LR fader
 
 ## 🚀 Installation for Claude Desktop
 
@@ -119,7 +117,6 @@ Once configured, you can use natural language commands like:
 
 **Dynamics:**
 - "Set channel 1 gate threshold to -40dB"
-- "Add compression to channel 3 with -20dB threshold and 4:1 ratio"
 
 **Aux Sends:**
 - "Send channel 1 to bus 3 at 50%"
@@ -168,7 +165,7 @@ Once configured, you can use natural language commands like:
 
 ### OSCXR Coverage:
 - Supported: channel fader/mute/name, EQ gain/on, channel sends to bus level, bus fader/mute/name, main LR, FX return, aux return, DCA, headamp gain, scenes
-- Explicitly unsupported until mapped or not losslessly representable: routing/user routing, matrices, console overview, full FX chain, colors/icons, gate/compressor, pan, EQ frequency/Q/type, and XR bus-specific source mutes that would otherwise become global source mutes
+- Explicitly unsupported until mapped or not losslessly representable: routing/user routing, matrices, console overview, colors/icons, gate/compressor, pan, EQ frequency/Q/type, and XR bus-specific source mutes that would otherwise become global source mutes
 
 ### Supported Mixer Models:
 - Behringer X32
@@ -225,7 +222,7 @@ You can send any OSC command supported by the mixer:
 
 ```
 Send OSC command /ch/01/config/name with value "Lead Vocal"
-Send custom command to /ch/05/mix/fader with value 0.8
+Set channel 5 fader to 0.8
 ```
 
 ### Batch Operations
@@ -253,37 +250,5 @@ Set up a basic mix:
 - Model Context Protocol SDK
 - OSC.js
 - Node.js
-
-## 🖥️ Using the X32 Emulator
-
-If you don't have a physical mixer, you can use the Patrick Maillot's X32 Emulator to test the agent.
-
-1. **Download the Emulator:**
-   The file is located at: `/Users/anteriovieira/Downloads/X32_macOS/X32`
-
-2. **Make it Executable:**
-   ```bash
-   chmod +x /Users/anteriovieira/Downloads/X32_macOS/X32
-   ```
-
-3. **Run the Emulator:**
-   ```bash
-   /Users/anteriovieira/Downloads/X32_macOS/X32
-   ```
-   
-   The emulator will start and listen on **UDP port 10023**.
-
-4. **Configure Claude Desktop:**
-   Update your `claude_desktop_config.json` to use the local IP (usually `127.0.0.1` or your LAN IP) and port `10023`.
-
-   ```json
-   "env": {
-     "OSC_HOST": "127.0.0.1",
-     "OSC_PORT": "10023",
-     "OSC_PROTOCOL": "OSCX32M32"
-   }
-   ```
-
----
 
 **Ready to start mixing with AI? Follow the installation steps above and enjoy controlling your mixer through natural conversation!** 🎚️🎵
