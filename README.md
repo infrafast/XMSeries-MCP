@@ -57,7 +57,7 @@ Replace the IP with your mixer's (on the X32: `Setup` -> `Network`). Restart Cla
 
 `OSC_PROTOCOL` is optional. Use `OSCX32M32` for Behringer X32 / Midas M32 consoles, or `OSCXR` for XAir/XR-compatible addressing. If omitted, the server defaults to `OSCX32M32`. `MCP_PROMPT_FILE` is also optional; it lets you point the server at a custom prompt file. If omitted, the server exposes the repository `PROMPT.md`.
 
-The server starts with these environment values, then the active mixer can be changed at runtime with `osc_configure_mixer`. Omitted fields keep their current values. Changing `host`, `port`, or `protocol` closes the current OSC client and reconnects to the new mixer; changing only `channelCount`, `busCount`, `fxCount`, or `dcaCount` updates resolver and bulk-read limits without reconnecting.
+The server starts with these environment values, then the active mixer can be changed at runtime with `osc_configure_mixer`. Omitted fields keep their current values. Changing `host`, `port`, or `protocol` closes the current OSC client and reconnects to the new mixer. For count-only updates, use `osc_set_mixer_counts`; it updates resolver and bulk-read limits without reconnecting. If counts are included in `osc_configure_mixer`, they are applied together with the connection change.
 
 Example runtime change:
 
@@ -79,6 +79,8 @@ Example runtime limit update:
   "dcaCount": 3
 }
 ```
+
+Use `osc_set_mixer_counts` for that count-only update.
 
 See `INSTALLATION.md`, `QUICKSTART.md`, and `AGENTS.md` for additional client wiring, including Cline, Continue.dev, and other MCP-compatible agents.
 

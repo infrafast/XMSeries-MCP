@@ -418,8 +418,8 @@ function formatLevelRead(label: string, level: number, unit: LevelToolUnit): str
     return `${label} is at ${(level * 100).toFixed(1)}%`;
 }
 
-function parsePositiveInteger(value: number | undefined, name: string): number | undefined {
-    if (value === undefined) return undefined;
+function parsePositiveInteger(value: number | null | undefined, name: string): number | undefined {
+    if (value === undefined || value === null) return undefined;
     if (!Number.isInteger(value) || value < 1) {
         throw new Error(`${name} must be a positive integer.`);
     }
@@ -430,10 +430,10 @@ async function configureOscRuntime(input: {
     host?: string;
     port?: number;
     protocol?: string;
-    channelCount?: number;
-    busCount?: number;
-    fxCount?: number;
-    dcaCount?: number;
+    channelCount?: number | null;
+    busCount?: number | null;
+    fxCount?: number | null;
+    dcaCount?: number | null;
 }): Promise<{ reconnect: boolean; previous: OscRuntimeConfig; current: OscRuntimeConfig }> {
     const previous = { ...oscRuntimeConfig };
     const next: OscRuntimeConfig = {
@@ -730,6 +730,19 @@ const TOOLS: Tool[] = [
                 busCount: { type: "number", description: "Configured bus count for name resolution and all-bus operations. Omit to keep current value.", minimum: 1 },
                 fxCount: { type: "number", description: "Configured FX return/slot count for name resolution and FX reads. Omit to keep current value.", minimum: 1 },
                 dcaCount: { type: "number", description: "Configured DCA count for name resolution and DCA reads. Omit to keep current value.", minimum: 1 },
+            },
+        },
+    },
+    {
+        name: "osc_set_mixer_counts",
+        description: "Update only the runtime channel/bus/FX/DCA limits used for name resolution, all-bus operations, and bulk reads. Omitted fields keep their current values. This never reconnects or changes host/port/protocol.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                channelCount: { type: "number", description: "Runtime channel count. Omit to keep current value.", minimum: 1 },
+                busCount: { type: "number", description: "Runtime bus count. Omit to keep current value.", minimum: 1 },
+                fxCount: { type: "number", description: "Runtime FX return/slot count. Omit to keep current value.", minimum: 1 },
+                dcaCount: { type: "number", description: "Runtime DCA count. Omit to keep current value.", minimum: 1 },
             },
         },
     },
@@ -1732,11 +1745,43 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     host?: string;
                     port?: number;
                     protocol?: string;
-                    channelCount?: number;
-                    busCount?: number;
-                    fxCount?: number;
-                    dcaCount?: number;
+                    channelCount?: number | null;
+                    busCount?: number | null;
+                    fxCount?: number | null;
+                    dcaCount?: number | null;
                 });
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: JSON.stringify(
+                                {
+                                    reconnected: result.reconnect,
+                                    previous: result.previous,
+                                    current: result.current,
+                                },
+                                null,
+                                2
+                            ),
+                        },
+                    ],
+                };
+            }
+
+            case "osc_set_mixer_counts": {
+                const input = args as unknown as {
+                    channelCount?: number | null;
+                    busCount?: number | null;
+                    fxCount?: number | null;
+                    dcaCount?: number | null;
+                };
+                if (
+                    input.channelCount === undefined && input.busCount === undefined &&
+                    input.fxCount === undefined && input.dcaCount === undefined
+                ) {
+                    throw new Error("At least one of channelCount, busCount, fxCount, or dcaCount is required.");
+                }
+                const result = await configureOscRuntime(input);
                 return {
                     content: [
                         {

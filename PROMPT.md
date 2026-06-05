@@ -152,7 +152,8 @@ French aliases:
 ## High-Value Reads
 
 - `osc_get_mixer_status({})` for current runtime connection config, protocol, model/version, and health.
-- `osc_configure_mixer({...})` to change the active mixer host/port/protocol or runtime channel/bus/FX/DCA counts. Omitted fields keep their current values. Changing only counts does not reconnect; changing host, port, or protocol reconnects the OSC client.
+- `osc_configure_mixer({...})` to change the active mixer host/port/protocol; it can also accept counts in the same request. Omitted fields, including omitted or null counts, keep their current values. Changing host, port, or protocol reconnects the OSC client.
+- `osc_set_mixer_counts({...})` when the user only provides channel/bus/FX/DCA counts. Count-only changes never reconnect.
 - `osc_find_named_target({"name":"...", "families":[...]})` to resolve named channels, buses, FX returns, aux returns, DCAs, and matrices in one deterministic tool call. Exact matches are authoritative over partial matches; fuzzy matches are only a fallback for likely speech-recognition spelling errors.
 - `osc_get_channel_name({"channel":N})` to read the name of a known channel number.
 - `osc_automation_ramp`, `osc_automation_delayed_command`, `osc_automation_macro`, `osc_automation_list`, `osc_automation_cancel` for timed actions.

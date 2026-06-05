@@ -33,7 +33,8 @@ XMSeries-MCP/
 4. **osc_channel_send_to_bus** - Get/set channel sends to buses
 5. **osc_get_mixer_status** - Get mixer status and identity via `/xinfo` plus `/status`
 6. **osc_main_fader** - Get/set main LR fader
-7. **osc_configure_mixer** - Change active mixer host/port/protocol or runtime scan limits
+7. **osc_configure_mixer** - Change active mixer host/port/protocol
+8. **osc_set_mixer_counts** - Change runtime channel/bus/FX/DCA scan limits without reconnecting
 
 ## 🚀 Installation for Claude Desktop
 
