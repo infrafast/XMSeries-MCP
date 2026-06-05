@@ -377,7 +377,7 @@ function parseLevelOperation(input: LevelToolInput): LevelOperation {
         throw new Error(`Invalid level action "${action}". Expected "get" or "set".`);
     }
 
-    const unit = input.unit ?? "level";
+    const unit = input.unit ?? "db";
     if (unit !== "level" && unit !== "db" && unit !== "percent") {
         throw new Error(`Invalid level unit "${unit}". Expected "level", "db", or "percent".`);
     }
@@ -387,6 +387,11 @@ function parseLevelOperation(input: LevelToolInput): LevelOperation {
     }
 
     return { action, unit, value: input.value };
+}
+
+function formatLevelWithDb(level: number): string {
+    const converted = faderLevelToDb(level);
+    return `${formatDb(converted.db)} (level ${level.toFixed(4)}, ${Math.round(level * 1000) / 10}%, nearest table index ${converted.index})`;
 }
 
 function levelValueToNormalized(operation: LevelOperation): { level: number; text: string } {
@@ -405,14 +410,13 @@ function levelValueToNormalized(operation: LevelOperation): { level: number; tex
     const level = clampLevel(operation.unit === "percent" ? operation.value / 100 : operation.value);
     return {
         level,
-        text: operation.unit === "percent" ? `${operation.value.toFixed(1)}% (level ${level.toFixed(4)})` : `${(level * 100).toFixed(1)}%`,
+        text: formatLevelWithDb(level),
     };
 }
 
 function formatLevelRead(label: string, level: number, unit: LevelToolUnit): string {
     if (unit === "db") {
-        const converted = faderLevelToDb(level);
-        return `${label} is ${formatDb(converted.db)} (level ${level.toFixed(4)}, nearest table index ${converted.index})`;
+        return `${label} is ${formatLevelWithDb(level)}`;
     }
 
     return `${label} is at ${(level * 100).toFixed(1)}%`;
@@ -891,7 +895,7 @@ const TOOLS: Tool[] = [
     // ========== Channel Controls ==========
     {
         name: "osc_channel_fader",
-        description: "Get or set a channel fader. Use unit='db' for dB requests; default unit='level' uses normalized 0.0-1.0 levels.",
+        description: "Get or set a channel fader. Use unit='db' for dB requests; default unit='db' returns and accepts X32/M32 fader dB values.",
         inputSchema: {
             type: "object",
             properties: {
@@ -905,7 +909,7 @@ const TOOLS: Tool[] = [
                 unit: {
                     type: "string",
                     enum: ["level", "percent", "db"],
-                    description: "level = normalized 0.0..1.0; percent = 0..100%; db = X32/M32 fader dB table. Defaults to level.",
+                    description: "level = normalized 0.0..1.0; percent = 0..100%; db = X32/M32 fader dB table. Defaults to db.",
                 },
                 value: {
                     type: "number",
@@ -992,7 +996,7 @@ const TOOLS: Tool[] = [
     // ========== Bus Controls ==========
     {
         name: "osc_bus_fader",
-        description: "Get or set a mix bus fader. Use unit='db' for dB requests; default unit='level' uses normalized 0.0-1.0 levels.",
+        description: "Get or set a mix bus fader. Use unit='db' for dB requests; default unit='db' returns and accepts X32/M32 fader dB values.",
         inputSchema: {
             type: "object",
             properties: {
@@ -1006,7 +1010,7 @@ const TOOLS: Tool[] = [
                 unit: {
                     type: "string",
                     enum: ["level", "percent", "db"],
-                    description: "level = normalized 0.0..1.0; percent = 0..100%; db = X32/M32 fader dB table. Defaults to level.",
+                    description: "level = normalized 0.0..1.0; percent = 0..100%; db = X32/M32 fader dB table. Defaults to db.",
                 },
                 value: {
                     type: "number",
@@ -1088,7 +1092,7 @@ const TOOLS: Tool[] = [
     // ========== Aux Controls ==========
     {
         name: "osc_aux_fader",
-        description: "Get or set an aux return fader. Use unit='db' for dB requests; default unit='level' uses normalized 0.0-1.0 levels. In OSCXR the aux return is a singleton; use aux 1.",
+        description: "Get or set an aux return fader. Use unit='db' for dB requests; default unit='db' returns and accepts X32/M32 fader dB values. In OSCXR the aux return is a singleton; use aux 1.",
         inputSchema: {
             type: "object",
             properties: {
@@ -1102,7 +1106,7 @@ const TOOLS: Tool[] = [
                 unit: {
                     type: "string",
                     enum: ["level", "percent", "db"],
-                    description: "level = normalized 0.0..1.0; percent = 0..100%; db = X32/M32 fader dB table. Defaults to level.",
+                    description: "level = normalized 0.0..1.0; percent = 0..100%; db = X32/M32 fader dB table. Defaults to db.",
                 },
                 value: {
                     type: "number",
@@ -1137,7 +1141,7 @@ const TOOLS: Tool[] = [
     // ========== Sends ==========
     {
         name: "osc_channel_send_to_bus",
-        description: "Get or set the send level from a channel to a mix bus. Use only when the user explicitly names both a source channel and a destination bus. Use unit='db' for dB requests; default unit='level' uses normalized 0.0-1.0 levels. Do not use for mute/cut/off commands; use osc_mute_channel_to_bus for that intent.",
+        description: "Get or set the send level from a channel to a mix bus. Use only when the user explicitly names both a source channel and a destination bus. Use unit='db' for dB requests; default unit='db' returns and accepts X32/M32 fader dB values. Do not use for mute/cut/off commands; use osc_mute_channel_to_bus for that intent.",
         inputSchema: {
             type: "object",
             properties: {
@@ -1157,7 +1161,7 @@ const TOOLS: Tool[] = [
                 unit: {
                     type: "string",
                     enum: ["level", "percent", "db"],
-                    description: "level = normalized 0.0..1.0; percent = 0..100%; db = X32/M32 fader dB table. Defaults to level.",
+                    description: "level = normalized 0.0..1.0; percent = 0..100%; db = X32/M32 fader dB table. Defaults to db.",
                 },
                 value: {
                     type: "number",
@@ -1217,14 +1221,14 @@ const TOOLS: Tool[] = [
     },
     {
         name: "osc_fx_send_to_bus",
-        description: "Get or set the send level from an FX return to a mix bus. Use unit='db' for dB requests; default unit='level' uses normalized 0.0-1.0 levels. Do not use for mute/cut/off commands; use osc_mute_fx_to_bus for that intent.",
+        description: "Get or set the send level from an FX return to a mix bus. Use unit='db' for dB requests; default unit='db' returns and accepts X32/M32 fader dB values. Do not use for mute/cut/off commands; use osc_mute_fx_to_bus for that intent.",
         inputSchema: {
             type: "object",
             properties: {
                 action: { type: "string", enum: ["get", "set"] },
                 effect: { type: "number", description: "FX return/effect number within the current runtime fxCount.", minimum: 1 },
                 bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
-                unit: { type: "string", enum: ["level", "percent", "db"], description: "level = normalized 0.0..1.0; percent = 0..100%; db = X32/M32 fader dB table. Defaults to level." },
+                unit: { type: "string", enum: ["level", "percent", "db"], description: "level = normalized 0.0..1.0; percent = 0..100%; db = X32/M32 fader dB table. Defaults to db." },
                 value: { type: "number", description: "Required for action='set'. Normalized level when unit='level', percentage when unit='percent', dB value when unit='db'.", minimum: -120, maximum: 100 },
             },
             required: ["action", "effect", "bus"],
@@ -1245,14 +1249,14 @@ const TOOLS: Tool[] = [
     },
     {
         name: "osc_aux_send_to_bus",
-        description: "Get or set the send level from an aux return to a mix bus. Use unit='db' for dB requests; default unit='level' uses normalized 0.0-1.0 levels. Do not use for mute/cut/off commands; use osc_mute_aux_to_bus for that intent. In OSCXR the aux return is a singleton; use aux 1.",
+        description: "Get or set the send level from an aux return to a mix bus. Use unit='db' for dB requests; default unit='db' returns and accepts X32/M32 fader dB values. Do not use for mute/cut/off commands; use osc_mute_aux_to_bus for that intent. In OSCXR the aux return is a singleton; use aux 1.",
         inputSchema: {
             type: "object",
             properties: {
                 action: { type: "string", enum: ["get", "set"] },
                 aux: { type: "number", description: "Aux return number (X32: 1-6; OSCXR: use 1 for /rtn/aux)", minimum: 1, maximum: 6 },
                 bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
-                unit: { type: "string", enum: ["level", "percent", "db"], description: "level = normalized 0.0..1.0; percent = 0..100%; db = X32/M32 fader dB table. Defaults to level." },
+                unit: { type: "string", enum: ["level", "percent", "db"], description: "level = normalized 0.0..1.0; percent = 0..100%; db = X32/M32 fader dB table. Defaults to db." },
                 value: { type: "number", description: "Required for action='set'. Normalized level when unit='level', percentage when unit='percent', dB value when unit='db'.", minimum: -120, maximum: 100 },
             },
             required: ["action", "aux", "bus"],
@@ -1302,7 +1306,7 @@ const TOOLS: Tool[] = [
     // ========== Main Mix ==========
     {
         name: "osc_main_fader",
-        description: "Get or set the main LR fader. Use unit='db' for dB requests; default unit='level' uses normalized 0.0-1.0 levels.",
+        description: "Get or set the main LR fader. Use unit='db' for dB requests; default unit='db' returns and accepts X32/M32 fader dB values.",
         inputSchema: {
             type: "object",
             properties: {
@@ -1310,7 +1314,7 @@ const TOOLS: Tool[] = [
                 unit: {
                     type: "string",
                     enum: ["level", "percent", "db"],
-                    description: "level = normalized 0.0..1.0; percent = 0..100%; db = X32/M32 fader dB table. Defaults to level.",
+                    description: "level = normalized 0.0..1.0; percent = 0..100%; db = X32/M32 fader dB table. Defaults to db.",
                 },
                 value: {
                     type: "number",
@@ -1339,7 +1343,7 @@ const TOOLS: Tool[] = [
     // ========== Matrix ==========
     {
         name: "osc_matrix_fader",
-        description: "Get or set a matrix fader. Use unit='db' for dB requests; default unit='level' uses normalized 0.0-1.0 levels. X32/M32 only; matrices are not mapped in OSCXR.",
+        description: "Get or set a matrix fader. Use unit='db' for dB requests; default unit='db' returns and accepts X32/M32 fader dB values. X32/M32 only; matrices are not mapped in OSCXR.",
         inputSchema: {
             type: "object",
             properties: {
@@ -1353,7 +1357,7 @@ const TOOLS: Tool[] = [
                 unit: {
                     type: "string",
                     enum: ["level", "percent", "db"],
-                    description: "level = normalized 0.0..1.0; percent = 0..100%; db = X32/M32 fader dB table. Defaults to level.",
+                    description: "level = normalized 0.0..1.0; percent = 0..100%; db = X32/M32 fader dB table. Defaults to db.",
                 },
                 value: {
                     type: "number",
