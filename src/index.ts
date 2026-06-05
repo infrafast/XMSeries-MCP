@@ -495,7 +495,12 @@ export async function configureOscRuntime(input: {
 }
 
 function targetAdapter(target: AutomationTargetSpec): AutomationTargetAdapter {
-    switch (target.kind) {
+    if (!target || typeof target !== "object") {
+        throw new Error("Automation target is required.");
+    }
+
+    const kind = (target as { kind?: string }).kind;
+    switch (kind) {
         case "channel_fader": {
             const channel = requireNumber(target.channel, "channel");
             const address = channelPath(channel, "/mix/fader");
@@ -589,6 +594,12 @@ function targetAdapter(target: AutomationTargetSpec): AutomationTargetAdapter {
                 write: (level) => osc.sendRaw(writeAddress, [coerceOscArg(level, target.osctype || "float")], { allowOfflineWrite: true }),
             };
         }
+        default:
+            throw new Error(
+                `Unsupported automation target kind "${kind ?? "(missing)"}". ` +
+                    "Use one of: channel_fader, channel_send, bus_fader, main_fader, fx_return_fader, fx_send, aux_fader, aux_send, matrix_fader, raw. " +
+                    'For a bus fader, use target.kind="bus_fader", not "bus".'
+            );
     }
 }
 
@@ -774,7 +785,7 @@ export const TOOLS: Tool[] = [
             properties: {
                 target: {
                     type: "object",
-                    description: "Target to automate. Use channel_fader for source on main LR, channel_send for source to bus, bus_fader, main_fader, fx_return_fader, fx_send, aux_fader, aux_send, matrix_fader, or raw.",
+                    description: "Target to automate. Use channel_fader for source on main LR, channel_send for source to bus, bus_fader for a named bus/monitor fader, main_fader, fx_return_fader, fx_send, aux_fader, aux_send, matrix_fader, or raw. Never use kind='bus'; use kind='bus_fader'.",
                     properties: {
                         kind: { type: "string", enum: ["channel_fader", "channel_send", "bus_fader", "main_fader", "fx_return_fader", "fx_send", "aux_fader", "aux_send", "matrix_fader", "raw"] },
                         channel: { type: "number" },

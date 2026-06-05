@@ -312,6 +312,17 @@ Examples:
 }
 ```
 
+For a named bus/monitor fader, use `kind:"bus_fader"`:
+
+```json
+{
+  "target": { "kind": "bus_fader", "bus": 2 },
+  "toDb": 0,
+  "durationSeconds": 12,
+  "label": "Raise Claude bus to 0 dB"
+}
+```
+
 ```json
 {
   "target": { "kind": "channel_send", "channel": 6, "bus": 1 },
