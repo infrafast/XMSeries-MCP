@@ -293,12 +293,12 @@ The MCP server includes a small background automation engine for timing-sensitiv
 Available tools:
 
 - `osc_automation_ramp` starts a fade/ramp on one numeric target and returns immediately with a job id.
-- `osc_automation_delayed_command` schedules one delayed supported mixer command.
-- `osc_automation_macro` runs a sequence of waits, raw commands, and ramps.
+- `osc_automation_delayed_command` schedules one delayed supported mixer command. Prefer structured `target` + `toDb`/`toLevel` for delayed level writes.
+- `osc_automation_macro` runs a sequence of waits, allowlisted raw commands, and structured ramps.
 - `osc_automation_list` lists running, completed, failed, and cancelled jobs.
 - `osc_automation_cancel` cancels a running job by id.
 
-Supported ramp targets include channel faders, channel sends to bus, bus faders, main LR, FX-return faders, FX sends to bus, aux faders, aux sends to bus, matrix faders, and raw numeric OSC addresses.
+Supported ramp targets include channel faders, channel sends to bus, bus faders, main LR, FX-return faders, FX sends to bus, aux faders, aux sends to bus, matrix faders, and allowlisted raw numeric OSC addresses.
 
 Examples:
 
@@ -323,6 +323,17 @@ For a named bus/monitor fader, use `kind:"bus_fader"`:
 }
 ```
 
+For a delayed main LR/façade level write, use a structured target instead of a raw OSC address:
+
+```json
+{
+  "delaySeconds": 5,
+  "target": { "kind": "main_fader" },
+  "toDb": 0,
+  "label": "Set main LR to 0 dB later"
+}
+```
+
 ```json
 {
   "target": { "kind": "channel_send", "channel": 6, "bus": 1 },
@@ -339,6 +350,8 @@ For a named bus/monitor fader, use `kind:"bus_fader"`:
   "label": "Mute main LR later"
 }
 ```
+
+Raw automation commands are rejected unless the address is in the server's protocol-aware allowlist for the active mixer protocol. Do not invent OSC paths; use structured targets for known level writes.
 
 For write-heavy ramps, the server sends timed OSC writes without probing `/xinfo` at every step, then verifies the final target value. This keeps fades smooth while still detecting failed end states.
 

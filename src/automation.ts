@@ -120,6 +120,7 @@ export class AutomationEngine {
 
         if (durationMs === 0) {
             await action.write(to);
+            await this.verifyRampFinalValue(job, action, clamp01(to));
             return;
         }
 

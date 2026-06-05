@@ -14,7 +14,7 @@ import {
     ReadResourceRequestSchema,
     Tool,
 } from "@modelcontextprotocol/sdk/types.js";
-import { AutomationAction, AutomationCurve, AutomationEngine } from "./automation.js";
+import { AutomationAction, AutomationCurve, AutomationEngine, AutomationRampAction } from "./automation.js";
 import { coerceOscArg, MixerDisconnectedError, OSCClient, OSCProtocol, parseOscCountEnv } from "./osc-client.js";
 import { dbToFaderLevel, faderLevelToDb, formatDb } from "./level-table.js";
 
@@ -342,7 +342,10 @@ interface AutomationRampInput {
 
 interface AutomationDelayedCommandInput {
     delaySeconds: number;
-    command: AutomationRawCommand;
+    command?: AutomationRawCommand;
+    target?: AutomationTargetSpec;
+    toLevel?: number;
+    toDb?: number | null;
     label?: string;
 }
 
@@ -588,6 +591,8 @@ function targetAdapter(target: AutomationTargetSpec): AutomationTargetAdapter {
             if (!readAddress || !writeAddress) {
                 throw new Error("Raw automation targets require address or readAddress/writeAddress.");
             }
+            validateAutomationRawCommand({ address: readAddress });
+            validateAutomationRawCommand({ address: writeAddress });
             return {
                 label: `raw OSC ${writeAddress}`,
                 read: async () => Number(await osc.readRaw(readAddress)),
@@ -642,20 +647,133 @@ function busSendSegment(bus: number): string {
     return bus.toString().padStart(2, "0");
 }
 
+function allowedAutomationRawAddresses(): Set<string> {
+    const addresses = new Set<string>();
+
+    addresses.add(`${mainStereoPath()}/mix/fader`);
+    addresses.add(`${mainStereoPath()}/mix/on`);
+
+    for (let channel = 1; channel <= oscRuntimeConfig.channelCount; channel += 1) {
+        addresses.add(channelPath(channel, "/mix/fader"));
+        addresses.add(channelPath(channel, "/mix/on"));
+        for (let bus = 1; bus <= oscRuntimeConfig.busCount; bus += 1) {
+            addresses.add(channelPath(channel, `/mix/${busSendSegment(bus)}/level`));
+            if (oscRuntimeConfig.protocol === "OSCX32M32") {
+                addresses.add(channelPath(channel, `/mix/${busSendSegment(bus)}/on`));
+            }
+        }
+    }
+
+    for (let bus = 1; bus <= oscRuntimeConfig.busCount; bus += 1) {
+        addresses.add(`${busPath(bus)}/mix/fader`);
+        addresses.add(`${busPath(bus)}/mix/on`);
+    }
+
+    for (let effect = 1; effect <= oscRuntimeConfig.fxCount; effect += 1) {
+        addresses.add(`${fxReturnPath(effect)}/mix/fader`);
+        addresses.add(`${fxReturnPath(effect)}/mix/on`);
+        addresses.add(`/fx/${effect}/par/01`);
+        for (let bus = 1; bus <= oscRuntimeConfig.busCount; bus += 1) {
+            addresses.add(`${fxReturnPath(effect)}/mix/${busSendSegment(bus)}/level`);
+            if (oscRuntimeConfig.protocol === "OSCX32M32") {
+                addresses.add(`${fxReturnPath(effect)}/mix/${busSendSegment(bus)}/on`);
+            }
+        }
+    }
+
+    const auxCount = oscRuntimeConfig.protocol === "OSCXR" ? 1 : 6;
+    for (let aux = 1; aux <= auxCount; aux += 1) {
+        addresses.add(`${auxPath(aux)}/mix/fader`);
+        addresses.add(`${auxPath(aux)}/mix/on`);
+        for (let bus = 1; bus <= oscRuntimeConfig.busCount; bus += 1) {
+            addresses.add(`${auxBusPath(aux, bus)}/level`);
+            if (oscRuntimeConfig.protocol === "OSCX32M32") {
+                addresses.add(`${auxBusPath(aux, bus)}/on`);
+            }
+        }
+    }
+
+    for (let dca = 1; dca <= oscRuntimeConfig.dcaCount; dca += 1) {
+        addresses.add(`/dca/${dca}/fader`);
+        addresses.add(`/dca/${dca}/on`);
+    }
+
+    if (oscRuntimeConfig.protocol === "OSCX32M32") {
+        for (let matrix = 1; matrix <= 6; matrix += 1) {
+            addresses.add(`/mtx/${matrix.toString().padStart(2, "0")}/mix/fader`);
+            addresses.add(`/mtx/${matrix.toString().padStart(2, "0")}/mix/on`);
+        }
+    }
+
+    return addresses;
+}
+
+function validateAutomationRawCommand(command: AutomationRawCommand): void {
+    if (!command?.address) {
+        throw new Error("Raw automation command requires an OSC address.");
+    }
+
+    const allowed = allowedAutomationRawAddresses();
+    if (!allowed.has(command.address)) {
+        throw new Error(
+            `Unsupported raw automation OSC address "${command.address}" for protocol ${oscRuntimeConfig.protocol}. ` +
+                "Do not invent OSC addresses. Use structured automation targets for known mixer operations, such as " +
+                'target.kind="main_fader" for facade/main LR, or use an address documented for the active protocol.'
+        );
+    }
+}
+
 function rawCommandAction(input: AutomationDelayedCommandInput): AutomationAction {
+    if (!input.command) {
+        throw new Error("Delayed raw OSC automation requires command, or use target with toLevel/toDb for a structured delayed level change.");
+    }
+    const command = input.command;
+    validateAutomationRawCommand(command);
+
     return {
         type: "delay",
         delaySeconds: input.delaySeconds,
-        description: input.label || `delayed OSC ${input.command.address}`,
+        description: input.label || `delayed OSC ${command.address}`,
         run: async () => {
-            const args = input.command.args?.map((arg) => coerceOscArg(arg, input.command.osctype));
+            const args = command.args?.map((arg) => coerceOscArg(arg, command.osctype));
             await osc.assertMixerOnline();
-            await osc.sendRaw(input.command.address, args, { allowOfflineWrite: true });
+            await osc.sendRaw(command.address, args, { allowOfflineWrite: true });
         },
     };
 }
 
-function rampAction(input: AutomationRampInput): AutomationAction {
+function delayedStructuredLevelAction(input: AutomationDelayedCommandInput): AutomationAction {
+    const ramp = rampAction({
+        target: input.target!,
+        toLevel: input.toLevel,
+        toDb: input.toDb,
+        durationSeconds: 0,
+        label: input.label,
+    });
+
+    return {
+        type: "delay",
+        delaySeconds: input.delaySeconds,
+        description: input.label || `delayed ${ramp.description || "level change"}`,
+        run: async () => {
+            await osc.assertMixerOnline();
+            await ramp.write(ramp.to);
+            const actual = await ramp.read();
+            if (Math.abs(actual - ramp.to) > 0.002) {
+                throw new Error(`Delayed level verification failed for ${ramp.description || "target"}: expected ${ramp.to.toFixed(6)}, read ${actual.toFixed(6)}`);
+            }
+        },
+    };
+}
+
+function delayedAutomationAction(input: AutomationDelayedCommandInput): AutomationAction {
+    if (input.target) {
+        return delayedStructuredLevelAction(input);
+    }
+    return rawCommandAction(input);
+}
+
+function rampAction(input: AutomationRampInput): AutomationRampAction {
     const adapter = targetAdapter(input.target);
     const to = input.toLevel ?? (input.toDb === null ? 0 : input.toDb !== undefined ? dbToFaderLevel(input.toDb).level : undefined);
     if (to === undefined) {
@@ -813,13 +931,33 @@ export const TOOLS: Tool[] = [
     },
     {
         name: "osc_automation_delayed_command",
-        description: "Schedule a raw OSC command to run later. Use for delayed actions that are not ramps. The command is sent once after delaySeconds.",
+        description: "Schedule a delayed one-shot automation. Prefer structured target + toDb/toLevel for delayed fader/send level changes; this is protocol-aware and prevents invented OSC addresses. Raw command is allowed only for documented/allowlisted OSC addresses in the active protocol.",
         inputSchema: {
             type: "object",
             properties: {
                 delaySeconds: { type: "number", minimum: 0 },
+                target: {
+                    type: "object",
+                    description: "Structured level target for delayed fader/send writes. Use main_fader for facade/main LR, bus_fader for a named bus/monitor, channel_fader for a source on main LR, channel_send for source to bus, etc. Prefer this over raw command.",
+                    properties: {
+                        kind: { type: "string", enum: ["channel_fader", "channel_send", "bus_fader", "main_fader", "fx_return_fader", "fx_send", "aux_fader", "aux_send", "matrix_fader", "raw"] },
+                        channel: { type: "number" },
+                        bus: { type: "number" },
+                        effect: { type: "number" },
+                        aux: { type: "number" },
+                        matrix: { type: "number" },
+                        address: { type: "string" },
+                        readAddress: { type: "string" },
+                        writeAddress: { type: "string" },
+                        osctype: { type: "string", enum: ["int", "float", "string", "bool"] },
+                    },
+                    required: ["kind"],
+                },
+                toLevel: { type: "number", description: "Target normalized level 0.0 to 1.0 when target is provided", minimum: 0, maximum: 1 },
+                toDb: { type: "number", description: "Target dB value when target is provided. Use this for user dB requests such as 0 dB.", minimum: -120, maximum: 20 },
                 command: {
                     type: "object",
+                    description: "Advanced raw OSC command. Use only for documented addresses in the active protocol; never invent paths.",
                     properties: {
                         address: { type: "string" },
                         args: { type: "array", items: {} },
@@ -829,12 +967,12 @@ export const TOOLS: Tool[] = [
                 },
                 label: { type: "string" },
             },
-            required: ["delaySeconds", "command"],
+            required: ["delaySeconds"],
         },
     },
     {
         name: "osc_automation_macro",
-        description: "Start a background temporal macro composed of waits, raw OSC commands, and ramps. Use this for timed sequences and progressive multi-parameter mix changes.",
+        description: "Start a background temporal macro composed of waits, allowlisted raw OSC commands, and structured ramps. Use ramp steps for known fader/send level changes so paths are protocol-aware; raw command steps are rejected unless the OSC address is documented/allowlisted for the active protocol.",
         inputSchema: {
             type: "object",
             properties: {
@@ -1852,8 +1990,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
             case "osc_automation_delayed_command": {
                 const input = args as unknown as AutomationDelayedCommandInput;
-                const action = rawCommandAction(input);
-                const job = automation.start(input.label || action.description || "delayed OSC command", [action]);
+                const action = delayedAutomationAction(input);
+                const job = automation.start(input.label || action.description || "delayed automation command", [action]);
                 return {
                     content: [{ type: "text", text: JSON.stringify(job, null, 2) }],
                 };
