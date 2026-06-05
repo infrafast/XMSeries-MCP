@@ -60,7 +60,7 @@ Copy the contents from `claude_desktop_config.json` in this repository, or add t
 
 The prompt is exposed as MCP standard prompt `agent_prompt`, standard resource `agent://prompt/system`, and standard fallback tool `get_agent_prompt`. Your agent/client still has to fetch it and inject it into the LLM context.
 
-`OSCXR` support is intentionally partial and follows `PROTOCOL.md`. Supported XR command families are: channel fader/mute/name, EQ gain/on, channel sends to bus level, bus fader/mute/name, main LR, FX return, aux return, DCA, headamp gain, and scenes. Source-to-bus levels are mapped when they are semantically equivalent; bus-specific source mutes that would become global XR mutes return `Unsupported for OSCXR: ...` rather than timing out or muting too much.
+`OSCXR` support is intentionally partial and follows `PROTOCOL.md`. Supported XR command families are: channel fader/mute/name, channel sends to bus level, bus fader/mute/name, main LR, FX return, aux return, DCA, and headamp gain. Source-to-bus levels are mapped when they are semantically equivalent; bus-specific source mutes that would become global XR mutes return `Unsupported for OSCXR: ...` rather than timing out or muting too much.
 
 ### 4. Restart Claude Desktop
 
@@ -195,7 +195,7 @@ The status tool uses `/xinfo` and `/status`, so a successful response should inc
 
 Dedicated readable write tools verify their writes by reading the same OSC address back. If the mixer does not answer, the tool reports that the mixer is disconnected. If the value read back is different from the value sent, the tool reports that the command was not executed correctly.
 
-Ramp automations verify the final value when the ramp completes. Raw custom OSC writes and scene recall/save are address-specific and are not generically verified; use explicit reads when you need to validate those.
+Ramp automations verify the final value when the ramp completes. Raw custom OSC writes are address-specific and are not generically verified; use explicit reads when you need to validate those.
 
 ## Example Commands
 
@@ -216,37 +216,10 @@ Unmute channel 7
 Mute channels 1, 2, and 3
 ```
 
-### Pan Control
-```
-Pan channel 2 to the left
-Center the pan on channel 4
-Pan channel 8 hard right
-```
-
-### EQ
-```
-Boost channel 1 EQ band 2 by 3dB
-Cut channel 5 EQ band 4 by 6dB
-Reset EQ on channel 1 band 3
-```
-
-### Dynamics
-```
-Set channel 1 gate threshold to -40dB
-Set channel 3 compressor with -20dB threshold and 4:1 ratio
-Adjust the gate on channel 5 to -35dB
-```
-
 ### Aux Sends
 ```
 Send channel 1 to bus 3 at 50%
 Set channel 2 send to bus 1 at 75%
-```
-
-### Scenes
-```
-Recall scene 5
-Load scene 12
 ```
 
 ### Advanced - Custom OSC Commands

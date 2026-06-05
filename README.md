@@ -10,11 +10,9 @@ For developpers: https://deepwiki.com/infrafast/XMSeries-MCP
 
 MCP tools organized into groups. Highlights beyond the original small MCP server:
 
-- **Deep channel strips** — headamp/preamp context, gate, EQ (all 4 bands with freq/Q/type/on in X32 mode), fader, pan, name, sends, and mute
-- **Broad bus / matrix / aux / FX-return / DCA / main coverage** — faders, mutes, names, pan where mapped, EQ where mapped, and focused strip reads
+- **Deep channel strips** — headamp/preamp context, fader, name, sends, and mute
+- **Broad bus / matrix / aux / FX-return / DCA / main coverage** — faders, mutes, names, and focused strip reads
 - **FX chain visibility** — type + all 16 params per slot, source assignment, return-channel state
-- **Firmware 4.0+ user routing** — per-channel 1:1 physical input mapping with decoded labels ("Card 1" / "AES50A 5" / "Local 27"), not raw ints
-- **Routing overview in one call** — `osc_get_routing_overview` returns the full topology (block-level + per-slot + AES50 + Card) with human labels
 - **Bulk section reads** — `osc_get_channel_strip`, `osc_get_bus_strip`, `osc_get_console_overview`, etc., so Claude can grab a coherent snapshot in one shot instead of 40 round-trips
 - **dB-aware level helpers** — `osc_db_to_fader_level`, `osc_fader_level_to_db`, and factorized fader/send tools with `unit:"db"` use the X32/M32 161-point pseudo-log Level table (`0.7500 = 0 dB`, `1.0000 = +10 dB`)
 - **Timed automation** — background ramps/fades, delayed OSC actions, and temporal macros through `osc_automation_*` tools, so agents do not perform timing-sensitive work with repeated LLM tool calls
@@ -149,7 +147,7 @@ Or use the included `docker-compose.yml` as a starting point. On Synology, set `
 
 ### Protocol support
 
-`OSCX32M32` is the complete/default mode. `OSCXR` is now partially effective for the command families currently mapped in `PROTOCOL.md`: channel fader/mute/name, EQ gain/on, channel sends to bus level, bus fader/mute/name, main LR, FX return, aux return via `/rtn/aux`, DCA fader/mute/name, headamp gain, and scenes.
+`OSCX32M32` is the complete/default mode. `OSCXR` is now partially effective for the command families currently mapped in `PROTOCOL.md`: channel fader/mute/name, channel sends to bus level, bus fader/mute/name, main LR, FX return, aux return via `/rtn/aux`, DCA fader/mute/name, and headamp gain.
 
 When `OSC_PROTOCOL` is `OSCXR`, commands that are still X32-only or not yet mapped return an explicit `Unsupported for OSCXR: ...` error instead of waiting for an OSC timeout. This includes routing/user routing, matrices, console overview, colors/icons, gate/compressor, pan, EQ frequency/Q/type, and other features not covered by `PROTOCOL.md` yet. Bus-specific source mute operations are also guarded: X32 can mute channel/FX/aux sends to one bus, while XR exposes only global source mute paths, so those lossy translations are rejected instead of silently muting the whole source.
 
@@ -164,7 +162,7 @@ A few X32/M32 quirks that will bite you if you do not know them. These mostly ap
 - **Block-level** (`/config/routing/IN/1-8` etc.) picks which 8-channel source group feeds each range of channels. Legacy style.
 - **User In** (`/config/userrout/in/NN`, 32 slots) patches each individual channel to any physical source — Local, AES50A/B, Card, AuxIn. This only takes effect if the corresponding block is set to "User In".
 
-Call `osc_get_routing_overview` first for any routing work. It shows both layers decoded to human labels.
+Routing tools are not exposed in this server profile.
 
 **2. FX racks are user-configurable.** Do not assume slot 1 is always a reverb or slot 5 is always a GEQ. Read `osc_get_all_effects` before reasoning about FX slots.
 
@@ -184,27 +182,23 @@ For a custom prompt, set `MCP_PROMPT_FILE` in the MCP server `env` to an absolut
 
 ## How the LLM should use it
 
-For any question about the current mixer state, call the relevant read/get tool before answering. Do not reuse prior conversation context as the source of truth for live levels, mutes, routing, scene names, FX state, or other console values.
+For any question about the current mixer state, call the relevant read/get tool before answering. Do not reuse prior conversation context as the source of truth for live levels, mutes, routing, FX state, or other console values.
 
 For broad inspection, start with low-risk read tools:
 
 1. `osc_get_mixer_status`
 2. `osc_get_console_overview`
-3. `osc_get_routing_overview`
-4. Focused strip reads such as `osc_get_channel_strip`, `osc_get_bus_strip`, and `osc_get_main_strip`
+3. Focused strip reads such as `osc_get_channel_strip`, `osc_get_bus_strip`, and `osc_get_main_strip`
 
-For routing changes, read `osc_get_routing_overview` first so the agent can tell whether a channel is fed by legacy 8-channel blocks or firmware-4.0+ User In slots. For XAir/XR-compatible targets, expect unsupported X32-only requests to return `Unsupported for OSCXR: ...`.
+Routing tools are not exposed in this server profile. For XAir/XR-compatible targets, expect unsupported X32-only requests to return `Unsupported for OSCXR: ...`.
 
 ## Example prompts
 
 Once wired up to LLM, natural language works:
 
 ```
-"Run a scene inspection and tell me what looks risky."
 "Why isn't channel 5 working?"
 "Compare channel 1 and channel 2 using their strip reads."
-"Show me the routing topology."
-"Set channel 27's input to Card 1."
 "Review my FX setup — anything redundant?"
 "Mute all channels except kick, snare, and overheads."
 "What's plugged into the console right now?"
@@ -239,14 +233,12 @@ Full list is visible to Claude; high-level groupings:
 
 | Group | Coverage |
 |---|---|
-| **Channel strips** | headamp/preamp context, gate, EQ (4 bands), fader, pan, mute, name, source, bus sends |
-| **Bus / Matrix / Aux / FX-Return / DCA / Main** | faders, mutes, names, pan where mapped, EQ where mapped, focused strip reads |
+| **Channel strips** | headamp/preamp context, fader, mute, name, source, bus sends |
+| **Bus / Matrix / Aux / FX-Return / DCA / Main** | faders, mutes, names, focused strip reads |
 | **Identity / status** | `osc_get_mixer_status` uses `/xinfo` for network address, mixer network name, console model, and console version |
-| **Routing** | block-level in/out/AES50/Card, User In (32 slots), User Out (48 slots), decoded labels, one-call overview |
 | **FX** | all-effects overview and FX return on/off plus parameter writes |
-| **Scenes / snippets** | recall and name reads |
-| **Bulk reads** | `channel_strip`, `bus_strip`, `aux_strip`, `matrix_strip`, `fx_return_strip`, `main_strip`, `dca`, `headamp`, `console_overview`, `routing_overview`, `user_routing` |
-| **Fader dB conversion** | `osc_db_to_fader_level`, `osc_fader_level_to_db`, channel/bus/aux/main/matrix `*_fader_db` setters/getters |
+| **Bulk reads** | `channel_strip`, `bus_strip`, `aux_strip`, `matrix_strip`, `fx_return_strip`, `main_strip`, `dca`, `headamp`, `console_overview` |
+| **Fader dB conversion** | `osc_db_to_fader_level`, `osc_fader_level_to_db`, factorized fader/send tools with `unit:"db"` |
 | **Automation** | `osc_automation_ramp`, `osc_automation_delayed_command`, `osc_automation_macro`, `osc_automation_list`, `osc_automation_cancel` for background fades, delayed actions, and timed sequences |
 
 ## Transactional Writes
@@ -254,8 +246,6 @@ Full list is visible to Claude; high-level groupings:
 Dedicated direct-control write tools use transactional OSC write-back verification where the target address is readable: the server writes one value, reads the same OSC address back, and verifies the returned value. Numeric values use a small tolerance and a few short read retries to tolerate mixer update latency. If the mixer does not answer, the tool reports `Le mixeur est deconnecté`; if the value read back differs, the tool reports that the OSC command was not executed correctly.
 
 Batch bus mute tools verify each bus write and report partial failures instead of silently claiming success. Ramp automations do not read after every step, but they verify the final value before marking the job completed.
-
-Scene recall remains intentionally outside this generic transaction layer because its OSC acknowledgement behavior is address-specific. Use explicit reads when validating scene-style operations.
 
 ## Fader Levels in dB
 
@@ -343,7 +333,7 @@ Other out-of-scope mixer areas:
 - Monitor / headphone (`/-stat/monitor/*`)
 - Custom user-assignable controls (`/config/userctrl/*`)
 - Meters (`/meters/*` — uses a different subscribe-based binary protocol)
-- Show/library file management (`/-show/*`, `/-libs/*`, deeper `/-snap/*` management beyond the implemented scene name/recall helpers)
+- Show/library file management (`/-show/*`, `/-libs/*`, deeper `/-snap/*` management)
 - Console preferences (`/-prefs/*`)
 - USB recorder and file browser operations
 - DP48 personal mixer workflows

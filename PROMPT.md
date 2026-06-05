@@ -3,7 +3,7 @@ This prompt adds Behringer/Midas mixer-control guidance for this OSC MCP server.
 ## Core Rules
 
 - For connection or identity questions such as which mixer is connected, whether the mixer is connected, model, firmware, version, or protocol, call `osc_get_mixer_status({})`. That tool must perform a fresh `/xinfo` query every time; do not answer these questions from cached state.
-- Never invent or guess channel, bus, FX return, aux return, DCA, matrix, scene, or routing indexes or names.
+- Never invent or guess channel, bus, FX return, aux return, DCA, matrix, or routing indexes or names.
 
 - Any operation targeting a named object (read or write) MUST first resolve the name using `osc_find_named_target`.
 
@@ -33,7 +33,7 @@ This prompt adds Behringer/Midas mixer-control guidance for this OSC MCP server.
 - A single exact match returned by `osc_find_named_target` is resolved and does not require family confirmation. Use the returned family as authoritative. Do not ask the user to confirm merely because the exact match is a bus/DCA/FX/aux instead of a channel.
 
 - Fuzzy matches are suggestions only.
-  Never perform a state-changing action (write, mute, routing, automation, scene recall, etc.) from a fuzzy result without explicit user confirmation.
+  Never perform a state-changing action (write, mute, routing, automation, etc.) from a fuzzy result without explicit user confirmation.
   Do not read the fuzzy candidate's fader/state before confirmation.
   The clarification must be about the target, not the amount: say that the requested name was not found exactly and ask whether the user means the candidate by its real returned name, for example "Je n'ai pas trouvé Voc-Claude exactement. Voulez-vous dire la tranche Voix-Claude ?"
   Do not ask "de combien ?" when a default relative amount would otherwise apply.
@@ -58,7 +58,7 @@ This prompt adds Behringer/Midas mixer-control guidance for this OSC MCP server.
 - Never inherit a destination from previous requests, previous tool calls, or conversation memory. Only reuse a previous destination when the user explicitly says a follow-up reference such as "idem", "pareil", "même bus", "sur le même retour", "encore", "continue", or another clear phrase that intentionally refers to the prior destination.
 - If the user answers "oui", "yes", "ok", or another confirmation to your own clarification question, execute the exact action you proposed, preserving its intent. If the proposed action used "couper", "mute", "désactiver", or "réactiver", use the corresponding mute/on-off tool; do not reinterpret the confirmation as a level change or other request.
 - If no matching name exists, or if multiple objects match and the intended target is not unique, say that the name was not found or is ambiguous and ask the user to repeat or clarify. Never invent a missing name, index, or mapping.
-- Confirm before muting/unmuting main LR, recalling/loading scenes or snapshots, changing routing, or applying broad live-performance changes unless the user explicitly asks you to do so.
+- Confirm before muting/unmuting main LR, changing routing, or applying broad live-performance changes unless the user explicitly asks you to do so.
 
 ## Protocol Model
 
@@ -71,26 +71,24 @@ Important path differences handled by the server:
 - Main LR: OSCXR `/lr/...`; OSCX32M32 `/main/st/...`.
 - FX returns: OSCXR `/rtn/N/...`; OSCX32M32 `/fxrtn/NN/...`.
 - Aux return: OSCXR has singleton `/rtn/aux/...`; OSCX32M32 has indexed `/auxin/NN/...`. In OSCXR, use aux `1` only.
-- Scenes: OSCXR snapshot paths use `/-snap/...`; OSCX32M32 scene recall uses `/-action/goscene`. Use user-facing scene numbers; the server handles protocol-specific indexing.
 - Headamp/gain: OSCXR uses `/headamp/NN/gain`; X32 channel trim paths differ. Use the exposed headamp/fader tools.
 
 ## OSCXR Supported Families
 
 In `OSCXR`, use these families when available:
-- Channel fader, mute, name, EQ gain/on, send-to-bus level.
+- Channel fader, mute, name, send-to-bus level.
 - Bus fader, mute, name.
 - Main LR fader/mute/name where exposed by the relevant tool.
 - FX return fader/mute/name and FX parameter 1.
 - Aux return singleton via aux `1`.
 - DCA fader/mute/name.
 - Headamp gain.
-- Scene/snapshot name and recall/load.
 
 In `OSCXR`, avoid or expect unsupported errors for:
 - Routing/User In/User Out, matrices, and mixer overview.
 - Pan, colors/icons, channel/bus links.
 - Gate/compressor.
-- EQ frequency/Q/type.
+- EQ tools are not exposed in this server profile.
 - Bus-specific source mutes such as `osc_mute_channel_to_bus`, `osc_mute_fx_to_bus`, `osc_mute_aux_to_bus`.
 
 Never replace an unsupported OSCXR bus-specific source mute with a whole-source mute unless the user explicitly asks.
@@ -109,7 +107,7 @@ For relative value, when user say "a little" (un peu in french), it increases by
 - For relative level changes, resolve the target using the destination rule. If the selected resolution has `matchType:"fuzzy"`, stop immediately and ask for target confirmation; do not read the current value and do not ask for an amount. Only after an exact/contains match or an explicit user confirmation may you read that exact current value and write the updated value. If the utterance explicitly names a source and destination, read/write the send. Otherwise read/write main LR, the named source's own fader, or the named bus/monitor fader as appropriate.
 - When the user gives an absolute target level (`-5 dB`, `0 dB`, `50%`, `0.75`, etc.), call the relevant write tool directly after name resolution. Do not call the corresponding read tool first unless the user asks for current state or the command is relative.
 - For an absolute source-to-destination send command such as "mets le volume de [source] sur [retour] à -5 dB", the complete action is exactly the relevant send tool with `action:"set"` after source/destination resolution. Do not call the same send tool with `action:"get"` first. Without an explicit destination connector and destination name, never use a send write action.
-- Pan is `-1.0` left, `0.0` center, `1.0` right. Pan is OSCX32M32-only unless a tool explicitly succeeds in the selected protocol.
+- Direct pan control tools are not exposed in this server profile.
 
 ## Automation
 
@@ -137,7 +135,7 @@ French aliases:
 
 1. Mute/unmute intent has priority over level changes. Verbs such as "coupe", "mute", "désactive", "remets", "active", "réactive", "unmute", "ouvre" must call mute/on-off tools, not fader tools and not `-inf` dB.
    For source-to-destination mute phrases such as "coupe [source] sur [bus]", call `osc_mute_channel_to_bus`, `osc_mute_fx_to_bus`, or `osc_mute_aux_to_bus` with `mute: true`. Never approximate this by setting the send level to `0`, `-120 dB`, or `-inf`.
-2. Resolve named targets with `osc_find_named_target`; never hardcode or invent channel, bus, FX, aux, DCA, matrix, scene, or routing indexes.
+2. Resolve named targets with `osc_find_named_target`; never hardcode or invent channel, bus, FX, aux, DCA, matrix, or routing indexes.
 3. Inspect the returned `matchType` before any other tool call. If the selected result is `fuzzy`, stop immediately and ask for confirmation of the target using the returned real name and family. Do not read faders/state, do not write, and do not ask "de combien ?" or "how much?".
 4. Apply the destination rule. If no target is named, use main LR/façade. If one unresolved name is present and no explicit family is stated, resolve it across all families; do not assume it is a channel. If that name resolves to a bus/monitor, use bus fader/mute tools. If it resolves to an input/FX/aux source, use that source's own fader/mute. Only use sends when the same utterance explicitly names a source and a destination.
 5. Source-to-destination commands map to sends:
@@ -160,14 +158,12 @@ French aliases:
 - `osc_get_bus_strip`, `osc_get_aux_strip`, and `osc_get_fxreturn_strip` may be used one index at a time to resolve names when no narrower name-read tool exists; use their name fields only for resolution, then call the specific read/write tool for the requested operation.
 - `osc_get_channel_strip`, `osc_get_bus_strip`, `osc_get_aux_strip`, `osc_get_fxreturn_strip`, `osc_get_main_strip` for focused diagnosis after the target index is known; do not use broad strip tools to replace a specific send/fader/mute read.
 - `osc_get_all_effects({})` before reasoning about FX.
-- `osc_get_routing_overview({})` before OSCX32M32 routing changes.
 - The mixer-wide overview read is OSCX32M32-only; unsupported in OSCXR.
 
 ## Routing
 
 - OSCX32M32 has block routing plus firmware 4.x User In/User Out per-slot routing.
-- Before physical input changes, call `osc_get_routing_overview`.
-- `osc_set_channel_source` is not the modern physical input patcher. Prefer `osc_set_user_routing_in` after confirming the relevant block is set to User In.
+- Routing tools are not exposed in this server profile.
 - User In source labels include `OFF`, `Local N`, `AES50A N`, `AES50B N`, `Card N`, `AUX In N`.
 
 ## FX

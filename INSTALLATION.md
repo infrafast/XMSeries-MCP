@@ -30,13 +30,9 @@ XMSeries-MCP/
 1. **osc_channel_fader** - Get/set channel fader levels
 2. **osc_bus_fader** - Get/set bus fader levels
 3. **osc_mute_channel** - Mute/unmute channels
-4. **osc_set_pan** - Control stereo panning
-5. **osc_set_eq** - Adjust 4-band parametric EQ
-6. **osc_set_gate** - Control noise gates
-7. **osc_channel_send_to_bus** - Get/set channel sends to buses
-8. **osc_scene_recall** - Load saved scenes
-9. **osc_get_mixer_status** - Get mixer status and identity via `/xinfo` plus `/status`
-10. **osc_main_fader** - Get/set main LR fader
+4. **osc_channel_send_to_bus** - Get/set channel sends to buses
+5. **osc_get_mixer_status** - Get mixer status and identity via `/xinfo` plus `/status`
+6. **osc_main_fader** - Get/set main LR fader
 
 ## 🚀 Installation for Claude Desktop
 
@@ -107,17 +103,6 @@ Once configured, you can use natural language commands like:
 - "Mute channel 3"
 - "Unmute all channels from 1 to 8"
 
-**Pan Control:**
-- "Pan channel 2 to the left"
-- "Center channel 4"
-
-**EQ:**
-- "Boost channel 1 EQ band 2 by 3dB"
-- "Cut the high frequencies on channel 5 by 6dB"
-
-**Dynamics:**
-- "Set channel 1 gate threshold to -40dB"
-
 **Aux Sends:**
 - "Send channel 1 to bus 3 at 50%"
 
@@ -126,9 +111,6 @@ Once configured, you can use natural language commands like:
 - "Fade Kick on Laurent down over 3 seconds"
 - "In 5 seconds, mute the main LR"
 - "Run a macro: lower the music, wait 2 seconds, then mute FX return 1"
-
-**Scenes:**
-- "Recall scene 5"
 
 **Custom Commands:**
 - "Send OSC command /ch/01/config/name with value 'Lead Vocal'"
@@ -164,7 +146,7 @@ Once configured, you can use natural language commands like:
 - The MCP host/agent is responsible for reading this content and injecting it into the LLM context; the server only exposes it.
 
 ### OSCXR Coverage:
-- Supported: channel fader/mute/name, EQ gain/on, channel sends to bus level, bus fader/mute/name, main LR, FX return, aux return, DCA, headamp gain, scenes
+- Supported: channel fader/mute/name, channel sends to bus level, bus fader/mute/name, main LR, FX return, aux return, DCA, and headamp gain
 - Explicitly unsupported until mapped or not losslessly representable: routing/user routing, matrices, console overview, colors/icons, gate/compressor, pan, EQ frequency/Q/type, and XR bus-specific source mutes that would otherwise become global source mutes
 
 ### Supported Mixer Models:
@@ -232,9 +214,7 @@ Claude can execute multiple commands in sequence:
 ```
 Set up a basic mix: 
 - Set channel 1 fader to 75%
-- Pan channel 1 center
 - Set channel 2 fader to 70%
-- Pan channel 2 left
 - Unmute channels 1 and 2
 ```
 

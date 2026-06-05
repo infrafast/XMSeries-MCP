@@ -44,7 +44,7 @@ Use `OSC_PROTOCOL: "OSCXR"` when testing against an XR/XAir-compatible target. `
 
 Set `DEBUG=true` to log every OSC command sent by the server on stderr, including the final address and arguments after tool-level conversions and protocol mapping.
 
-In XR mode, start with supported smoke tests such as main fader/mute, channel fader/mute/name, channel EQ gain/on, send-to-bus level, bus fader/mute/name, FX return mute/name, aux return fader, DCA fader/mute/name, headamp gain, and scene name/recall/save. XR snapshots are addressed 1-based, so scene 1 reads `/-snap/01/name`. Tools not covered by `PROTOCOL.md`, plus bus-specific source mutes that would become global XR mutes, should return `Unsupported for OSCXR: ...`.
+In XR mode, start with supported smoke tests such as main fader/mute, channel fader/mute/name, send-to-bus level, bus fader/mute/name, FX return mute/name, aux return fader, DCA fader/mute/name, and headamp gain. Tools not covered by `PROTOCOL.md`, plus bus-specific source mutes that would become global XR mutes, should return `Unsupported for OSCXR: ...`.
 
 ## Running Tests
 
@@ -92,6 +92,4 @@ Once connected, you can use Claude Desktop to control the mixer. Try commands li
 
 *   "Set channel 1 fader to 75%"
 *   "Mute channel 3"
-*   "Pan channel 2 to the left"
-
 Verify the changes are reflected on the mixer or its control application.
