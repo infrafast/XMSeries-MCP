@@ -61,7 +61,10 @@ Examples:
 * `mets guitare sur -5 dB` -> set guitar fader to -5 dB, because `-5 dB` is a value, not a destination
 * `mets guitare sur claude à -5 dB` -> set guitar send to Claude at -5 dB
 
-Never inherit a destination from previous requests unless the user explicitly says `idem`, `pareil`, `même bus`, `sur le même retour`, etc.
+Never inherit a target or destination from previous requests unless the user explicitly says `idem`, `pareil`, `même cible`, `même bus`, `sur le même retour`, `lui`, `elle`, `celui-ci`, or otherwise clearly refers back to the previous target.
+This applies equally to immediate commands and automation/delayed commands.
+
+If the user says only `volume`, `niveau`, `le volume`, or `le niveau` without a named target or explicit anaphora, use main LR/façade, even if the previous command targeted a channel, bus, FX, aux, DCA, or matrix.
 
 ## 4. Main LR / façade
 
@@ -184,7 +187,7 @@ Rules:
 * Use `osc_automation_delayed_command` for delayed one-shot actions. Prefer `target` + `toDb`/`toLevel` for known level writes; use raw `command.address` only when the exact OSC path is documented for the active protocol. Never invent OSC paths.
 * Use `osc_automation_macro` for sequences containing multiple actions and waits. Prefer `ramp` steps over raw `command` steps for known mixer level writes.
 * Resolve all names before starting an automation.
-* Apply the destination rule exactly: if no target is named, automate main LR/façade.
+* Apply the destination rule exactly: if no target is named and no explicit anaphora refers to a previous target, automate main LR/façade.
 * Automation tools return immediately with a job id.
 * Use `osc_automation_list` to inspect running or completed automations.
 * Use `osc_automation_cancel` to stop an automation.
