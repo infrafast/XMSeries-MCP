@@ -104,7 +104,8 @@ Never replace an unsupported OSCXR bus-specific source mute with a whole-source 
 - When the user says dB/decibel for sends, use the factorized send tools with `unit:"db"`:
   `osc_channel_send_to_bus`, `osc_fx_send_to_bus`, `osc_aux_send_to_bus`.
 - For conversion only, use `osc_db_to_fader_level` and `osc_fader_level_to_db`. Never use conversion tools alone to answer a live value question; first read the live value in the same request, or prefer the relevant factorized fader/send tool with `action:"get"` and `unit:"db"`.
-- When the user asks to raise/lower a fader or send relatively without a precise value, read the current value first, then apply a relative normalized change to that current value: "un peu" / "a little" = 10%, "beaucoup" / "a lot" = 20%, and no modifier = 15%. Clamp the final normalized value to `0.0..1.0`. 
+- When the user asks to raise/lower a fader or send relatively without a precise value like changes such as "de 5 dB", "monte", or "baisse", read the current value first, then apply a relative normalized change to that current value
+For relative value, when user say "a little" (un peu in french), it increases by 10% below -40 dB, 5% between -40 and -10 dB, and 1 dB above -10 dB; when he says "a lot" (beaucoup), it's 30%, 15% and 5 dB in the same areas; if he do not specifies, it's 15%, 7% and 2 dB.
 - For relative level changes, resolve the target using the destination rule. If the selected resolution has `matchType:"fuzzy"`, stop immediately and ask for target confirmation; do not read the current value and do not ask for an amount. Only after an exact/contains match or an explicit user confirmation may you read that exact current value and write the updated value. If the utterance explicitly names a source and destination, read/write the send. Otherwise read/write main LR, the named source's own fader, or the named bus/monitor fader as appropriate.
 - When the user gives an absolute target level (`-5 dB`, `0 dB`, `50%`, `0.75`, etc.), call the relevant write tool directly after name resolution. Do not call the corresponding read tool first unless the user asks for current state or the command is relative.
 - For an absolute source-to-destination send command such as "mets le volume de [source] sur [retour] à -5 dB", the complete action is exactly the relevant send tool with `action:"set"` after source/destination resolution. Do not call the same send tool with `action:"get"` first. Without an explicit destination connector and destination name, never use a send write action.
@@ -147,7 +148,6 @@ French aliases:
    For selected bus-list channel send writes, prefer `osc_send_to_buses_db` and do not call individual bus send tools. For all-bus channel send writes, prefer `osc_send_to_all_buses_db` and do not read individual bus faders. For bus master mute lists, use `osc_mute_buses`; for all bus masters, use `osc_mute_all_buses`; for all bus masters except named buses, use `osc_mute_all_buses_except`.
 6. For reads, call the relevant read/get tool for the resolved target before answering.
 7. For explicit absolute writes, call one relevant write tool after name resolution. Do not also call a read tool before or after unless the user asks for verification.
-8. For relative changes such as "de 5 dB", "un peu", "beaucoup", "monte", or "baisse", read the current value of the resolved target first, then write the updated value.
 9. For timed requests such as "fade", "fade-in", "fade-out", "progressivement", "en N secondes", "dans N secondes", or sequences, use automation tools with the resolved target from the destination rule.
 10. If the requested name or target cannot be resolved uniquely, stop and ask. Do not invent a missing mapping or fall back to a guessed destination.
 
@@ -176,6 +176,9 @@ French aliases:
 - X32 FX slots do not have real `/fx/N/on` or `/fx/N/mix`. `osc_set_effect_on` mutes/unmutes the matching FX return.
 - FX slot addresses are unpadded internally: `/fx/1/...`, not `/fx/01/...`.
 - This MCP does not include named FX algorithm schemas; parameter tools use raw normalized values.
+
+## safety
+Always Clamp the final normalized value to `0.0..0.8`.  never reach 1.0 as it may create damage because sound too loud.
 
 ## Known Gaps
 
