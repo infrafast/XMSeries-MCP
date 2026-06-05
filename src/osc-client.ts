@@ -204,6 +204,13 @@ export class OSCClient {
         });
     }
 
+    updateCounts(options: { channelCount?: number; busCount?: number; fxCount?: number; dcaCount?: number }): void {
+        if (options.channelCount !== undefined) this.channelCount = options.channelCount;
+        if (options.busCount !== undefined) this.busCount = options.busCount;
+        if (options.fxCount !== undefined) this.fxCount = options.fxCount;
+        if (options.dcaCount !== undefined) this.dcaCount = options.dcaCount;
+    }
+
     async connect(): Promise<void> {
         return new Promise((resolve, reject) => {
             try {

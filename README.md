@@ -57,6 +57,29 @@ Replace the IP with your mixer's (on the X32: `Setup` -> `Network`). Restart Cla
 
 `OSC_PROTOCOL` is optional. Use `OSCX32M32` for Behringer X32 / Midas M32 consoles, or `OSCXR` for XAir/XR-compatible addressing. If omitted, the server defaults to `OSCX32M32`. `MCP_PROMPT_FILE` is also optional; it lets you point the server at a custom prompt file. If omitted, the server exposes the repository `PROMPT.md`.
 
+The server starts with these environment values, then the active mixer can be changed at runtime with `osc_configure_mixer`. Omitted fields keep their current values. Changing `host`, `port`, or `protocol` closes the current OSC client and reconnects to the new mixer; changing only `channelCount`, `busCount`, `fxCount`, or `dcaCount` updates resolver and bulk-read limits without reconnecting.
+
+Example runtime change:
+
+```json
+{
+  "host": "192.168.0.160",
+  "port": 10024,
+  "protocol": "XR"
+}
+```
+
+Example runtime limit update:
+
+```json
+{
+  "channelCount": 32,
+  "busCount": 16,
+  "fxCount": 5,
+  "dcaCount": 3
+}
+```
+
 See `INSTALLATION.md`, `QUICKSTART.md`, and `AGENTS.md` for additional client wiring, including Cline, Continue.dev, and other MCP-compatible agents.
 
 ### Environment variables
@@ -96,10 +119,10 @@ HTTP mode reads these additional variables:
 | `HTTP_PORT` | `8787` | HTTP MCP port |
 | `HTTP_PUBLIC_HOST` | auto-detected | Optional LAN IP or hostname to print in the agent JSON config. Useful in Docker, where auto-detection may otherwise find the container IP. |
 | `MCP_AUTH_TOKEN` | unset | Optional bearer token required on `/mcp` and `/health` when set |
-| `OSC_CHANNEL_COUNT` | `32` | Number of mixer input channels to scan for name resolution and overview reads. Override for smaller OSCXR consoles. |
-| `OSC_BUS_COUNT` | `16` | Number of mix buses to scan/use for name resolution and all-bus commands. Override for smaller OSCXR consoles. |
-| `OSC_FX_COUNT` | `8` | Number of FX slots/returns to scan for name resolution and FX reads. Override if a compact console exposes fewer FX returns. |
-| `OSC_DCA_COUNT` | `8` | Number of DCA groups to scan for name resolution and overview reads. Override if a compact console exposes fewer DCA groups. |
+| `OSC_CHANNEL_COUNT` | `32` | Initial number of mixer input channels to scan for name resolution and overview reads. Can be changed at runtime with `osc_configure_mixer`. |
+| `OSC_BUS_COUNT` | `16` | Initial number of mix buses to scan/use for name resolution and all-bus commands. Can be changed at runtime with `osc_configure_mixer`. |
+| `OSC_FX_COUNT` | `8` | Initial number of FX slots/returns to scan for name resolution and FX reads. Can be changed at runtime with `osc_configure_mixer`. |
+| `OSC_DCA_COUNT` | `8` | Initial number of DCA groups to scan for name resolution and overview reads. Can be changed at runtime with `osc_configure_mixer`. |
 
 The HTTP MCP endpoint is `/mcp`; a health endpoint is available at `/health`. If `MCP_AUTH_TOKEN` is set, remote agents must send `Authorization: Bearer <token>` or `x-mcp-auth-token: <token>`.
 

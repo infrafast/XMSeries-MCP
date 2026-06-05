@@ -9,13 +9,7 @@ import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import {
     connectOscDevice,
     createOscMcpServer,
-    OSC_BUS_COUNT,
-    OSC_CHANNEL_COUNT,
-    OSC_DCA_COUNT,
-    OSC_FX_COUNT,
-    OSC_HOST,
-    OSC_PORT,
-    OSC_PROTOCOL,
+    getOscRuntimeConfig,
 } from "./index.js";
 
 const HTTP_HOST = process.env.HTTP_HOST || "0.0.0.0";
@@ -74,17 +68,18 @@ export async function startHttpServer(): Promise<void> {
     });
 
     app.get("/health", (_req, res) => {
+        const oscConfig = getOscRuntimeConfig();
         res.json({
             ok: true,
             scheme: HTTP_SCHEME,
             transport: "streamable-http",
-            oscHost: OSC_HOST,
-            oscPort: OSC_PORT,
-            oscProtocol: OSC_PROTOCOL,
-            oscChannelCount: OSC_CHANNEL_COUNT,
-            oscBusCount: OSC_BUS_COUNT,
-            oscFxCount: OSC_FX_COUNT,
-            oscDcaCount: OSC_DCA_COUNT,
+            oscHost: oscConfig.host,
+            oscPort: oscConfig.port,
+            oscProtocol: oscConfig.protocol,
+            oscChannelCount: oscConfig.channelCount,
+            oscBusCount: oscConfig.busCount,
+            oscFxCount: oscConfig.fxCount,
+            oscDcaCount: oscConfig.dcaCount,
             authRequired: Boolean(MCP_AUTH_TOKEN),
         });
     });
@@ -144,8 +139,9 @@ export async function startHttpServer(): Promise<void> {
         console.error(`Health: ${HTTP_SCHEME}://${HTTP_HOST}:${HTTP_PORT}/health`);
         console.error(`Agent MCP URL: ${mcpUrl}`);
         console.error(`Agent health URL: ${healthUrl}`);
-        console.error(`OSC: ${OSC_HOST}:${OSC_PORT} (${OSC_PROTOCOL})`);
-        console.error(`OSC limits: ${OSC_CHANNEL_COUNT} channel(s), ${OSC_BUS_COUNT} bus(es), ${OSC_FX_COUNT} FX slot/return(s), ${OSC_DCA_COUNT} DCA group(s)`);
+        const oscConfig = getOscRuntimeConfig();
+        console.error(`OSC: ${oscConfig.host}:${oscConfig.port} (${oscConfig.protocol})`);
+        console.error(`OSC limits: ${oscConfig.channelCount} channel(s), ${oscConfig.busCount} bus(es), ${oscConfig.fxCount} FX slot/return(s), ${oscConfig.dcaCount} DCA group(s)`);
         if (MCP_AUTH_TOKEN) {
             console.error("HTTP auth: bearer token required");
         } else {

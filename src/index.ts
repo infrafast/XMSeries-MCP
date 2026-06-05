@@ -29,6 +29,29 @@ export const OSC_CHANNEL_COUNT = parseOscCountEnv("OSC_CHANNEL_COUNT", 32);
 export const OSC_BUS_COUNT = parseOscCountEnv("OSC_BUS_COUNT", 16);
 export const OSC_FX_COUNT = parseOscCountEnv("OSC_FX_COUNT", 8);
 export const OSC_DCA_COUNT = parseOscCountEnv("OSC_DCA_COUNT", 8);
+export interface OscRuntimeConfig {
+    host: string;
+    port: number;
+    protocol: OSCProtocol;
+    channelCount: number;
+    busCount: number;
+    fxCount: number;
+    dcaCount: number;
+}
+
+let oscRuntimeConfig: OscRuntimeConfig = {
+    host: OSC_HOST,
+    port: OSC_PORT,
+    protocol: OSC_PROTOCOL,
+    channelCount: OSC_CHANNEL_COUNT,
+    busCount: OSC_BUS_COUNT,
+    fxCount: OSC_FX_COUNT,
+    dcaCount: OSC_DCA_COUNT,
+};
+
+export function getOscRuntimeConfig(): OscRuntimeConfig {
+    return { ...oscRuntimeConfig };
+}
 const DEBUG_ENABLED = process.env.DEBUG === "1" || process.env.DEBUG?.toLowerCase() === "true";
 const PROMPT_RESOURCE_URI = "agent://prompt/system";
 const PROMPT_NAME = "agent_prompt";
@@ -42,13 +65,17 @@ async function readAgentPrompt(): Promise<string> {
     return await readFile(PROMPT_FILE, "utf8");
 }
 
+function createOscClient(config: OscRuntimeConfig): OSCClient {
+    return new OSCClient(config.host, config.port, config.protocol, {
+        channelCount: config.channelCount,
+        busCount: config.busCount,
+        fxCount: config.fxCount,
+        dcaCount: config.dcaCount,
+    });
+}
+
 // Initialize OSC client
-const osc = new OSCClient(OSC_HOST, OSC_PORT, OSC_PROTOCOL, {
-    channelCount: OSC_CHANNEL_COUNT,
-    busCount: OSC_BUS_COUNT,
-    fxCount: OSC_FX_COUNT,
-    dcaCount: OSC_DCA_COUNT,
-});
+let osc = createOscClient(oscRuntimeConfig);
 const automation = new AutomationEngine();
 let oscConnectPromise: Promise<void> | null = null;
 
@@ -57,6 +84,14 @@ export function connectOscDevice(): Promise<void> {
         oscConnectPromise = osc.connect();
     }
     return oscConnectPromise;
+}
+
+function closeOscClient(client: OSCClient): void {
+    try {
+        client.close();
+    } catch (error) {
+        console.error("OSC close error:", error);
+    }
 }
 
 function levelDbPayload(result: ReturnType<typeof dbToFaderLevel>): string {
@@ -83,7 +118,9 @@ function faderDbPayload(result: ReturnType<typeof faderLevelToDb>): string {
 
 function parseOscProtocol(value?: string): OSCProtocol {
     if (!value) return "OSCX32M32";
-    if (value === "OSCX32M32" || value === "OSCXR") return value;
+    const normalized = value.trim().toUpperCase();
+    if (normalized === "OSCX32M32" || normalized === "X32" || normalized === "M32") return "OSCX32M32";
+    if (normalized === "OSCXR" || normalized === "XR" || normalized === "XAIR" || normalized === "XAIRXR") return "OSCXR";
     throw new Error(`Invalid OSC_PROTOCOL "${value}". Expected "OSCX32M32" or "OSCXR".`);
 }
 
@@ -202,12 +239,12 @@ async function readNamedTarget(family: NamedTargetFamily, index: number): Promis
 
 function namedTargetRange(family: NamedTargetFamily): number[] {
     const maxByFamily: Record<NamedTargetFamily, number> = {
-        channel: OSC_CHANNEL_COUNT,
-        bus: OSC_BUS_COUNT,
-        fxreturn: OSC_FX_COUNT,
-        aux: OSC_PROTOCOL === "OSCXR" ? 1 : 8,
-        dca: OSC_DCA_COUNT,
-        matrix: OSC_PROTOCOL === "OSCXR" ? 0 : 6,
+        channel: oscRuntimeConfig.channelCount,
+        bus: oscRuntimeConfig.busCount,
+        fxreturn: oscRuntimeConfig.fxCount,
+        aux: oscRuntimeConfig.protocol === "OSCXR" ? 1 : 8,
+        dca: oscRuntimeConfig.dcaCount,
+        matrix: oscRuntimeConfig.protocol === "OSCXR" ? 0 : 6,
     };
     return Array.from({ length: maxByFamily[family] }, (_, i) => i + 1);
 }
@@ -381,6 +418,62 @@ function formatLevelRead(label: string, level: number, unit: LevelToolUnit): str
     return `${label} is at ${(level * 100).toFixed(1)}%`;
 }
 
+function parsePositiveInteger(value: number | undefined, name: string): number | undefined {
+    if (value === undefined) return undefined;
+    if (!Number.isInteger(value) || value < 1) {
+        throw new Error(`${name} must be a positive integer.`);
+    }
+    return value;
+}
+
+async function configureOscRuntime(input: {
+    host?: string;
+    port?: number;
+    protocol?: string;
+    channelCount?: number;
+    busCount?: number;
+    fxCount?: number;
+    dcaCount?: number;
+}): Promise<{ reconnect: boolean; previous: OscRuntimeConfig; current: OscRuntimeConfig }> {
+    const previous = { ...oscRuntimeConfig };
+    const next: OscRuntimeConfig = {
+        host: input.host?.trim() || previous.host,
+        port: input.port ?? previous.port,
+        protocol: input.protocol !== undefined ? parseOscProtocol(input.protocol) : previous.protocol,
+        channelCount: parsePositiveInteger(input.channelCount, "channelCount") ?? previous.channelCount,
+        busCount: parsePositiveInteger(input.busCount, "busCount") ?? previous.busCount,
+        fxCount: parsePositiveInteger(input.fxCount, "fxCount") ?? previous.fxCount,
+        dcaCount: parsePositiveInteger(input.dcaCount, "dcaCount") ?? previous.dcaCount,
+    };
+
+    if (!Number.isInteger(next.port) || next.port < 1 || next.port > 65535) {
+        throw new Error("port must be an integer from 1 to 65535.");
+    }
+
+    const reconnect =
+        next.host !== previous.host ||
+        next.port !== previous.port ||
+        next.protocol !== previous.protocol;
+
+    oscRuntimeConfig = next;
+
+    if (reconnect) {
+        closeOscClient(osc);
+        osc = createOscClient(oscRuntimeConfig);
+        oscConnectPromise = null;
+        await connectOscDevice();
+    } else {
+        osc.updateCounts({
+            channelCount: oscRuntimeConfig.channelCount,
+            busCount: oscRuntimeConfig.busCount,
+            fxCount: oscRuntimeConfig.fxCount,
+            dcaCount: oscRuntimeConfig.dcaCount,
+        });
+    }
+
+    return { reconnect, previous, current: { ...oscRuntimeConfig } };
+}
+
 function targetAdapter(target: AutomationTargetSpec): AutomationTargetAdapter {
     switch (target.kind) {
         case "channel_fader": {
@@ -487,7 +580,7 @@ function requireNumber(value: number | undefined, name: string): number {
 }
 
 function mainStereoPath(): string {
-    return OSC_PROTOCOL === "OSCXR" ? "/lr" : "/main/st";
+    return oscRuntimeConfig.protocol === "OSCXR" ? "/lr" : "/main/st";
 }
 
 function channelPath(channel: number, suffix = ""): string {
@@ -495,15 +588,15 @@ function channelPath(channel: number, suffix = ""): string {
 }
 
 function busPath(bus: number): string {
-    return OSC_PROTOCOL === "OSCXR" ? `/bus/${bus}` : `/bus/${bus.toString().padStart(2, "0")}`;
+    return oscRuntimeConfig.protocol === "OSCXR" ? `/bus/${bus}` : `/bus/${bus.toString().padStart(2, "0")}`;
 }
 
 function fxReturnPath(effect: number): string {
-    return OSC_PROTOCOL === "OSCXR" ? `/rtn/${effect}` : `/fxrtn/${effect.toString().padStart(2, "0")}`;
+    return oscRuntimeConfig.protocol === "OSCXR" ? `/rtn/${effect}` : `/fxrtn/${effect.toString().padStart(2, "0")}`;
 }
 
 function auxPath(aux: number): string {
-    if (OSC_PROTOCOL === "OSCXR") {
+    if (oscRuntimeConfig.protocol === "OSCXR") {
         if (aux !== 1) throw new Error("OSCXR exposes the aux return as /rtn/aux; use aux 1.");
         return "/rtn/aux";
     }
@@ -622,6 +715,22 @@ const TOOLS: Tool[] = [
                 },
             },
             required: ["name"],
+        },
+    },
+    {
+        name: "osc_configure_mixer",
+        description: "Change the active mixer connection and/or runtime channel/bus/FX/DCA limits. Omitted fields keep their current values. Changing host, port, or protocol closes the current OSC client and connects to the new mixer. Changing only counts updates resolver/overview limits without reconnecting.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                host: { type: "string", description: "Mixer IP address or hostname. Omit to keep the current host." },
+                port: { type: "number", description: "Mixer OSC UDP port, such as 10023 or 10024. Omit to keep the current port.", minimum: 1, maximum: 65535 },
+                protocol: { type: "string", enum: ["OSCX32M32", "OSCXR", "X32", "M32", "XR"], description: "OSC protocol/address mapping. Omit to keep the current protocol." },
+                channelCount: { type: "number", description: "Configured channel count for name resolution and bulk reads. Omit to keep current value.", minimum: 1 },
+                busCount: { type: "number", description: "Configured bus count for name resolution and all-bus operations. Omit to keep current value.", minimum: 1 },
+                fxCount: { type: "number", description: "Configured FX return/slot count for name resolution and FX reads. Omit to keep current value.", minimum: 1 },
+                dcaCount: { type: "number", description: "Configured DCA count for name resolution and DCA reads. Omit to keep current value.", minimum: 1 },
+            },
         },
     },
     {
@@ -924,8 +1033,8 @@ const TOOLS: Tool[] = [
             properties: {
                 buses: {
                     type: "array",
-                    description: `Selected mix bus numbers (1-${OSC_BUS_COUNT})`,
-                    items: { type: "number", minimum: 1, maximum: OSC_BUS_COUNT },
+                    description: "Selected mix bus numbers within the current runtime busCount.",
+                    items: { type: "number", minimum: 1 },
                     minItems: 1,
                     uniqueItems: true,
                 },
@@ -953,8 +1062,8 @@ const TOOLS: Tool[] = [
             properties: {
                 exceptBuses: {
                     type: "array",
-                    description: `Configured mix bus numbers to leave unchanged (1-${OSC_BUS_COUNT})`,
-                    items: { type: "number", minimum: 1, maximum: OSC_BUS_COUNT },
+                    description: "Configured mix bus numbers to leave unchanged, within the current runtime busCount.",
+                    items: { type: "number", minimum: 1 },
                     minItems: 1,
                     uniqueItems: true,
                 },
@@ -1100,7 +1209,7 @@ const TOOLS: Tool[] = [
             type: "object",
             properties: {
                 action: { type: "string", enum: ["get", "set"] },
-                effect: { type: "number", description: `FX return/effect number (1-${OSC_FX_COUNT})`, minimum: 1, maximum: OSC_FX_COUNT },
+                effect: { type: "number", description: "FX return/effect number within the current runtime fxCount.", minimum: 1 },
                 bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
                 unit: { type: "string", enum: ["level", "percent", "db"], description: "level = normalized 0.0..1.0; percent = 0..100%; db = X32/M32 fader dB table. Defaults to level." },
                 value: { type: "number", description: "Required for action='set'. Normalized level when unit='level', percentage when unit='percent', dB value when unit='db'.", minimum: -120, maximum: 100 },
@@ -1114,7 +1223,7 @@ const TOOLS: Tool[] = [
         inputSchema: {
             type: "object",
             properties: {
-                effect: { type: "number", description: `FX return/effect number (1-${OSC_FX_COUNT})`, minimum: 1, maximum: OSC_FX_COUNT },
+                effect: { type: "number", description: "FX return/effect number within the current runtime fxCount.", minimum: 1 },
                 bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
                 mute: { type: "boolean", description: "True to mute, false to unmute" },
             },
@@ -1272,9 +1381,8 @@ const TOOLS: Tool[] = [
             properties: {
                 effect: {
                     type: "number",
-                    description: `Effect number (1-${OSC_FX_COUNT})`,
+                    description: "Effect number within the current runtime fxCount.",
                     minimum: 1,
-                    maximum: OSC_FX_COUNT,
                 },
             },
             required: ["effect"],
@@ -1282,7 +1390,7 @@ const TOOLS: Tool[] = [
     },
     {
         name: "osc_get_all_effects",
-        description: `Get a summary of all configured FX slots (${OSC_FX_COUNT}) including type and first 8 parameters`,
+        description: "Get a summary of all configured FX slots using the current runtime fxCount, including type and first 8 parameters",
         inputSchema: {
             type: "object",
             properties: {},
@@ -1344,9 +1452,8 @@ const TOOLS: Tool[] = [
             properties: {
                 fxreturn: {
                     type: "number",
-                    description: `FX return number (1-${OSC_FX_COUNT})`,
+                    description: "FX return number within the current runtime fxCount.",
                     minimum: 1,
-                    maximum: OSC_FX_COUNT,
                 },
             },
             required: ["fxreturn"],
@@ -1376,9 +1483,8 @@ const TOOLS: Tool[] = [
             properties: {
                 dca: {
                     type: "number",
-                    description: `DCA group number (1-${OSC_DCA_COUNT})`,
+                    description: "DCA group number within the current runtime dcaCount.",
                     minimum: 1,
-                    maximum: OSC_DCA_COUNT,
                 },
             },
             required: ["dca"],
@@ -1410,7 +1516,7 @@ const TOOLS: Tool[] = [
     },
     {
         name: "osc_get_console_overview",
-        description: `Get a high-level overview of the ENTIRE console: configured channels (${OSC_CHANNEL_COUNT}), buses (${OSC_BUS_COUNT}), DCAs (${OSC_DCA_COUNT}), 6 matrices, 8 aux inputs, FX returns (${OSC_FX_COUNT}), FX slot types (${OSC_FX_COUNT}), and main bus. Warning: this reads many parameters so takes several seconds.`,
+        description: "Get a high-level overview of the ENTIRE console using the current runtime channel/bus/FX/DCA limits, plus matrices, aux inputs, and main bus. Warning: this reads many parameters so takes several seconds.",
         inputSchema: {
             type: "object",
             properties: {},
@@ -1424,9 +1530,8 @@ const TOOLS: Tool[] = [
             properties: {
                 effect: {
                     type: "number",
-                    description: `Effect number (1-${OSC_FX_COUNT})`,
+                    description: "Effect number within the current runtime fxCount.",
                     minimum: 1,
-                    maximum: OSC_FX_COUNT,
                 },
                 on: {
                     type: "boolean",
@@ -1444,9 +1549,8 @@ const TOOLS: Tool[] = [
             properties: {
                 effect: {
                     type: "number",
-                    description: `Effect number (1-${OSC_FX_COUNT})`,
+                    description: "Effect number within the current runtime fxCount.",
                     minimum: 1,
-                    maximum: OSC_FX_COUNT,
                 },
                 param: {
                     type: "number",
@@ -1623,6 +1727,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 };
             }
 
+            case "osc_configure_mixer": {
+                const result = await configureOscRuntime(args as unknown as {
+                    host?: string;
+                    port?: number;
+                    protocol?: string;
+                    channelCount?: number;
+                    busCount?: number;
+                    fxCount?: number;
+                    dcaCount?: number;
+                });
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: JSON.stringify(
+                                {
+                                    reconnected: result.reconnect,
+                                    previous: result.previous,
+                                    current: result.current,
+                                },
+                                null,
+                                2
+                            ),
+                        },
+                    ],
+                };
+            }
+
             case "osc_automation_ramp": {
                 const input = args as unknown as AutomationRampInput;
                 const action = rampAction(input);
@@ -1778,12 +1910,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             case "osc_mute_buses": {
                 const { buses, mute } = args as { buses: number[]; mute: boolean };
                 const uniqueBuses = Array.from(new Set(buses));
-                const invalidBuses = uniqueBuses.filter((bus) => !Number.isInteger(bus) || bus < 1 || bus > OSC_BUS_COUNT);
+                const invalidBuses = uniqueBuses.filter((bus) => !Number.isInteger(bus) || bus < 1 || bus > oscRuntimeConfig.busCount);
                 if (invalidBuses.length > 0) {
-                    throw new Error(`Invalid bus number(s): ${invalidBuses.join(", ")}. Configured bus range is 1 to ${OSC_BUS_COUNT}.`);
+                    throw new Error(`Invalid bus number(s): ${invalidBuses.join(", ")}. Configured bus range is 1 to ${oscRuntimeConfig.busCount}.`);
                 }
                 if (uniqueBuses.length === 0) {
-                    throw new Error(`At least one bus number from 1 to ${OSC_BUS_COUNT} is required`);
+                    throw new Error(`At least one bus number from 1 to ${oscRuntimeConfig.busCount} is required`);
                 }
                 const { changed, failures } = await muteBusBatch(uniqueBuses, mute);
                 if (failures.length > 0) {
@@ -1819,9 +1951,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             case "osc_mute_all_buses_except": {
                 const { exceptBuses, mute } = args as { exceptBuses: number[]; mute: boolean };
                 const uniqueExceptBuses = Array.from(new Set(exceptBuses));
-                const invalidBuses = uniqueExceptBuses.filter((bus) => !Number.isInteger(bus) || bus < 1 || bus > OSC_BUS_COUNT);
+                const invalidBuses = uniqueExceptBuses.filter((bus) => !Number.isInteger(bus) || bus < 1 || bus > oscRuntimeConfig.busCount);
                 if (invalidBuses.length > 0) {
-                    throw new Error(`Invalid exception bus number(s): ${invalidBuses.join(", ")}. Configured bus range is 1 to ${OSC_BUS_COUNT}.`);
+                    throw new Error(`Invalid exception bus number(s): ${invalidBuses.join(", ")}. Configured bus range is 1 to ${oscRuntimeConfig.busCount}.`);
                 }
 
                 const protectedBuses = new Set(uniqueExceptBuses);
@@ -1912,9 +2044,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
             case "osc_send_to_buses_db": {
                 const { channel, buses, db, includeMain } = args as { channel: number; buses: number[]; db: number; includeMain?: boolean };
-                const uniqueBuses = Array.from(new Set(buses)).filter((bus) => Number.isInteger(bus) && bus >= 1 && bus <= OSC_BUS_COUNT);
+                const uniqueBuses = Array.from(new Set(buses)).filter((bus) => Number.isInteger(bus) && bus >= 1 && bus <= oscRuntimeConfig.busCount);
                 if (uniqueBuses.length === 0) {
-                    throw new Error(`At least one valid bus number from 1 to ${OSC_BUS_COUNT} is required`);
+                    throw new Error(`At least one valid bus number from 1 to ${oscRuntimeConfig.busCount} is required`);
                 }
                 const converted = dbToFaderLevel(db);
                 await osc.assertMixerOnline();
@@ -2189,7 +2321,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     content: [
                         {
                             type: "text",
-                            text: `Mixer Status:\n${JSON.stringify(status, null, 2)}`,
+                            text: `Mixer Status:\n${JSON.stringify({ runtimeConfig: oscRuntimeConfig, mixer: status }, null, 2)}`,
                         },
                     ],
                 };
@@ -2246,8 +2378,8 @@ return server;
 // Start server
 async function main() {
     console.error("Starting OSC MCP Server...");
-    console.error(`Connecting to OSC device at ${OSC_HOST}:${OSC_PORT} (${OSC_PROTOCOL})`);
-    console.error(`OSC limits: ${OSC_CHANNEL_COUNT} channel(s), ${OSC_BUS_COUNT} bus(es), ${OSC_FX_COUNT} FX slot/return(s), ${OSC_DCA_COUNT} DCA group(s)`);
+    console.error(`Connecting to OSC device at ${oscRuntimeConfig.host}:${oscRuntimeConfig.port} (${oscRuntimeConfig.protocol})`);
+    console.error(`OSC limits: ${oscRuntimeConfig.channelCount} channel(s), ${oscRuntimeConfig.busCount} bus(es), ${oscRuntimeConfig.fxCount} FX slot/return(s), ${oscRuntimeConfig.dcaCount} DCA group(s)`);
 
     await connectOscDevice();
 
