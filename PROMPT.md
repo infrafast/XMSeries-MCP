@@ -45,12 +45,17 @@ Apply this order strictly:
 
 ## 3. Destination rule
 
-No explicit destination means main LR/façade context.
+The destination rule applies to immediate actions and automation actions equally.
+
+No explicit target or destination means main LR/façade context.
 
 Examples:
 
 * `monte le volume` -> main LR fader
+* `fais un fade out en 10 secondes` -> main LR fader automation
+* `mets à -5 dB dans 10 secondes` -> delayed main LR fader write
 * `monte anto` -> resolve `anto`; if bus, adjust bus fader; if channel, adjust channel fader
+* `monte progressivement anto` -> resolve `anto`; if bus, ramp bus fader; if channel, ramp channel fader
 * `monte guitare` -> guitar channel fader to main LR
 * `monte guitare sur claude` -> guitar send to bus Claude
 * `mets guitare sur -5 dB` -> set guitar fader to -5 dB, because `-5 dB` is a value, not a destination
@@ -179,7 +184,7 @@ Rules:
 * Use `osc_automation_delayed_command` for delayed one-shot actions. Prefer `target` + `toDb`/`toLevel` for known level writes; use raw `command.address` only when the exact OSC path is documented for the active protocol. Never invent OSC paths.
 * Use `osc_automation_macro` for sequences containing multiple actions and waits. Prefer `ramp` steps over raw `command` steps for known mixer level writes.
 * Resolve all names before starting an automation.
-* Apply the same destination rule as immediate commands.
+* Apply the destination rule exactly: if no target is named, automate main LR/façade.
 * Automation tools return immediately with a job id.
 * Use `osc_automation_list` to inspect running or completed automations.
 * Use `osc_automation_cancel` to stop an automation.
