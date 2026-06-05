@@ -27,16 +27,16 @@ XMSeries-MCP/
 
 ### Mixer Control Tools (representative subset):
 
-1. **osc_set_fader** - Set channel fader levels
-2. **osc_get_fader** - Get current fader levels
+1. **osc_channel_fader** - Get/set channel fader levels
+2. **osc_bus_fader** - Get/set bus fader levels
 3. **osc_mute_channel** - Mute/unmute channels
 4. **osc_set_pan** - Control stereo panning
 5. **osc_set_eq** - Adjust 4-band parametric EQ
 6. **osc_set_gate** - Control noise gates
-7. **osc_send_to_bus** - Control aux sends
+7. **osc_channel_send_to_bus** - Get/set channel sends to buses
 8. **osc_scene_recall** - Load saved scenes
 9. **osc_get_mixer_status** - Get mixer status and identity via `/xinfo` plus `/status`
-10. **osc_set_main_fader** - Control main LR fader
+10. **osc_main_fader** - Get/set main LR fader
 
 ## 🚀 Installation for Claude Desktop
 

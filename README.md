@@ -16,7 +16,7 @@ MCP tools organized into groups. Highlights beyond the original small MCP server
 - **Firmware 4.0+ user routing** — per-channel 1:1 physical input mapping with decoded labels ("Card 1" / "AES50A 5" / "Local 27"), not raw ints
 - **Routing overview in one call** — `osc_get_routing_overview` returns the full topology (block-level + per-slot + AES50 + Card) with human labels
 - **Bulk section reads** — `osc_get_channel_strip`, `osc_get_bus_strip`, `osc_get_console_overview`, etc., so Claude can grab a coherent snapshot in one shot instead of 40 round-trips
-- **dB-aware fader helpers** — `osc_db_to_fader_level`, `osc_fader_level_to_db`, and `*_fader_db` tools use the X32/M32 161-point pseudo-log Level table (`0.7500 = 0 dB`, `1.0000 = +10 dB`)
+- **dB-aware level helpers** — `osc_db_to_fader_level`, `osc_fader_level_to_db`, and factorized fader/send tools with `unit:"db"` use the X32/M32 161-point pseudo-log Level table (`0.7500 = 0 dB`, `1.0000 = +10 dB`)
 - **Timed automation** — background ramps/fades, delayed OSC actions, and temporal macros through `osc_automation_*` tools, so agents do not perform timing-sensitive work with repeated LLM tool calls
 
 ## Primary use cases
@@ -263,11 +263,11 @@ The raw OSC fader values are normalized floats from `0.0` to `1.0`. For user-fac
 
 - `osc_db_to_fader_level({"db": 0})` -> normalized level `0.75`
 - `osc_fader_level_to_db({"level": 0.75})` -> `0 dB`
-- `osc_set_fader_db`, `osc_get_fader_db` for channels
-- `osc_set_bus_fader_db`, `osc_get_bus_fader_db` for buses
-- `osc_set_aux_fader_db`, `osc_get_aux_fader_db` for aux returns
-- `osc_set_main_fader_db`, `osc_get_main_fader_db` for main LR
-- `osc_set_matrix_fader_db`, `osc_get_matrix_fader_db` for X32/M32 matrices
+- `osc_channel_fader` with `unit:"db"` for channels
+- `osc_bus_fader` with `unit:"db"` for buses
+- `osc_aux_fader` with `unit:"db"` for aux returns
+- `osc_main_fader` with `unit:"db"` for main LR
+- `osc_matrix_fader` with `unit:"db"` for X32/M32 matrices
 
 The conversion snaps to the nearest point in the 161-entry table. Values below `-87 dB` map to `-inf`/`0.0`; values above `+10 dB` clip to `+10 dB`/`1.0`.
 

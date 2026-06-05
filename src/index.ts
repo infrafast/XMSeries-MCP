@@ -315,8 +315,70 @@ type AutomationMacroStepInput =
     | ({ type: "command"; delaySeconds?: number; command: AutomationRawCommand; label?: string })
     | ({ type: "ramp" } & AutomationRampInput);
 
+type LevelToolAction = "get" | "set";
+type LevelToolUnit = "level" | "db" | "percent";
+
+interface LevelToolInput {
+    action: LevelToolAction;
+    unit?: LevelToolUnit;
+    value?: number;
+}
+
+interface LevelOperation {
+    action: LevelToolAction;
+    unit: LevelToolUnit;
+    value?: number;
+}
+
 function clampLevel(value: number): number {
     return Math.min(1, Math.max(0, value));
+}
+
+function parseLevelOperation(input: LevelToolInput): LevelOperation {
+    const action = input.action;
+    if (action !== "get" && action !== "set") {
+        throw new Error(`Invalid level action "${action}". Expected "get" or "set".`);
+    }
+
+    const unit = input.unit ?? "level";
+    if (unit !== "level" && unit !== "db" && unit !== "percent") {
+        throw new Error(`Invalid level unit "${unit}". Expected "level", "db", or "percent".`);
+    }
+
+    if (action === "set" && typeof input.value !== "number") {
+        throw new Error("Level set action requires numeric value.");
+    }
+
+    return { action, unit, value: input.value };
+}
+
+function levelValueToNormalized(operation: LevelOperation): { level: number; text: string } {
+    if (operation.value === undefined) {
+        throw new Error("Level set action requires numeric value.");
+    }
+
+    if (operation.unit === "db") {
+        const converted = dbToFaderLevel(operation.value);
+        return {
+            level: converted.level,
+            text: `${formatDb(converted.db)} (level ${converted.level.toFixed(4)}, table index ${converted.index}${converted.clipped ? ", clipped" : ""})`,
+        };
+    }
+
+    const level = clampLevel(operation.unit === "percent" ? operation.value / 100 : operation.value);
+    return {
+        level,
+        text: operation.unit === "percent" ? `${operation.value.toFixed(1)}% (level ${level.toFixed(4)})` : `${(level * 100).toFixed(1)}%`,
+    };
+}
+
+function formatLevelRead(label: string, level: number, unit: LevelToolUnit): string {
+    if (unit === "db") {
+        const converted = faderLevelToDb(level);
+        return `${label} is ${formatDb(converted.db)} (level ${level.toFixed(4)}, nearest table index ${converted.index})`;
+    }
+
+    return `${label} is at ${(level * 100).toFixed(1)}%`;
 }
 
 function targetAdapter(target: AutomationTargetSpec): AutomationTargetAdapter {
@@ -706,79 +768,31 @@ const TOOLS: Tool[] = [
     },
     // ========== Channel Controls ==========
     {
-        name: "osc_set_fader",
-        description: "Set the fader level for a channel (0.0 to 1.0)",
+        name: "osc_channel_fader",
+        description: "Get or set a channel fader. Use unit='db' for dB requests; default unit='level' uses normalized 0.0-1.0 levels.",
         inputSchema: {
             type: "object",
             properties: {
+                action: { type: "string", enum: ["get", "set"] },
                 channel: {
                     type: "number",
                     description: "Channel number (1-32)",
                     minimum: 1,
                     maximum: 32,
                 },
-                level: {
-                    type: "number",
-                    description: "Fader level (0.0 = -∞dB, 0.75 = 0dB, 1.0 = +10dB)",
-                    minimum: 0,
-                    maximum: 1,
+                unit: {
+                    type: "string",
+                    enum: ["level", "percent", "db"],
+                    description: "level = normalized 0.0..1.0; percent = 0..100%; db = X32/M32 fader dB table. Defaults to level.",
                 },
-            },
-            required: ["channel", "level"],
-        },
-    },
-    {
-        name: "osc_set_fader_db",
-        description: "Set a channel fader by dB value. Converts dB to the nearest normalized OSC fader level using the X32/M32 161-point Level table.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                channel: {
+                value: {
                     type: "number",
-                    description: "Channel number (1-32)",
-                    minimum: 1,
-                    maximum: 32,
-                },
-                db: {
-                    type: "number",
-                    description: "Requested fader level in dB (-87 to +10; lower values map to -inf)",
+                    description: "Required for action='set'. Normalized level when unit='level', percentage when unit='percent', dB value when unit='db'.",
                     minimum: -120,
-                    maximum: 20,
+                    maximum: 100,
                 },
             },
-            required: ["channel", "db"],
-        },
-    },
-    {
-        name: "osc_get_fader",
-        description: "Get the current fader level for a channel",
-        inputSchema: {
-            type: "object",
-            properties: {
-                channel: {
-                    type: "number",
-                    description: "Channel number (1-32)",
-                    minimum: 1,
-                    maximum: 32,
-                },
-            },
-            required: ["channel"],
-        },
-    },
-    {
-        name: "osc_get_fader_db",
-        description: "Get the current channel fader level as dB using the X32/M32 161-point Level table.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                channel: {
-                    type: "number",
-                    description: "Channel number (1-32)",
-                    minimum: 1,
-                    maximum: 32,
-                },
-            },
-            required: ["channel"],
+            required: ["action", "channel"],
         },
     },
     {
@@ -1161,79 +1175,31 @@ const TOOLS: Tool[] = [
     },
     // ========== Bus Controls ==========
     {
-        name: "osc_set_bus_fader",
-        description: "Set the fader level for a mix bus",
+        name: "osc_bus_fader",
+        description: "Get or set a mix bus fader. Use unit='db' for dB requests; default unit='level' uses normalized 0.0-1.0 levels.",
         inputSchema: {
             type: "object",
             properties: {
+                action: { type: "string", enum: ["get", "set"] },
                 bus: {
                     type: "number",
                     description: "Bus number (1-16)",
                     minimum: 1,
                     maximum: 16,
                 },
-                level: {
-                    type: "number",
-                    description: "Fader level (0.0 to 1.0)",
-                    minimum: 0,
-                    maximum: 1,
+                unit: {
+                    type: "string",
+                    enum: ["level", "percent", "db"],
+                    description: "level = normalized 0.0..1.0; percent = 0..100%; db = X32/M32 fader dB table. Defaults to level.",
                 },
-            },
-            required: ["bus", "level"],
-        },
-    },
-    {
-        name: "osc_set_bus_fader_db",
-        description: "Set a mix bus fader by dB value. Converts dB to the nearest normalized OSC fader level using the X32/M32 161-point Level table.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                bus: {
+                value: {
                     type: "number",
-                    description: "Bus number (1-16)",
-                    minimum: 1,
-                    maximum: 16,
-                },
-                db: {
-                    type: "number",
-                    description: "Requested fader level in dB (-87 to +10; lower values map to -inf)",
+                    description: "Required for action='set'. Normalized level when unit='level', percentage when unit='percent', dB value when unit='db'.",
                     minimum: -120,
-                    maximum: 20,
+                    maximum: 100,
                 },
             },
-            required: ["bus", "db"],
-        },
-    },
-    {
-        name: "osc_get_bus_fader",
-        description: "Get the fader level for a mix bus",
-        inputSchema: {
-            type: "object",
-            properties: {
-                bus: {
-                    type: "number",
-                    description: "Bus number (1-16)",
-                    minimum: 1,
-                    maximum: 16,
-                },
-            },
-            required: ["bus"],
-        },
-    },
-    {
-        name: "osc_get_bus_fader_db",
-        description: "Get the current mix bus fader level as dB using the X32/M32 161-point Level table.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                bus: {
-                    type: "number",
-                    description: "Bus number (1-16)",
-                    minimum: 1,
-                    maximum: 16,
-                },
-            },
-            required: ["bus"],
+            required: ["action", "bus"],
         },
     },
     {
@@ -1305,79 +1271,31 @@ const TOOLS: Tool[] = [
     },
     // ========== Aux Controls ==========
     {
-        name: "osc_set_aux_fader",
-        description: "Set the fader level for an aux output",
+        name: "osc_aux_fader",
+        description: "Get or set an aux return fader. Use unit='db' for dB requests; default unit='level' uses normalized 0.0-1.0 levels. In OSCXR the aux return is a singleton; use aux 1.",
         inputSchema: {
             type: "object",
             properties: {
-                aux: {
-                    type: "number",
-                    description: "Aux number (1-6)",
-                    minimum: 1,
-                    maximum: 6,
-                },
-                level: {
-                    type: "number",
-                    description: "Fader level (0.0 to 1.0)",
-                    minimum: 0,
-                    maximum: 1,
-                },
-            },
-            required: ["aux", "level"],
-        },
-    },
-    {
-        name: "osc_set_aux_fader_db",
-        description: "Set an aux return fader by dB value. Converts dB to the nearest normalized OSC fader level using the X32/M32 161-point Level table.",
-        inputSchema: {
-            type: "object",
-            properties: {
+                action: { type: "string", enum: ["get", "set"] },
                 aux: {
                     type: "number",
                     description: "Aux number (X32: 1-6; OSCXR: use 1 for /rtn/aux)",
                     minimum: 1,
                     maximum: 6,
                 },
-                db: {
+                unit: {
+                    type: "string",
+                    enum: ["level", "percent", "db"],
+                    description: "level = normalized 0.0..1.0; percent = 0..100%; db = X32/M32 fader dB table. Defaults to level.",
+                },
+                value: {
                     type: "number",
-                    description: "Requested fader level in dB (-87 to +10; lower values map to -inf)",
+                    description: "Required for action='set'. Normalized level when unit='level', percentage when unit='percent', dB value when unit='db'.",
                     minimum: -120,
-                    maximum: 20,
+                    maximum: 100,
                 },
             },
-            required: ["aux", "db"],
-        },
-    },
-    {
-        name: "osc_get_aux_fader",
-        description: "Get the fader level for an aux output",
-        inputSchema: {
-            type: "object",
-            properties: {
-                aux: {
-                    type: "number",
-                    description: "Aux number (1-6)",
-                    minimum: 1,
-                    maximum: 6,
-                },
-            },
-            required: ["aux"],
-        },
-    },
-    {
-        name: "osc_get_aux_fader_db",
-        description: "Get the current aux return fader level as dB using the X32/M32 161-point Level table.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                aux: {
-                    type: "number",
-                    description: "Aux number (X32: 1-6; OSCXR: use 1 for /rtn/aux)",
-                    minimum: 1,
-                    maximum: 6,
-                },
-            },
-            required: ["aux"],
+            required: ["action", "aux"],
         },
     },
     {
@@ -1424,11 +1342,12 @@ const TOOLS: Tool[] = [
     },
     // ========== Sends ==========
     {
-        name: "osc_send_to_bus",
-        description: "Set the send level from a channel to a mix bus. Use only when the user explicitly names both a source and a destination bus, such as '[channel] sur [bus]'. Do not use for main LR/façade destinations; use the source channel fader for that. Do not use for a single named target like 'Voc-Claude à 0 dB'. Do not use this for mute/cut/off commands; use osc_mute_channel_to_bus for that intent.",
+        name: "osc_channel_send_to_bus",
+        description: "Get or set the send level from a channel to a mix bus. Use only when the user explicitly names both a source channel and a destination bus. Use unit='db' for dB requests; default unit='level' uses normalized 0.0-1.0 levels. Do not use for mute/cut/off commands; use osc_mute_channel_to_bus for that intent.",
         inputSchema: {
             type: "object",
             properties: {
+                action: { type: "string", enum: ["get", "set"] },
                 channel: {
                     type: "number",
                     description: "Channel number (1-32)",
@@ -1441,61 +1360,19 @@ const TOOLS: Tool[] = [
                     minimum: 1,
                     maximum: 16,
                 },
-                level: {
+                unit: {
+                    type: "string",
+                    enum: ["level", "percent", "db"],
+                    description: "level = normalized 0.0..1.0; percent = 0..100%; db = X32/M32 fader dB table. Defaults to level.",
+                },
+                value: {
                     type: "number",
-                    description: "Send level (0.0 to 1.0)",
-                    minimum: 0,
-                    maximum: 1,
+                    description: "Required for action='set'. Normalized level when unit='level', percentage when unit='percent', dB value when unit='db'.",
+                    minimum: -120,
+                    maximum: 100,
                 },
             },
-            required: ["channel", "bus", "level"],
-        },
-    },
-    {
-        name: "osc_get_send_to_bus",
-        description: "Get the send level from a channel to a mix bus",
-        inputSchema: {
-            type: "object",
-            properties: {
-                channel: {
-                    type: "number",
-                    description: "Channel number (1-32)",
-                    minimum: 1,
-                    maximum: 32,
-                },
-                bus: {
-                    type: "number",
-                    description: "Mix bus number (1-16)",
-                    minimum: 1,
-                    maximum: 16,
-                },
-            },
-            required: ["channel", "bus"],
-        },
-    },
-    {
-        name: "osc_get_send_to_bus_db",
-        description: "Get the send level from a channel to a mix bus as dB using the X32/M32 161-point Level table. Use this directly when the user asks for a channel send level in dB.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                channel: { type: "number", description: "Channel number (1-32)", minimum: 1, maximum: 32 },
-                bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
-            },
-            required: ["channel", "bus"],
-        },
-    },
-    {
-        name: "osc_send_to_bus_db",
-        description: "Set the send level from a channel to a mix bus by dB value using the X32/M32 161-point Level table. Use only when the user explicitly names both a source and a destination bus, such as '[channel] sur [bus] à -5 dB'. Do not use for main LR/façade destinations; use osc_set_fader_db for the source channel. Do not use for a single named target like 'Voc-Claude à 0 dB'. Do not use this for mute/cut/off commands, even if the user says 'moins infini' or '-120 dB' while meaning mute; use osc_mute_channel_to_bus for that intent.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                channel: { type: "number", description: "Channel number (1-32)", minimum: 1, maximum: 32 },
-                bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
-                db: { type: "number", description: "Requested send level in dB (-87 to +10; lower values map to -inf)", minimum: -120, maximum: 20 },
-            },
-            required: ["channel", "bus", "db"],
+            required: ["action", "channel", "bus"],
         },
     },
     {
@@ -1545,53 +1422,18 @@ const TOOLS: Tool[] = [
         },
     },
     {
-        name: "osc_send_fx_to_bus",
-        description: "Set the send level from an FX return to a mix bus. Do not use this for mute/cut/off commands; use osc_mute_fx_to_bus for that intent.",
+        name: "osc_fx_send_to_bus",
+        description: "Get or set the send level from an FX return to a mix bus. Use unit='db' for dB requests; default unit='level' uses normalized 0.0-1.0 levels. Do not use for mute/cut/off commands; use osc_mute_fx_to_bus for that intent.",
         inputSchema: {
             type: "object",
             properties: {
+                action: { type: "string", enum: ["get", "set"] },
                 effect: { type: "number", description: `FX return/effect number (1-${OSC_FX_COUNT})`, minimum: 1, maximum: OSC_FX_COUNT },
                 bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
-                level: { type: "number", description: "Send level (0.0 to 1.0)", minimum: 0, maximum: 1 },
+                unit: { type: "string", enum: ["level", "percent", "db"], description: "level = normalized 0.0..1.0; percent = 0..100%; db = X32/M32 fader dB table. Defaults to level." },
+                value: { type: "number", description: "Required for action='set'. Normalized level when unit='level', percentage when unit='percent', dB value when unit='db'.", minimum: -120, maximum: 100 },
             },
-            required: ["effect", "bus", "level"],
-        },
-    },
-    {
-        name: "osc_get_fx_to_bus",
-        description: "Get the send level from an FX return to a mix bus",
-        inputSchema: {
-            type: "object",
-            properties: {
-                effect: { type: "number", description: `FX return/effect number (1-${OSC_FX_COUNT})`, minimum: 1, maximum: OSC_FX_COUNT },
-                bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
-            },
-            required: ["effect", "bus"],
-        },
-    },
-    {
-        name: "osc_get_fx_to_bus_db",
-        description: "Get the send level from an FX return to a mix bus as dB using the X32/M32 161-point Level table.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                effect: { type: "number", description: `FX return/effect number (1-${OSC_FX_COUNT})`, minimum: 1, maximum: OSC_FX_COUNT },
-                bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
-            },
-            required: ["effect", "bus"],
-        },
-    },
-    {
-        name: "osc_send_fx_to_bus_db",
-        description: "Set the send level from an FX return to a mix bus by dB value using the X32/M32 161-point Level table. Do not use this for mute/cut/off commands; use osc_mute_fx_to_bus for that intent.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                effect: { type: "number", description: `FX return/effect number (1-${OSC_FX_COUNT})`, minimum: 1, maximum: OSC_FX_COUNT },
-                bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
-                db: { type: "number", description: "Requested send level in dB (-87 to +10; lower values map to -inf)", minimum: -120, maximum: 20 },
-            },
-            required: ["effect", "bus", "db"],
+            required: ["action", "effect", "bus"],
         },
     },
     {
@@ -1608,53 +1450,18 @@ const TOOLS: Tool[] = [
         },
     },
     {
-        name: "osc_send_aux_to_bus",
-        description: "Set the send level from an aux return to a mix bus. Do not use this for mute/cut/off commands; use osc_mute_aux_to_bus for that intent. In OSCXR the aux return is a singleton; use aux 1.",
+        name: "osc_aux_send_to_bus",
+        description: "Get or set the send level from an aux return to a mix bus. Use unit='db' for dB requests; default unit='level' uses normalized 0.0-1.0 levels. Do not use for mute/cut/off commands; use osc_mute_aux_to_bus for that intent. In OSCXR the aux return is a singleton; use aux 1.",
         inputSchema: {
             type: "object",
             properties: {
+                action: { type: "string", enum: ["get", "set"] },
                 aux: { type: "number", description: "Aux return number (X32: 1-6; OSCXR: use 1 for /rtn/aux)", minimum: 1, maximum: 6 },
                 bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
-                level: { type: "number", description: "Send level (0.0 to 1.0)", minimum: 0, maximum: 1 },
+                unit: { type: "string", enum: ["level", "percent", "db"], description: "level = normalized 0.0..1.0; percent = 0..100%; db = X32/M32 fader dB table. Defaults to level." },
+                value: { type: "number", description: "Required for action='set'. Normalized level when unit='level', percentage when unit='percent', dB value when unit='db'.", minimum: -120, maximum: 100 },
             },
-            required: ["aux", "bus", "level"],
-        },
-    },
-    {
-        name: "osc_get_aux_to_bus",
-        description: "Get the send level from an aux return to a mix bus. In OSCXR the aux return is a singleton; use aux 1.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                aux: { type: "number", description: "Aux return number (X32: 1-6; OSCXR: use 1 for /rtn/aux)", minimum: 1, maximum: 6 },
-                bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
-            },
-            required: ["aux", "bus"],
-        },
-    },
-    {
-        name: "osc_get_aux_to_bus_db",
-        description: "Get the send level from an aux return to a mix bus as dB using the X32/M32 161-point Level table. In OSCXR the aux return is a singleton; use aux 1.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                aux: { type: "number", description: "Aux return number (X32: 1-6; OSCXR: use 1 for /rtn/aux)", minimum: 1, maximum: 6 },
-                bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
-            },
-            required: ["aux", "bus"],
-        },
-    },
-    {
-        name: "osc_send_aux_to_bus_db",
-        description: "Set the send level from an aux return to a mix bus by dB value using the X32/M32 161-point Level table. Do not use this for mute/cut/off commands; use osc_mute_aux_to_bus for that intent. In OSCXR the aux return is a singleton; use aux 1.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                aux: { type: "number", description: "Aux return number (X32: 1-6; OSCXR: use 1 for /rtn/aux)", minimum: 1, maximum: 6 },
-                bus: { type: "number", description: "Mix bus number (1-16)", minimum: 1, maximum: 16 },
-                db: { type: "number", description: "Requested send level in dB (-87 to +10; lower values map to -inf)", minimum: -120, maximum: 20 },
-            },
-            required: ["aux", "bus", "db"],
+            required: ["action", "aux", "bus"],
         },
     },
     {
@@ -1700,51 +1507,25 @@ const TOOLS: Tool[] = [
     },
     // ========== Main Mix ==========
     {
-        name: "osc_set_main_fader",
-        description: "Set the main LR fader level",
+        name: "osc_main_fader",
+        description: "Get or set the main LR fader. Use unit='db' for dB requests; default unit='level' uses normalized 0.0-1.0 levels.",
         inputSchema: {
             type: "object",
             properties: {
-                level: {
-                    type: "number",
-                    description: "Fader level (0.0 to 1.0)",
-                    minimum: 0,
-                    maximum: 1,
+                action: { type: "string", enum: ["get", "set"] },
+                unit: {
+                    type: "string",
+                    enum: ["level", "percent", "db"],
+                    description: "level = normalized 0.0..1.0; percent = 0..100%; db = X32/M32 fader dB table. Defaults to level.",
                 },
-            },
-            required: ["level"],
-        },
-    },
-    {
-        name: "osc_set_main_fader_db",
-        description: "Set the main LR fader by dB value. Converts dB to the nearest normalized OSC fader level using the X32/M32 161-point Level table.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                db: {
+                value: {
                     type: "number",
-                    description: "Requested fader level in dB (-87 to +10; lower values map to -inf)",
+                    description: "Required for action='set'. Normalized level when unit='level', percentage when unit='percent', dB value when unit='db'.",
                     minimum: -120,
-                    maximum: 20,
+                    maximum: 100,
                 },
             },
-            required: ["db"],
-        },
-    },
-    {
-        name: "osc_get_main_fader",
-        description: "Get the main LR fader level",
-        inputSchema: {
-            type: "object",
-            properties: {},
-        },
-    },
-    {
-        name: "osc_get_main_fader_db",
-        description: "Get the current main LR fader level as dB using the X32/M32 161-point Level table.",
-        inputSchema: {
-            type: "object",
-            properties: {},
+            required: ["action"],
         },
     },
     {
@@ -1779,63 +1560,31 @@ const TOOLS: Tool[] = [
     },
     // ========== Matrix ==========
     {
-        name: "osc_set_matrix_fader",
-        description: "Set the fader level for a matrix output",
+        name: "osc_matrix_fader",
+        description: "Get or set a matrix fader. Use unit='db' for dB requests; default unit='level' uses normalized 0.0-1.0 levels. X32/M32 only; matrices are not mapped in OSCXR.",
         inputSchema: {
             type: "object",
             properties: {
+                action: { type: "string", enum: ["get", "set"] },
                 matrix: {
                     type: "number",
                     description: "Matrix number (1-6)",
                     minimum: 1,
                     maximum: 6,
                 },
-                level: {
-                    type: "number",
-                    description: "Fader level (0.0 to 1.0)",
-                    minimum: 0,
-                    maximum: 1,
+                unit: {
+                    type: "string",
+                    enum: ["level", "percent", "db"],
+                    description: "level = normalized 0.0..1.0; percent = 0..100%; db = X32/M32 fader dB table. Defaults to level.",
                 },
-            },
-            required: ["matrix", "level"],
-        },
-    },
-    {
-        name: "osc_set_matrix_fader_db",
-        description: "Set a matrix fader by dB value. Converts dB to the nearest normalized OSC fader level using the X32/M32 161-point Level table. X32/M32 only; matrices are not mapped in OSCXR.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                matrix: {
+                value: {
                     type: "number",
-                    description: "Matrix number (1-6)",
-                    minimum: 1,
-                    maximum: 6,
-                },
-                db: {
-                    type: "number",
-                    description: "Requested fader level in dB (-87 to +10; lower values map to -inf)",
+                    description: "Required for action='set'. Normalized level when unit='level', percentage when unit='percent', dB value when unit='db'.",
                     minimum: -120,
-                    maximum: 20,
+                    maximum: 100,
                 },
             },
-            required: ["matrix", "db"],
-        },
-    },
-    {
-        name: "osc_get_matrix_fader_db",
-        description: "Get the current matrix fader level as dB using the X32/M32 161-point Level table. X32/M32 only; matrices are not mapped in OSCXR.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                matrix: {
-                    type: "number",
-                    description: "Matrix number (1-6)",
-                    minimum: 1,
-                    maximum: 6,
-                },
-            },
-            required: ["matrix"],
+            required: ["action", "matrix"],
         },
     },
     {
@@ -2425,58 +2174,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
 
             // ========== Channel Controls ==========
-            case "osc_set_fader": {
-                const { channel, level } = args as { channel: number; level: number };
-                await osc.setFader(channel, level);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Set channel ${channel} fader to ${(level * 100).toFixed(1)}%`,
-                        },
-                    ],
-                };
-            }
+            case "osc_channel_fader": {
+                const { channel, ...levelInput } = args as unknown as { channel: number } & LevelToolInput;
+                const operation = parseLevelOperation(levelInput);
+                const label = `Channel ${channel} fader`;
+                if (operation.action === "get") {
+                    const level = await osc.getFader(channel);
+                    return { content: [{ type: "text", text: formatLevelRead(label, level, operation.unit) }] };
+                }
 
-            case "osc_set_fader_db": {
-                const { channel, db } = args as { channel: number; db: number };
-                const converted = dbToFaderLevel(db);
-                await osc.setFader(channel, converted.level);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Set channel ${channel} fader to ${formatDb(converted.db)} (level ${converted.level.toFixed(4)}, table index ${converted.index}${converted.clipped ? ", clipped" : ""})`,
-                        },
-                    ],
-                };
-            }
-
-            case "osc_get_fader": {
-                const { channel } = args as { channel: number };
-                const level = await osc.getFader(channel);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Channel ${channel} fader is at ${(level * 100).toFixed(1)}%`,
-                        },
-                    ],
-                };
-            }
-
-            case "osc_get_fader_db": {
-                const { channel } = args as { channel: number };
-                const level = await osc.getFader(channel);
-                const converted = faderLevelToDb(level);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Channel ${channel} fader is ${formatDb(converted.db)} (level ${level.toFixed(4)}, nearest table index ${converted.index})`,
-                        },
-                    ],
-                };
+                const target = levelValueToNormalized(operation);
+                await osc.setFader(channel, target.level);
+                return { content: [{ type: "text", text: `Set ${label.toLowerCase()} to ${target.text}` }] };
             }
 
             case "osc_mute_channel": {
@@ -2721,58 +2430,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 
             // ========== Bus Controls ==========
-            case "osc_set_bus_fader": {
-                const { bus, level } = args as { bus: number; level: number };
-                await osc.setBusFader(bus, level);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Set bus ${bus} fader to ${(level * 100).toFixed(1)}%`,
-                        },
-                    ],
-                };
-            }
+            case "osc_bus_fader": {
+                const { bus, ...levelInput } = args as unknown as { bus: number } & LevelToolInput;
+                const operation = parseLevelOperation(levelInput);
+                const label = `Bus ${bus} fader`;
+                if (operation.action === "get") {
+                    const level = await osc.getBusFader(bus);
+                    return { content: [{ type: "text", text: formatLevelRead(label, level, operation.unit) }] };
+                }
 
-            case "osc_set_bus_fader_db": {
-                const { bus, db } = args as { bus: number; db: number };
-                const converted = dbToFaderLevel(db);
-                await osc.setBusFader(bus, converted.level);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Set bus ${bus} fader to ${formatDb(converted.db)} (level ${converted.level.toFixed(4)}, table index ${converted.index}${converted.clipped ? ", clipped" : ""})`,
-                        },
-                    ],
-                };
-            }
-
-            case "osc_get_bus_fader": {
-                const { bus } = args as { bus: number };
-                const level = await osc.getBusFader(bus);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Bus ${bus} fader is at ${(level * 100).toFixed(1)}%`,
-                        },
-                    ],
-                };
-            }
-
-            case "osc_get_bus_fader_db": {
-                const { bus } = args as { bus: number };
-                const level = await osc.getBusFader(bus);
-                const converted = faderLevelToDb(level);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Bus ${bus} fader is ${formatDb(converted.db)} (level ${level.toFixed(4)}, nearest table index ${converted.index})`,
-                        },
-                    ],
-                };
+                const target = levelValueToNormalized(operation);
+                await osc.setBusFader(bus, target.level);
+                return { content: [{ type: "text", text: `Set ${label.toLowerCase()} to ${target.text}` }] };
             }
 
             case "osc_mute_bus": {
@@ -2860,58 +2529,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 
             // ========== Aux Controls ==========
-            case "osc_set_aux_fader": {
-                const { aux, level } = args as { aux: number; level: number };
-                await osc.setAuxFader(aux, level);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Set aux ${aux} fader to ${(level * 100).toFixed(1)}%`,
-                        },
-                    ],
-                };
-            }
+            case "osc_aux_fader": {
+                const { aux, ...levelInput } = args as unknown as { aux: number } & LevelToolInput;
+                const operation = parseLevelOperation(levelInput);
+                const label = `Aux ${aux} fader`;
+                if (operation.action === "get") {
+                    const level = await osc.getAuxFader(aux);
+                    return { content: [{ type: "text", text: formatLevelRead(label, level, operation.unit) }] };
+                }
 
-            case "osc_set_aux_fader_db": {
-                const { aux, db } = args as { aux: number; db: number };
-                const converted = dbToFaderLevel(db);
-                await osc.setAuxFader(aux, converted.level);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Set aux ${aux} fader to ${formatDb(converted.db)} (level ${converted.level.toFixed(4)}, table index ${converted.index}${converted.clipped ? ", clipped" : ""})`,
-                        },
-                    ],
-                };
-            }
-
-            case "osc_get_aux_fader": {
-                const { aux } = args as { aux: number };
-                const level = await osc.getAuxFader(aux);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Aux ${aux} fader is at ${(level * 100).toFixed(1)}%`,
-                        },
-                    ],
-                };
-            }
-
-            case "osc_get_aux_fader_db": {
-                const { aux } = args as { aux: number };
-                const level = await osc.getAuxFader(aux);
-                const converted = faderLevelToDb(level);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Aux ${aux} fader is ${formatDb(converted.db)} (level ${level.toFixed(4)}, nearest table index ${converted.index})`,
-                        },
-                    ],
-                };
+                const target = levelValueToNormalized(operation);
+                await osc.setAuxFader(aux, target.level);
+                return { content: [{ type: "text", text: `Set ${label.toLowerCase()} to ${target.text}` }] };
             }
 
             case "osc_mute_aux": {
@@ -2943,65 +2572,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
 
             // ========== Sends ==========
-            case "osc_send_to_bus": {
-                const { channel, bus, level } = args as {
-                    channel: number;
-                    bus: number;
-                    level: number;
-                };
-                await osc.sendToBus(channel, bus, level);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Set channel ${channel} send to bus ${bus} at ${(level * 100).toFixed(1)}%`,
-                        },
-                    ],
-                };
-            }
+            case "osc_channel_send_to_bus": {
+                const { channel, bus, ...levelInput } = args as unknown as { channel: number; bus: number } & LevelToolInput;
+                const operation = parseLevelOperation(levelInput);
+                const label = `Channel ${channel} send to bus ${bus}`;
+                if (operation.action === "get") {
+                    const level = await osc.getSendToBus(channel, bus);
+                    return { content: [{ type: "text", text: formatLevelRead(label, level, operation.unit) }] };
+                }
 
-            case "osc_get_send_to_bus": {
-                const { channel, bus } = args as {
-                    channel: number;
-                    bus: number;
-                };
-                const level = await osc.getSendToBus(channel, bus);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Channel ${channel} send to bus ${bus} is at ${(level * 100).toFixed(1)}%`,
-                        },
-                    ],
-                };
-            }
-
-            case "osc_get_send_to_bus_db": {
-                const { channel, bus } = args as { channel: number; bus: number };
-                const level = await osc.getSendToBus(channel, bus);
-                const converted = faderLevelToDb(level);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Channel ${channel} send to bus ${bus} is ${formatDb(converted.db)} (level ${level.toFixed(4)}, nearest table index ${converted.index})`,
-                        },
-                    ],
-                };
-            }
-
-            case "osc_send_to_bus_db": {
-                const { channel, bus, db } = args as { channel: number; bus: number; db: number };
-                const converted = dbToFaderLevel(db);
-                await osc.sendToBus(channel, bus, converted.level);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Set channel ${channel} send to bus ${bus} to ${formatDb(converted.db)} (level ${converted.level.toFixed(4)}, table index ${converted.index}${converted.clipped ? ", clipped" : ""})`,
-                        },
-                    ],
-                };
+                const target = levelValueToNormalized(operation);
+                await osc.sendToBus(channel, bus, target.level);
+                return { content: [{ type: "text", text: `Set ${label.toLowerCase()} to ${target.text}` }] };
             }
 
             case "osc_send_to_all_buses_db": {
@@ -3057,38 +2639,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 };
             }
 
-            case "osc_send_fx_to_bus": {
-                const { effect, bus, level } = args as { effect: number; bus: number; level: number };
-                await osc.sendFxToBus(effect, bus, level);
-                return {
-                    content: [{ type: "text", text: `Set FX return ${effect} send to bus ${bus} at ${(level * 100).toFixed(1)}%` }],
-                };
-            }
+            case "osc_fx_send_to_bus": {
+                const { effect, bus, ...levelInput } = args as unknown as { effect: number; bus: number } & LevelToolInput;
+                const operation = parseLevelOperation(levelInput);
+                const label = `FX return ${effect} send to bus ${bus}`;
+                if (operation.action === "get") {
+                    const level = await osc.getFxToBus(effect, bus);
+                    return { content: [{ type: "text", text: formatLevelRead(label, level, operation.unit) }] };
+                }
 
-            case "osc_get_fx_to_bus": {
-                const { effect, bus } = args as { effect: number; bus: number };
-                const level = await osc.getFxToBus(effect, bus);
-                return {
-                    content: [{ type: "text", text: `FX return ${effect} send to bus ${bus} is at ${(level * 100).toFixed(1)}%` }],
-                };
-            }
-
-            case "osc_get_fx_to_bus_db": {
-                const { effect, bus } = args as { effect: number; bus: number };
-                const level = await osc.getFxToBus(effect, bus);
-                const converted = faderLevelToDb(level);
-                return {
-                    content: [{ type: "text", text: `FX return ${effect} send to bus ${bus} is ${formatDb(converted.db)} (level ${level.toFixed(4)}, nearest table index ${converted.index})` }],
-                };
-            }
-
-            case "osc_send_fx_to_bus_db": {
-                const { effect, bus, db } = args as { effect: number; bus: number; db: number };
-                const converted = dbToFaderLevel(db);
-                await osc.sendFxToBus(effect, bus, converted.level);
-                return {
-                    content: [{ type: "text", text: `Set FX return ${effect} send to bus ${bus} to ${formatDb(converted.db)} (level ${converted.level.toFixed(4)}, table index ${converted.index}${converted.clipped ? ", clipped" : ""})` }],
-                };
+                const target = levelValueToNormalized(operation);
+                await osc.sendFxToBus(effect, bus, target.level);
+                return { content: [{ type: "text", text: `Set ${label.toLowerCase()} to ${target.text}` }] };
             }
 
             case "osc_mute_fx_to_bus": {
@@ -3099,38 +2661,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 };
             }
 
-            case "osc_send_aux_to_bus": {
-                const { aux, bus, level } = args as { aux: number; bus: number; level: number };
-                await osc.sendAuxToBus(aux, bus, level);
-                return {
-                    content: [{ type: "text", text: `Set aux return ${aux} send to bus ${bus} at ${(level * 100).toFixed(1)}%` }],
-                };
-            }
+            case "osc_aux_send_to_bus": {
+                const { aux, bus, ...levelInput } = args as unknown as { aux: number; bus: number } & LevelToolInput;
+                const operation = parseLevelOperation(levelInput);
+                const label = `Aux return ${aux} send to bus ${bus}`;
+                if (operation.action === "get") {
+                    const level = await osc.getAuxToBus(aux, bus);
+                    return { content: [{ type: "text", text: formatLevelRead(label, level, operation.unit) }] };
+                }
 
-            case "osc_get_aux_to_bus": {
-                const { aux, bus } = args as { aux: number; bus: number };
-                const level = await osc.getAuxToBus(aux, bus);
-                return {
-                    content: [{ type: "text", text: `Aux return ${aux} send to bus ${bus} is at ${(level * 100).toFixed(1)}%` }],
-                };
-            }
-
-            case "osc_get_aux_to_bus_db": {
-                const { aux, bus } = args as { aux: number; bus: number };
-                const level = await osc.getAuxToBus(aux, bus);
-                const converted = faderLevelToDb(level);
-                return {
-                    content: [{ type: "text", text: `Aux return ${aux} send to bus ${bus} is ${formatDb(converted.db)} (level ${level.toFixed(4)}, nearest table index ${converted.index})` }],
-                };
-            }
-
-            case "osc_send_aux_to_bus_db": {
-                const { aux, bus, db } = args as { aux: number; bus: number; db: number };
-                const converted = dbToFaderLevel(db);
-                await osc.sendAuxToBus(aux, bus, converted.level);
-                return {
-                    content: [{ type: "text", text: `Set aux return ${aux} send to bus ${bus} to ${formatDb(converted.db)} (level ${converted.level.toFixed(4)}, table index ${converted.index}${converted.clipped ? ", clipped" : ""})` }],
-                };
+                const target = levelValueToNormalized(operation);
+                await osc.sendAuxToBus(aux, bus, target.level);
+                return { content: [{ type: "text", text: `Set ${label.toLowerCase()} to ${target.text}` }] };
             }
 
             case "osc_mute_aux_to_bus": {
@@ -3159,56 +2701,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
 
             // ========== Main Mix ==========
-            case "osc_set_main_fader": {
-                const { level } = args as { level: number };
-                await osc.setMainFader(level);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Set main LR fader to ${(level * 100).toFixed(1)}%`,
-                        },
-                    ],
-                };
-            }
+            case "osc_main_fader": {
+                const operation = parseLevelOperation(args as unknown as LevelToolInput);
+                const label = "Main LR fader";
+                if (operation.action === "get") {
+                    const level = await osc.getMainFader();
+                    return { content: [{ type: "text", text: formatLevelRead(label, level, operation.unit) }] };
+                }
 
-            case "osc_set_main_fader_db": {
-                const { db } = args as { db: number };
-                const converted = dbToFaderLevel(db);
-                await osc.setMainFader(converted.level);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Set main LR fader to ${formatDb(converted.db)} (level ${converted.level.toFixed(4)}, table index ${converted.index}${converted.clipped ? ", clipped" : ""})`,
-                        },
-                    ],
-                };
-            }
-
-            case "osc_get_main_fader": {
-                const level = await osc.getMainFader();
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Main LR fader is at ${(level * 100).toFixed(1)}%`,
-                        },
-                    ],
-                };
-            }
-
-            case "osc_get_main_fader_db": {
-                const level = await osc.getMainFader();
-                const converted = faderLevelToDb(level);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Main LR fader is ${formatDb(converted.db)} (level ${level.toFixed(4)}, nearest table index ${converted.index})`,
-                        },
-                    ],
-                };
+                const target = levelValueToNormalized(operation);
+                await osc.setMainFader(target.level);
+                return { content: [{ type: "text", text: `Set ${label.toLowerCase()} to ${target.text}` }] };
             }
 
             case "osc_mute_main": {
@@ -3240,48 +2743,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
 
             // ========== Matrix ==========
-            case "osc_set_matrix_fader": {
-                const { matrix, level } = args as {
-                    matrix: number;
-                    level: number;
-                };
-                await osc.setMatrixFader(matrix, level);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Set matrix ${matrix} fader to ${(level * 100).toFixed(1)}%`,
-                        },
-                    ],
-                };
-            }
+            case "osc_matrix_fader": {
+                const { matrix, ...levelInput } = args as unknown as { matrix: number } & LevelToolInput;
+                const operation = parseLevelOperation(levelInput);
+                const label = `Matrix ${matrix} fader`;
+                if (operation.action === "get") {
+                    const level = await osc.getMatrixFader(matrix);
+                    return { content: [{ type: "text", text: formatLevelRead(label, level, operation.unit) }] };
+                }
 
-            case "osc_set_matrix_fader_db": {
-                const { matrix, db } = args as { matrix: number; db: number };
-                const converted = dbToFaderLevel(db);
-                await osc.setMatrixFader(matrix, converted.level);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Set matrix ${matrix} fader to ${formatDb(converted.db)} (level ${converted.level.toFixed(4)}, table index ${converted.index}${converted.clipped ? ", clipped" : ""})`,
-                        },
-                    ],
-                };
-            }
-
-            case "osc_get_matrix_fader_db": {
-                const { matrix } = args as { matrix: number };
-                const level = await osc.getMatrixFader(matrix);
-                const converted = faderLevelToDb(level);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Matrix ${matrix} fader is ${formatDb(converted.db)} (level ${level.toFixed(4)}, nearest table index ${converted.index})`,
-                        },
-                    ],
-                };
+                const target = levelValueToNormalized(operation);
+                await osc.setMatrixFader(matrix, target.level);
+                return { content: [{ type: "text", text: `Set ${label.toLowerCase()} to ${target.text}` }] };
             }
 
             case "osc_mute_matrix": {

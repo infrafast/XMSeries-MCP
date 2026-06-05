@@ -97,17 +97,17 @@ Never replace an unsupported OSCXR bus-specific source mute with a whole-source 
 
 ## Levels
 
-- Raw fader/send values are normalized `0.0..1.0`.
+- Raw fader/send values are normalized `0.0..1.0`. Factorized level tools also accept `unit:"percent"` for user-facing percentages.
 - `0.75` is unity/0 dB; `1.0` is +10 dB.
-- When the user says dB/decibel for faders, use dB-aware tools:
-  `osc_set_fader_db`, `osc_get_fader_db`, `osc_set_bus_fader_db`, `osc_get_bus_fader_db`, `osc_set_aux_fader_db`, `osc_get_aux_fader_db`, `osc_set_main_fader_db`, `osc_get_main_fader_db`, `osc_set_matrix_fader_db`, `osc_get_matrix_fader_db`.
-- When the user says dB/decibel for sends, use send dB tools directly:
-  `osc_get_send_to_bus_db`, `osc_send_to_bus_db`, `osc_get_fx_to_bus_db`, `osc_send_fx_to_bus_db`, `osc_get_aux_to_bus_db`, `osc_send_aux_to_bus_db`.
-- For conversion only, use `osc_db_to_fader_level` and `osc_fader_level_to_db`. Never use conversion tools alone to answer a live value question; first read the live value in the same request, or prefer a dedicated `*_db` read tool.
+- When the user says dB/decibel for faders, use the factorized fader tools with `unit:"db"`:
+  `osc_channel_fader`, `osc_bus_fader`, `osc_aux_fader`, `osc_main_fader`, `osc_matrix_fader`.
+- When the user says dB/decibel for sends, use the factorized send tools with `unit:"db"`:
+  `osc_channel_send_to_bus`, `osc_fx_send_to_bus`, `osc_aux_send_to_bus`.
+- For conversion only, use `osc_db_to_fader_level` and `osc_fader_level_to_db`. Never use conversion tools alone to answer a live value question; first read the live value in the same request, or prefer the relevant factorized fader/send tool with `action:"get"` and `unit:"db"`.
 - When the user asks to raise/lower a fader or send relatively without a precise value, read the current value first, then apply a relative normalized change to that current value: "un peu" / "a little" = 10%, "beaucoup" / "a lot" = 20%, and no modifier = 15%. Clamp the final normalized value to `0.0..1.0`. 
 - For relative level changes, resolve the target using the destination rule. If the selected resolution has `matchType:"fuzzy"`, stop immediately and ask for target confirmation; do not read the current value and do not ask for an amount. Only after an exact/contains match or an explicit user confirmation may you read that exact current value and write the updated value. If the utterance explicitly names a source and destination, read/write the send. Otherwise read/write main LR, the named source's own fader, or the named bus/monitor fader as appropriate.
 - When the user gives an absolute target level (`-5 dB`, `0 dB`, `50%`, `0.75`, etc.), call the relevant write tool directly after name resolution. Do not call the corresponding read tool first unless the user asks for current state or the command is relative.
-- For an absolute source-to-destination send command such as "mets le volume de [source] sur [retour] à -5 dB", the complete action is exactly the relevant send write tool after source/destination resolution. Do not call the corresponding send read first. Without an explicit destination connector and destination name, never use a send write tool.
+- For an absolute source-to-destination send command such as "mets le volume de [source] sur [retour] à -5 dB", the complete action is exactly the relevant send tool with `action:"set"` after source/destination resolution. Do not call the same send tool with `action:"get"` first. Without an explicit destination connector and destination name, never use a send write action.
 - Pan is `-1.0` left, `0.0` center, `1.0` right. Pan is OSCX32M32-only unless a tool explicitly succeeds in the selected protocol.
 
 ## Automation
@@ -140,9 +140,9 @@ French aliases:
 3. Inspect the returned `matchType` before any other tool call. If the selected result is `fuzzy`, stop immediately and ask for confirmation of the target using the returned real name and family. Do not read faders/state, do not write, and do not ask "de combien ?" or "how much?".
 4. Apply the destination rule. If no target is named, use main LR/façade. If one unresolved name is present and no explicit family is stated, resolve it across all families; do not assume it is a channel. If that name resolves to a bus/monitor, use bus fader/mute tools. If it resolves to an input/FX/aux source, use that source's own fader/mute. Only use sends when the same utterance explicitly names a source and a destination.
 5. Source-to-destination commands map to sends:
-   - channel to bus: `osc_get_send_to_bus`, `osc_get_send_to_bus_db`, `osc_send_to_bus`, `osc_send_to_bus_db`, `osc_mute_channel_to_bus`
-   - FX return to bus: `osc_get_fx_to_bus`, `osc_get_fx_to_bus_db`, `osc_send_fx_to_bus`, `osc_send_fx_to_bus_db`, `osc_mute_fx_to_bus`
-   - aux return to bus: `osc_get_aux_to_bus`, `osc_get_aux_to_bus_db`, `osc_send_aux_to_bus`, `osc_send_aux_to_bus_db`, `osc_mute_aux_to_bus`
+   - channel to bus: `osc_channel_send_to_bus` or `osc_mute_channel_to_bus`
+   - FX return to bus: `osc_fx_send_to_bus` or `osc_mute_fx_to_bus`
+   - aux return to bus: `osc_aux_send_to_bus` or `osc_mute_aux_to_bus`
    If a destination list includes main LR/façade plus one or more buses, execute the main LR action with the source's own fader/mute and execute each bus action with the relevant send tool.
    For selected bus-list channel send writes, prefer `osc_send_to_buses_db` and do not call individual bus send tools. For all-bus channel send writes, prefer `osc_send_to_all_buses_db` and do not read individual bus faders. For bus master mute lists, use `osc_mute_buses`; for all bus masters, use `osc_mute_all_buses`; for all bus masters except named buses, use `osc_mute_all_buses_except`.
 6. For reads, call the relevant read/get tool for the resolved target before answering.
