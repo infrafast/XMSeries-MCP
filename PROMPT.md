@@ -97,7 +97,7 @@ Never replace an unsupported OSCXR bus-specific source mute with a whole-source 
 
 - Raw fader/send values are normalized `0.0..1.0`. Factorized level tools also accept `unit:"percent"` for user-facing percentages.
 - `0.75` is unity/0 dB; `1.0` is +10 dB.
-- Unless the user explicitly asks for percent or normalized level, use `unit:"db"` for fader/send get and set tools, and answer the user in dB. This includes vague requests such as "volume", "monte", "baisse", "plus fort", and current-level questions.
+- Unless the user explicitly asks for percent or normalized level, use `unit:"db"` for fader/send get and set tools, and answer the user in dB only. Do not add an approximate percent or normalized level unless the user asked for it. This includes vague requests such as "volume", "monte", "baisse", "plus fort", and current-level questions.
 - When the user says dB/decibel for faders, use the factorized fader tools with `unit:"db"`:
   `osc_channel_fader`, `osc_bus_fader`, `osc_aux_fader`, `osc_main_fader`, `osc_matrix_fader`.
 - When the user says dB/decibel for sends, use the factorized send tools with `unit:"db"`:

@@ -391,7 +391,7 @@ function parseLevelOperation(input: LevelToolInput): LevelOperation {
 
 function formatLevelWithDb(level: number): string {
     const converted = faderLevelToDb(level);
-    return `${formatDb(converted.db)} (level ${level.toFixed(4)}, ${Math.round(level * 1000) / 10}%, nearest table index ${converted.index})`;
+    return formatDb(converted.db);
 }
 
 function levelValueToNormalized(operation: LevelOperation): { level: number; text: string } {
@@ -403,14 +403,18 @@ function levelValueToNormalized(operation: LevelOperation): { level: number; tex
         const converted = dbToFaderLevel(operation.value);
         return {
             level: converted.level,
-            text: `${formatDb(converted.db)} (level ${converted.level.toFixed(4)}, table index ${converted.index}${converted.clipped ? ", clipped" : ""})`,
+            text: `${formatDb(converted.db)}${converted.clipped ? " (clipped)" : ""}`,
         };
     }
 
     const level = clampLevel(operation.unit === "percent" ? operation.value / 100 : operation.value);
+    const converted = faderLevelToDb(level);
     return {
         level,
-        text: formatLevelWithDb(level),
+        text:
+            operation.unit === "percent"
+                ? `${(level * 100).toFixed(1)}% (${formatDb(converted.db)})`
+                : `level ${level.toFixed(4)} (${formatDb(converted.db)})`,
     };
 }
 
@@ -419,7 +423,12 @@ function formatLevelRead(label: string, level: number, unit: LevelToolUnit): str
         return `${label} is ${formatLevelWithDb(level)}`;
     }
 
-    return `${label} is at ${(level * 100).toFixed(1)}%`;
+    const converted = faderLevelToDb(level);
+    if (unit === "percent") {
+        return `${label} is at ${(level * 100).toFixed(1)}% (${formatDb(converted.db)})`;
+    }
+
+    return `${label} is at level ${level.toFixed(4)} (${formatDb(converted.db)})`;
 }
 
 function parsePositiveInteger(value: number | null | undefined, name: string): number | undefined {
