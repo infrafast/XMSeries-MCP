@@ -213,6 +213,8 @@ Example remote-agent JSON:
 
 Replace `192.168.1.50` with the IP address of the computer running the MCP server. The same example is available in `mcp_http_agent_config.example.json`.
 
+Opening `/mcp` in a browser shows a small admin page when no MCP session header is present. It displays full mixer status and lets you update the runtime host, port, protocol, and mixer limits. MCP agent traffic still uses the same `/mcp` endpoint unchanged.
+
 ### Key Points
 
 - **Absolute paths**: Always use absolute paths, not relative paths

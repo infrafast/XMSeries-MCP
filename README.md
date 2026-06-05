@@ -126,7 +126,7 @@ HTTP mode reads these additional variables:
 | `OSC_FX_COUNT` | `8` | Initial number of FX slots/returns to scan for name resolution and FX reads. Can be changed at runtime with `osc_configure_mixer`. |
 | `OSC_DCA_COUNT` | `8` | Initial number of DCA groups to scan for name resolution and overview reads. Can be changed at runtime with `osc_configure_mixer`. |
 
-The HTTP MCP endpoint is `/mcp`; a health endpoint is available at `/health`. If `MCP_AUTH_TOKEN` is set, remote agents must send `Authorization: Bearer <token>` or `x-mcp-auth-token: <token>`.
+The HTTP MCP endpoint is `/mcp`; a health endpoint is available at `/health`. Browser `GET /mcp` requests without an MCP session show a small admin page with the live mixer status and editable runtime connection/count settings. The same page uses `GET /mcp/status` and `POST /mcp/config`; Streamable HTTP agent traffic on `/mcp` is unchanged. If `MCP_AUTH_TOKEN` is set, remote agents and browser/admin requests must send `Authorization: Bearer <token>` or `x-mcp-auth-token: <token>`.
 
 Example remote-agent configuration:
 

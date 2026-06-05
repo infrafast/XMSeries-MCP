@@ -55,7 +55,6 @@ export function getOscRuntimeConfig(): OscRuntimeConfig {
 const DEBUG_ENABLED = process.env.DEBUG === "1" || process.env.DEBUG?.toLowerCase() === "true";
 const PROMPT_RESOURCE_URI = "agent://prompt/system";
 const PROMPT_NAME = "agent_prompt";
-const LEGACY_PROMPT_RESOURCE_URI = "xmseries://prompt/system";
 const LEGACY_PROMPT_NAME = "xmseries_mixer_assistant";
 const PROMPT_FILE = process.env.MCP_PROMPT_FILE
     ? path.resolve(process.env.MCP_PROMPT_FILE)
@@ -439,7 +438,15 @@ function parsePositiveInteger(value: number | null | undefined, name: string): n
     return value;
 }
 
-async function configureOscRuntime(input: {
+export async function getOscMixerStatus(): Promise<{ runtimeConfig: OscRuntimeConfig; mixer: any }> {
+    const status = await osc.getMixerStatus();
+    return {
+        runtimeConfig: getOscRuntimeConfig(),
+        mixer: status,
+    };
+}
+
+export async function configureOscRuntime(input: {
     host?: string;
     port?: number;
     protocol?: string;
@@ -698,7 +705,7 @@ function macroActions(steps: AutomationMacroStepInput[]): AutomationAction[] {
 }
 
 // Define available tools
-const TOOLS: Tool[] = [
+export const TOOLS: Tool[] = [
     // ========== Agent Guidance ==========
     {
         name: "get_agent_prompt",
@@ -1607,6 +1614,31 @@ const TOOLS: Tool[] = [
     // ========== Application Controls ==========
 ];
 
+export function getOscToolSummaries(): Array<{ name: string; description: string }> {
+    return TOOLS.map((tool) => ({
+        name: tool.name,
+        description: tool.description || "",
+    }));
+}
+
+export function getOscResourceSummaries(): Array<{
+    uri: string;
+    name: string;
+    title: string;
+    description: string;
+    mimeType: string;
+}> {
+    return [
+        {
+            uri: PROMPT_RESOURCE_URI,
+            name: "XMSeries MCP Agent Prompt",
+            title: "XMSeries Mixer Assistant Prompt",
+            description: "Contents of PROMPT.md for agents that inject MCP resources into model instructions.",
+            mimeType: "text/markdown",
+        },
+    ];
+}
+
 // Create MCP server
 export function createOscMcpServer(): Server {
 const server = new Server(
@@ -1664,27 +1696,12 @@ server.setRequestHandler(GetPromptRequestSchema, async (request) => {
 
 server.setRequestHandler(ListResourcesRequestSchema, async () => {
     return {
-        resources: [
-            {
-                uri: PROMPT_RESOURCE_URI,
-                name: "XMSeries MCP Agent Prompt",
-                title: "XMSeries Mixer Assistant Prompt",
-                description: "Contents of PROMPT.md for agents that inject MCP resources into model instructions.",
-                mimeType: "text/markdown",
-            },
-            {
-                uri: LEGACY_PROMPT_RESOURCE_URI,
-                name: "XMSeries MCP Agent Prompt Legacy URI",
-                title: "XMSeries Mixer Assistant Prompt",
-                description: "Legacy resource URI for PROMPT.md.",
-                mimeType: "text/markdown",
-            },
-        ],
+        resources: getOscResourceSummaries(),
     };
 });
 
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-    if (![PROMPT_RESOURCE_URI, LEGACY_PROMPT_RESOURCE_URI].includes(request.params.uri)) {
+    if (request.params.uri !== PROMPT_RESOURCE_URI) {
         throw new Error(`Unknown resource: ${request.params.uri}`);
     }
 
@@ -2374,12 +2391,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
             // ========== Status ==========
             case "osc_get_mixer_status": {
-                const status = await osc.getMixerStatus();
+                const status = await getOscMixerStatus();
                 return {
                     content: [
                         {
                             type: "text",
-                            text: `Mixer Status:\n${JSON.stringify({ runtimeConfig: oscRuntimeConfig, mixer: status }, null, 2)}`,
+                            text: `Mixer Status:\n${JSON.stringify(status, null, 2)}`,
                         },
                     ],
                 };

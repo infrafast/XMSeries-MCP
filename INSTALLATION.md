@@ -138,7 +138,7 @@ Once configured, you can use natural language commands like:
 - `npm start` runs the full MCP server over stdio through `dist/index.js`
 - `npm run start:http` runs the same full MCP server over Streamable HTTP through `dist/http.js`
 - HTTP mode uses `HTTP_HOST` (`0.0.0.0` by default), `HTTP_PORT` (`8787` by default), and optional `MCP_AUTH_TOKEN`
-- Remote agents connect to `http://SERVER_IP:8787/mcp`; see `mcp_http_agent_config.example.json`
+- Remote agents connect to `http://SERVER_IP:8787/mcp`; opening the same URL in a browser shows the runtime mixer status/config page when no MCP session header is present. See `mcp_http_agent_config.example.json`
 - Use `MCP_AUTH_TOKEN` and a trusted LAN/VPN/reverse proxy when exposing HTTP mode, because the server can control live mixer state
 
 ### Agent Prompt Exposure:
