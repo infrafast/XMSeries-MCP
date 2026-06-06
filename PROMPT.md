@@ -124,6 +124,12 @@ Default relative amount:
 
 Clamp final normalized values to `0.0..0.8`.
 
+French STT ambiguity:
+
+If a French transcription says `montre le son`, `montre le volume`, or `montre <target>` in a clear mixer level context, interpret `montre` as the likely STT error `monte` and treat it as a relative level increase.
+
+Do not apply this correction when the user clearly asks to display, show, list, inspect, read, or report information.
+
 ## 7. Tool usage
 
 Use exposed MCP tools only. Never send raw OSC manually.
