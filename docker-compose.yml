@@ -25,3 +25,8 @@ services:
       OSC_DCA_COUNT: 8
       # Enable [OSC READ] and [OSC WRITE] traces in container logs.
       DEBUG: "false"
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 10.200.10.0/24      
