@@ -93,6 +93,25 @@ Then configure the remote agent with the server computer's LAN IP:
 
 The same example is available in `mcp_http_agent_config.example.json`. Use a trusted LAN, VPN, or authenticated reverse proxy; this MCP can control live mixer state.
 
+### Optional: Raspberry Pi Systemd Service
+
+For a Raspberry Pi that should run XMSeries-MCP continuously and expose HTTP mode to LiveStageAssistant over LAN or Tailscale, use the service pack in [`xmseriesmcp_raspi_service_pack/README.md`](xmseriesmcp_raspi_service_pack/README.md).
+
+The Raspberry Pi setup expects Node.js >= 20.20.0, preferably Node 22 LTS, and a built checkout at `/home/pi/XMSeries-MCP`:
+
+```bash
+cd /home/pi/XMSeries-MCP
+npm ci
+npm run build
+cd xmseriesmcp_raspi_service_pack
+./install_xmseriesmcp_service.sh
+sudo nano /etc/xmseriesmcp.env
+xmseriesmcp auto
+xmseriesmcp health
+```
+
+Configure `/etc/xmseriesmcp.env` with the mixer LAN address, then point LiveStageAssistant to `http://<raspberry-lan-or-tailscale-ip>:8787/mcp`.
+
 ### Optional: Run With Docker
 
 Docker is useful when you want XMSeries-MCP to run autonomously on a NAS, mini PC, or server without installing Node.js directly on the host.

@@ -141,6 +141,26 @@ Once configured, you can use natural language commands like:
 - Remote agents connect to `http://SERVER_IP:8787/mcp`; opening the same URL in a browser shows the runtime mixer status/config page when no MCP session header is present. See `mcp_http_agent_config.example.json`
 - Use `MCP_AUTH_TOKEN` and a trusted LAN/VPN/reverse proxy when exposing HTTP mode, because the server can control live mixer state
 
+
+### Raspberry Pi / Systemd Service
+
+For a Raspberry Pi deployment that should start at boot and serve LiveStageAssistant over HTTP, use the dedicated service pack: [`xmseriesmcp_raspi_service_pack/README.md`](xmseriesmcp_raspi_service_pack/README.md).
+
+Typical flow on the Raspberry Pi:
+
+```bash
+cd /home/pi/XMSeries-MCP
+npm ci
+npm run build
+cd xmseriesmcp_raspi_service_pack
+./install_xmseriesmcp_service.sh
+sudo nano /etc/xmseriesmcp.env
+xmseriesmcp auto
+xmseriesmcp health
+```
+
+Node.js must be >= 20.20.0; Node 22 LTS is recommended when running both XMSeries-MCP and QLCPlus-MCP on the same Raspberry Pi. The service runs HTTP mode on port `8787` by default, so remote agents can connect to `http://<raspberry-ip>:8787/mcp`.
+
 ### Agent Prompt Exposure:
 - Standard prompt name: `agent_prompt` via MCP `prompts/list` and `prompts/get`
 - Standard resource URI: `agent://prompt/system` via MCP `resources/list` and `resources/read`
