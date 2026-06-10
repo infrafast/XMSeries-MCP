@@ -1,0 +1,19 @@
+[Unit]
+Description=XMSeries MCP HTTP Server
+Documentation=https://github.com/infrafast/XMSeries-MCP
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/XMSeries-MCP
+EnvironmentFile=/etc/xmseriesmcp.env
+ExecStart=/usr/bin/npm run start:http
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

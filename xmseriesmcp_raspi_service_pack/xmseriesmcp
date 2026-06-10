@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SERVICE="xmseriesmcp.service"
+HEALTH_URL="http://127.0.0.1:8787/health"
+
+cmd="${1:-}"
+
+case "$cmd" in
+  start)
+    sudo systemctl start "$SERVICE"
+    ;;
+
+  stop)
+    sudo systemctl stop "$SERVICE"
+    ;;
+
+  restart)
+    sudo systemctl restart "$SERVICE"
+    ;;
+
+  status)
+    systemctl status "$SERVICE" --no-pager
+    ;;
+
+  logs)
+    journalctl -u "$SERVICE" -f
+    ;;
+
+  auto)
+    sudo systemctl enable "$SERVICE"
+    sudo systemctl start "$SERVICE"
+    echo "XMSeries-MCP auto-start enabled and service started."
+    ;;
+
+  noauto)
+    sudo systemctl disable "$SERVICE"
+    echo "XMSeries-MCP auto-start disabled."
+    ;;
+
+  last-state)
+    echo "Enabled: $(systemctl is-enabled "$SERVICE" 2>/dev/null || true)"
+    echo "Active : $(systemctl is-active "$SERVICE" 2>/dev/null || true)"
+    ;;
+
+  health)
+    curl -s "$HEALTH_URL"
+    echo
+    ;;
+
+  test-remote)
+    IP="$(tailscale ip -4 2>/dev/null | head -n 1)"
+    if [ -z "$IP" ]; then
+      echo "No Tailscale IPv4 found."
+      exit 1
+    fi
+    echo "Local health:  $HEALTH_URL"
+    echo "Remote health: http://$IP:8787/health"
+    curl -s "http://$IP:8787/health"
+    echo
+    ;;
+
+  *)
+    echo "Usage: xmseriesmcp {start|stop|restart|status|logs|auto|noauto|last-state|health|test-remote}"
+    exit 1
+    ;;
+esac
