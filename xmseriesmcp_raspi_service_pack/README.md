@@ -49,7 +49,9 @@ Raspberry Pi / XMSeries-MCP calls the mixer directly:
 192.168.100.16:10023
 ```
 
-## Prerequisite
+## Prerequisites
+
+Node.js must be >= 20.20.0. Node 22 LTS is recommended when installing both XMSeries-MCP and QLCPlus-MCP on the same Raspberry Pi.
 
 Make sure the repository exists here:
 
@@ -61,6 +63,6 @@ and has already been built:
 
 ```bash
 cd /home/pi/XMSeries-MCP
-npm install
+npm ci
 npm run build
 ```
