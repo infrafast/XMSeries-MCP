@@ -22,8 +22,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Default OSC configuration
-export const OSC_HOST = process.env.OSC_HOST || "192.168.1.17";
-export const OSC_PORT = parseInt(process.env.OSC_PORT || "10023");
+export const OSC_HOST = process.env.OSC_HOST || "192.168.100.16";
+export const OSC_PORT = parseInt(process.env.OSC_PORT || "10024");
 export const OSC_PROTOCOL = parseOscProtocol(process.env.OSC_PROTOCOL);
 export const OSC_CHANNEL_COUNT = parseOscCountEnv("OSC_CHANNEL_COUNT", 32);
 export const OSC_BUS_COUNT = parseOscCountEnv("OSC_BUS_COUNT", 16);
@@ -116,7 +116,7 @@ function faderDbPayload(result: ReturnType<typeof faderLevelToDb>): string {
 }
 
 function parseOscProtocol(value?: string): OSCProtocol {
-    if (!value) return "OSCX32M32";
+    if (!value) return "OSCXR";
     const normalized = value.trim().toUpperCase();
     if (normalized === "OSCX32M32" || normalized === "X32" || normalized === "M32") return "OSCX32M32";
     if (normalized === "OSCXR" || normalized === "XR" || normalized === "XAIR" || normalized === "XAIRXR") return "OSCXR";
