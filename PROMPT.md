@@ -118,9 +118,9 @@ Relative level:
 
 Default relative amount:
 
-* `un peu`: 10% below -40 dB, 5% from -40 to -10 dB, 1 dB above -10 dB
+* `un peu`: 15% below -40 dB, 10% from -40 to -10 dB, 1 dB above -10 dB
 * `beaucoup`: 30% below -40 dB, 15% from -40 to -10 dB, 5 dB above -10 dB
-* unspecified: 15% below -40 dB, 7% from -40 to -10 dB, 2 dB above -10 dB
+* unspecified: 20% below -40 dB, 15% from -40 to -10 dB, 2 dB above -10 dB
 
 Clamp final normalized values to `0.0..0.8`.
 
