@@ -94,6 +94,15 @@ Both MCP transports read these values at startup:
 | `OSC_PORT` | `10023` | Mixer OSC UDP port |
 | `OSC_PROTOCOL` | `OSCX32M32` | Address mapping mode: `OSCX32M32` or `OSCXR` |
 | `MCP_PROMPT_FILE` | repository `PROMPT.md` | Optional absolute path to the prompt exposed through MCP |
+| `XMS_SPEAKER_MAP` | empty | Optional JSON map used by `osc_get_speaker_context` to translate a recognized voice speaker into monitor bus/channel names |
+
+`XMS_SPEAKER_MAP` is intentionally server-side. A voice agent may pass a neutral `speaker` value, but this MCP server decides how that speaker maps to the mixer. Example:
+
+```bash
+XMS_SPEAKER_MAP='{"laurent":{"bus":"Laurent","channel":"Talk Laurent"},"marie":{"bus":"Marie"}}'
+```
+
+If a known speaker has no explicit entry, `osc_get_speaker_context` defaults `busName` to the speaker name and leaves `channelName` empty. Use explicit entries when mixer labels differ from speaker names.
 
 ### Transport modes
 

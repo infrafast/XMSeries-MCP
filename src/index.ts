@@ -123,6 +123,41 @@ function parseOscProtocol(value?: string): OSCProtocol {
     throw new Error(`Invalid OSC_PROTOCOL "${value}". Expected "OSCX32M32" or "OSCXR".`);
 }
 
+interface SpeakerMixerMapping {
+    bus?: string;
+    channel?: string;
+    enabled?: boolean;
+}
+
+function speakerMapFromEnv(): Record<string, SpeakerMixerMapping> {
+    const raw = process.env.XMS_SPEAKER_MAP || "";
+    if (!raw.trim()) return {};
+    try {
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+            ? (parsed as Record<string, SpeakerMixerMapping>)
+            : {};
+    } catch (error) {
+        console.error(`Invalid XMS_SPEAKER_MAP: ${error instanceof Error ? error.message : String(error)}`);
+        return {};
+    }
+}
+
+function speakerContextPayload(speaker: string): string {
+    const normalized = String(speaker || "unknown").trim().toLowerCase();
+    const mappings = speakerMapFromEnv();
+    const mapping = mappings[normalized];
+    const enabled = mapping?.enabled !== false;
+    const known = Boolean(normalized && normalized !== "unknown" && enabled);
+    return JSON.stringify({
+        speaker: normalized || "unknown",
+        known,
+        busName: known ? (mapping?.bus || normalized) : null,
+        channelName: known ? (mapping?.channel || null) : null,
+        source: mapping ? "XMS_SPEAKER_MAP" : "default-speaker-name",
+    });
+}
+
 function appendOscTrace(toolResult: any, commands: string[], toolName?: string): any {
     if (!DEBUG_ENABLED || commands.length === 0) {
         return toolResult;
@@ -852,6 +887,20 @@ export const TOOLS: Tool[] = [
         inputSchema: {
             type: "object",
             properties: {},
+        },
+    },
+    {
+        name: "osc_get_speaker_context",
+        description: "Return the mixer context for a recognized voice speaker. The voice agent supplies speaker='unknown' when not recognized. For known speakers, busName defaults to the speaker name unless XMS_SPEAKER_MAP overrides it; channelName is optional.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                speaker: {
+                    type: "string",
+                    description: "Recognized speaker name from the voice agent, or unknown.",
+                },
+            },
+            required: ["speaker"],
         },
     },
     {
@@ -1896,6 +1945,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                         {
                             type: "text",
                             text: prompt,
+                        },
+                    ],
+                };
+            }
+
+            case "osc_get_speaker_context": {
+                const { speaker } = args as { speaker?: string };
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: speakerContextPayload(speaker || "unknown"),
                         },
                     ],
                 };

@@ -66,6 +66,29 @@ This applies equally to immediate commands and automation/delayed commands.
 
 If the user says only `volume`, `niveau`, `le volume`, or `le niveau` without a named target or explicit anaphora, use main LR/façade, even if the previous command targeted a channel, bus, FX, aux, DCA, or matrix.
 
+## 3b. Recognized speaker context
+
+The voice agent may append an internal JSON payload with `speaker`, `speaker_confidence`, and `speaker_backend`.
+
+Use that payload only for first-person monitor or microphone requests. Never treat the speaker name as a mixer target by yourself.
+
+When the user says first-person monitor phrases such as `mon retour`, `mes retours`, `dans mon retour`, `mon wedge`, or `mes ears`:
+
+* if `speaker` is `unknown`, stop and ask which monitor/bus to use
+* otherwise call `osc_get_speaker_context({ "speaker": "<speaker>" })`
+* if the returned context has `known:false`, ask which monitor/bus to use
+* otherwise resolve the returned `busName` with `osc_find_named_target` restricted to `bus`
+* apply the requested bus fader, bus mute, or source-to-bus send command
+
+When the user says first-person input phrases such as `ma voix`, `mon micro`, or `ma tranche`:
+
+* call `osc_get_speaker_context({ "speaker": "<speaker>" })`
+* use `channelName` only if it is present
+* resolve `channelName` with `osc_find_named_target` restricted to `channel`
+* if `channelName` is missing or does not resolve uniquely, ask which channel to use
+
+Explicit target names always override speaker context. For example, `monte guitare dans le retour de Claude` uses the named target/destination resolution, not the current speaker.
+
 ## 4. Main LR / façade
 
 French aliases:
