@@ -104,6 +104,8 @@ XMS_SPEAKER_MAP='{"laurent":{"bus":"Laurent","channel":"Talk Laurent"},"marie":{
 
 If a known speaker has no explicit entry, `osc_get_speaker_context` defaults `busName` to the speaker name and leaves `channelName` empty. Use explicit entries when mixer labels differ from speaker names.
 
+In HTTP mode, the `/mcp` admin page exposes this same speaker mapping as `XMS_SPEAKER_MAP` in the configuration form. Saving it updates the running HTTP server immediately; for `stdio` mode, set `XMS_SPEAKER_MAP` in the MCP client config `env` before launching the server.
+
 ### Transport modes
 
 The full MCP server can run either as the original local `stdio` server or as a Streamable HTTP MCP server. Both transports use the same reusable MCP server factory and expose the same tools, prompts, and resources.

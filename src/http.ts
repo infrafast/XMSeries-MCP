@@ -8,11 +8,13 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import {
     configureOscRuntime,
+    configureSpeakerMapConfig,
     connectOscDevice,
     createOscMcpServer,
     getOscMixerStatus,
     getOscResourceSummaries,
     getOscRuntimeConfig,
+    getSpeakerMapConfig,
     getOscToolSummaries,
 } from "./index.js";
 
@@ -165,7 +167,7 @@ function renderMcpAdminPage(): string {
       font-size: 13px;
       font-weight: 600;
     }
-    input, select {
+    input, select, textarea {
       width: 100%;
       min-height: 38px;
       border: 1px solid var(--border);
@@ -174,6 +176,12 @@ function renderMcpAdminPage(): string {
       background: transparent;
       color: var(--text);
       font: inherit;
+    }
+    textarea {
+      min-height: 128px;
+      resize: vertical;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 13px;
     }
     .pair {
       display: grid;
@@ -332,6 +340,13 @@ function renderMcpAdminPage(): string {
               </label>
             </div>
           </fieldset>
+          <fieldset>
+            <legend>Speaker mapping</legend>
+            <label>XMS_SPEAKER_MAP
+              <textarea id="speakerMap" name="speakerMap" spellcheck="false" placeholder='{"laurent":{"bus":"Laurent","channel":"Guitar-loran"}}'></textarea>
+            </label>
+            <p>Maps recognized voice speakers to mixer bus/channel names. Used by first-person requests such as "mon retour".</p>
+          </fieldset>
           <div class="actions">
             <button id="update-button" type="submit">Update</button>
             <button class="secondary" id="refresh-button" type="button">Refresh</button>
@@ -389,6 +404,14 @@ function renderMcpAdminPage(): string {
     }
 
     function payloadFromForm() {
+      let speakerMap = {};
+      const speakerMapText = document.getElementById("speakerMap").value.trim();
+      if (speakerMapText) {
+        speakerMap = JSON.parse(speakerMapText);
+        if (!speakerMap || Array.isArray(speakerMap) || typeof speakerMap !== "object") {
+          throw new Error("XMS_SPEAKER_MAP must be a JSON object.");
+        }
+      }
       return {
         host: document.getElementById("host").value.trim(),
         port: numberValue("port"),
@@ -396,7 +419,8 @@ function renderMcpAdminPage(): string {
         channelCount: numberValue("channelCount"),
         busCount: numberValue("busCount"),
         fxCount: numberValue("fxCount"),
-        dcaCount: numberValue("dcaCount")
+        dcaCount: numberValue("dcaCount"),
+        speakerMap
       };
     }
 
@@ -408,6 +432,10 @@ function renderMcpAdminPage(): string {
       document.getElementById("busCount").value = config.busCount ?? "";
       document.getElementById("fxCount").value = config.fxCount ?? "";
       document.getElementById("dcaCount").value = config.dcaCount ?? "";
+    }
+
+    function fillSpeakerMap(map) {
+      document.getElementById("speakerMap").value = JSON.stringify(map || {}, null, 2);
     }
 
     function setBusy(busy) {
@@ -487,6 +515,7 @@ function renderMcpAdminPage(): string {
         throw new Error(data.error || "Unable to read mixer status");
       }
       fillForm(data.runtimeConfig);
+      fillSpeakerMap(data.speakerMap || {});
       renderStatus(data);
       return data;
     }
@@ -534,6 +563,7 @@ function renderMcpAdminPage(): string {
           throw new Error(data.error || "Unable to update mixer config");
         }
         fillForm(data.status.runtimeConfig);
+        fillSpeakerMap(data.status.speakerMap || {});
         renderStatus(data.status);
         setMessage(data.update.reconnect ? "Connection updated and reconnected." : "Limits updated.", "ok");
       } catch (error) {
@@ -610,7 +640,8 @@ export async function startHttpServer(): Promise<void> {
 
     app.get("/mcp/status", async (_req, res) => {
         try {
-            res.json(await getOscMixerStatus());
+            const status = await getOscMixerStatus();
+            res.json({ ...status, speakerMap: getSpeakerMapConfig() });
         } catch (error) {
             res.status(500).json({
                 error: error instanceof Error ? error.message : String(error),
@@ -629,8 +660,12 @@ export async function startHttpServer(): Promise<void> {
     app.post("/mcp/config", async (req, res) => {
         try {
             const update = await configureOscRuntime(req.body || {});
+            const speakerMapUpdate =
+                Object.prototype.hasOwnProperty.call(req.body || {}, "speakerMap")
+                    ? configureSpeakerMapConfig((req.body || {}).speakerMap)
+                    : undefined;
             const status = await getOscMixerStatus();
-            res.json({ update, status });
+            res.json({ update, speakerMapUpdate, status: { ...status, speakerMap: getSpeakerMapConfig() } });
         } catch (error) {
             res.status(400).json({
                 error: error instanceof Error ? error.message : String(error),

@@ -129,18 +129,54 @@ interface SpeakerMixerMapping {
     enabled?: boolean;
 }
 
+function parseSpeakerMap(raw: string): Record<string, SpeakerMixerMapping> {
+    if (!raw.trim()) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("XMS_SPEAKER_MAP must be a JSON object.");
+    }
+
+    const normalized: Record<string, SpeakerMixerMapping> = {};
+    for (const [speaker, value] of Object.entries(parsed)) {
+        const key = String(speaker || "").trim().toLowerCase();
+        if (!key) continue;
+        if (!value || typeof value !== "object" || Array.isArray(value)) {
+            throw new Error(`XMS_SPEAKER_MAP.${key} must be an object.`);
+        }
+        const mapping = value as Record<string, unknown>;
+        normalized[key] = {
+            bus: mapping.bus === undefined ? undefined : String(mapping.bus).trim(),
+            channel: mapping.channel === undefined ? undefined : String(mapping.channel).trim(),
+            enabled: mapping.enabled === undefined ? undefined : Boolean(mapping.enabled),
+        };
+    }
+    return normalized;
+}
+
 function speakerMapFromEnv(): Record<string, SpeakerMixerMapping> {
     const raw = process.env.XMS_SPEAKER_MAP || "";
     if (!raw.trim()) return {};
     try {
-        const parsed = JSON.parse(raw);
-        return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-            ? (parsed as Record<string, SpeakerMixerMapping>)
-            : {};
+        return parseSpeakerMap(raw);
     } catch (error) {
         console.error(`Invalid XMS_SPEAKER_MAP: ${error instanceof Error ? error.message : String(error)}`);
         return {};
     }
+}
+
+export function getSpeakerMapConfig(): Record<string, SpeakerMixerMapping> {
+    return speakerMapFromEnv();
+}
+
+export function configureSpeakerMapConfig(input: unknown): {
+    previous: Record<string, SpeakerMixerMapping>;
+    current: Record<string, SpeakerMixerMapping>;
+} {
+    const previous = speakerMapFromEnv();
+    const raw = typeof input === "string" ? input : JSON.stringify(input || {});
+    const current = parseSpeakerMap(raw);
+    process.env.XMS_SPEAKER_MAP = JSON.stringify(current);
+    return { previous, current };
 }
 
 function speakerContextPayload(speaker: string): string {
