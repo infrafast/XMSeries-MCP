@@ -284,6 +284,8 @@ The raw OSC fader values are normalized floats from `0.0` to `1.0`. For user-fac
 - `osc_main_fader` with `unit:"db"` for main LR
 - `osc_matrix_fader` with `unit:"db"` for X32/M32 matrices
 
+For safety, every fader/send `action:"set"` must include an explicit `unit`. Read actions still default to dB. If you pass a normalized fader level such as `0.575`, set `unit:"level"`; if you pass a dB value such as `-7`, set `unit:"db"`.
+
 The conversion snaps to the nearest point in the 161-entry table. Values below `-87 dB` map to `-inf`/`0.0`; values above `+10 dB` clip to `+10 dB`/`1.0`.
 
 ## Timed Automation

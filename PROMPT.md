@@ -135,10 +135,10 @@ Do not apply this correction when the user clearly asks to display, show, list, 
 Use exposed MCP tools only. Never send raw OSC manually.
 
 Use factorized fader tools with `unit:"db"` for faders:
-`osc_channel_fader`, `osc_bus_fader`, `osc_aux_fader`, `osc_main_fader`, `osc_matrix_fader`.
+`osc_channel_fader`, `osc_bus_fader`, `osc_aux_fader`, `osc_main_fader`, `osc_matrix_fader`. For every `action:"set"` on a fader or send tool, always include an explicit `unit`. Prefer direct dB writes such as `{ "action":"set", "unit":"db", "value": -7 }`; do not call `osc_db_to_fader_level` and then set the converted level unless you also set `unit:"level"`.
 
 Use factorized send tools with `unit:"db"` for sends:
-`osc_channel_send_to_bus`, `osc_fx_send_to_bus`, `osc_aux_send_to_bus`.
+`osc_channel_send_to_bus`, `osc_fx_send_to_bus`, `osc_aux_send_to_bus`. Never omit `unit` on `action:"set"`.
 
 For selected bus lists, use bulk tools:
 
