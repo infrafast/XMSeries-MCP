@@ -350,7 +350,7 @@ interface AutomationDelayedCommandInput {
 }
 
 type AutomationMacroStepInput =
-    | ({ type: "wait"; durationSeconds: number; label?: string })
+    | ({ type: "wait" | "delay"; durationSeconds: number; label?: string })
     | ({ type: "command"; delaySeconds?: number; command: AutomationRawCommand; label?: string })
     | ({ type: "ramp" } & AutomationRampInput);
 
@@ -815,7 +815,7 @@ async function muteBusBatch(buses: number[], mute: boolean): Promise<{ changed: 
 
 function macroActions(steps: AutomationMacroStepInput[]): AutomationAction[] {
     return steps.map((step) => {
-        if (step.type === "wait") {
+        if (step.type === "wait" || step.type === "delay") {
             return {
                 type: "wait",
                 durationSeconds: step.durationSeconds,
@@ -829,7 +829,13 @@ function macroActions(steps: AutomationMacroStepInput[]): AutomationAction[] {
                 label: step.label,
             });
         }
-        return rampAction(step);
+        if (step.type === "ramp") {
+            if (!("target" in step) || !step.target) {
+                throw new Error("Automation macro ramp step target is required. Resolve the name first and copy the resolved target into the ramp step, for example { kind: channel_fader, channel: N }.");
+            }
+            return rampAction(step);
+        }
+        throw new Error("Unsupported automation macro step type. Use wait, command, or ramp.");
     });
 }
 
@@ -982,7 +988,7 @@ export const TOOLS: Tool[] = [
                     items: {
                         type: "object",
                         properties: {
-                            type: { type: "string", enum: ["wait", "command", "ramp"] },
+                            type: { type: "string", enum: ["wait", "delay", "command", "ramp"] },
                             label: { type: "string" },
                             durationSeconds: { type: "number", minimum: 0 },
                             delaySeconds: { type: "number", minimum: 0 },

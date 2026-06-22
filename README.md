@@ -294,7 +294,7 @@ Available tools:
 
 - `osc_automation_ramp` starts a fade/ramp on one numeric target and returns immediately with a job id.
 - `osc_automation_delayed_command` schedules one delayed supported mixer command. Prefer structured `target` + `toDb`/`toLevel` for delayed level writes.
-- `osc_automation_macro` runs a sequence of waits, allowlisted raw commands, and structured ramps.
+- `osc_automation_macro` runs a sequence of waits, allowlisted raw commands, and structured ramps. Each `ramp` step must include its own structured `target`; use `type:"wait"` for delays inside macros (`type:"delay"` is accepted as a compatibility alias).
 - `osc_automation_list` lists running, completed, failed, and cancelled jobs.
 - `osc_automation_cancel` cancels a running job by id.
 

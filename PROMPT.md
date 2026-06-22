@@ -191,7 +191,7 @@ Rules:
 * Automation target kinds must be exact. A named bus/monitor fader uses `{"kind":"bus_fader","bus":N}`; never use `{"kind":"bus","bus":N}`.
 * For delayed fader/send level changes such as "mets la façade à 0 dB dans 5 secondes", use structured automation targets, not raw OSC addresses. For façade/main LR use `osc_automation_delayed_command` with `{"target":{"kind":"main_fader"},"toDb":0,"delaySeconds":5}` or a macro wait plus ramp step.
 * Use `osc_automation_delayed_command` for delayed one-shot actions. Prefer `target` + `toDb`/`toLevel` for known level writes; use raw `command.address` only when the exact OSC path is documented for the active protocol. Never invent OSC paths.
-* Use `osc_automation_macro` for sequences containing multiple actions and waits. Prefer `ramp` steps over raw `command` steps for known mixer level writes.
+* Use `osc_automation_macro` for sequences containing multiple actions and waits. Prefer `ramp` steps over raw `command` steps for known mixer level writes. In a macro, every `ramp` step must include its own structured `target`; after resolving a name, copy the resolved target into the ramp step. Use `type:"wait"` for delays inside macros (`type:"delay"` is accepted only as a compatibility alias).
 * Resolve all names before starting an automation.
 * Apply the destination rule exactly: if no target is named and no explicit anaphora refers to a previous target, automate main LR/façade.
 * Automation tools return immediately with a job id.
@@ -213,6 +213,9 @@ Examples:
 
 * `baisse la façade puis remonte-la après 5 secondes`
   -> use `osc_automation_macro`
+
+* `dans 5 secondes, fais un fade out de snare`
+  -> resolve `snare`, then use `osc_automation_macro` with steps `[ {"type":"wait","durationSeconds":5}, {"type":"ramp","target":{"kind":"channel_fader","channel":N},"toDb":-120,"durationSeconds":5} ]`
 
 
 ## 10. Safety
