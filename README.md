@@ -213,7 +213,7 @@ For broad inspection, start with low-risk read tools:
 
 1. `osc_get_mixer_status`
 2. `osc_get_console_overview`
-3. Focused strip reads such as `osc_get_channel_strip`, `osc_get_bus_strip`, and `osc_get_main_strip`
+3. Focused strip reads such as `osc_get_channel_strip`, `osc_get_bus_strip`, and `osc_get_main_strip` for detailed diagnostics. For simple user-facing fader level questions, prefer the dedicated fader read tools such as `osc_main_fader` with `unit:"db"`; strip payloads include raw normalized OSC values.
 
 Routing tools are not exposed in this server profile. For XAir/XR-compatible targets, expect unsupported X32-only requests to return `Unsupported for OSCXR: ...`.
 

@@ -1590,7 +1590,7 @@ export const TOOLS: Tool[] = [
     },
     {
         name: "osc_get_channel_strip",
-        description: "Get full channel strip: name, fader, mute, pan, headamp (gain/phantom), EQ (all 4 bands with gain/freq/Q/type), gate (full params), compressor (full params), and all 16 bus sends (level/pan/pre-post)",
+        description: "Get full channel diagnostic strip: name, raw normalized fader, mute, pan, headamp (gain/phantom), EQ, gate, compressor, and bus sends. For a simple user-facing channel fader level in dB, use osc_channel_fader instead.",
         inputSchema: {
             type: "object",
             properties: {
@@ -1606,7 +1606,7 @@ export const TOOLS: Tool[] = [
     },
     {
         name: "osc_get_bus_strip",
-        description: "Get full mix bus strip: name, fader, mute, pan, EQ, dynamics",
+        description: "Get full mix bus diagnostic strip: name, raw normalized fader, mute, pan, EQ, dynamics. For a simple user-facing bus fader level in dB, use osc_bus_fader instead.",
         inputSchema: {
             type: "object",
             properties: {
@@ -1622,7 +1622,7 @@ export const TOOLS: Tool[] = [
     },
     {
         name: "osc_get_aux_strip",
-        description: "Get aux input strip: name, fader, mute, pan, source",
+        description: "Get aux input diagnostic strip: name, raw normalized fader, mute, pan, source. For a simple user-facing aux fader level in dB, use osc_aux_fader instead.",
         inputSchema: {
             type: "object",
             properties: {
@@ -1638,7 +1638,7 @@ export const TOOLS: Tool[] = [
     },
     {
         name: "osc_get_fxreturn_strip",
-        description: "Get FX return strip: name, fader, mute, pan",
+        description: "Get FX return diagnostic strip: name, raw normalized fader, mute, pan. Use this for FX return diagnostics; the fader field is a raw normalized OSC value.",
         inputSchema: {
             type: "object",
             properties: {
@@ -1653,7 +1653,7 @@ export const TOOLS: Tool[] = [
     },
     {
         name: "osc_get_matrix_strip",
-        description: "Get matrix output strip: name, fader, mute, pan, EQ",
+        description: "Get matrix output diagnostic strip: name, raw normalized fader, mute, pan, EQ. For a simple user-facing matrix fader level in dB, use osc_matrix_fader instead.",
         inputSchema: {
             type: "object",
             properties: {
@@ -1669,7 +1669,7 @@ export const TOOLS: Tool[] = [
     },
     {
         name: "osc_get_dca",
-        description: "Get DCA group: name, fader, mute",
+        description: "Get DCA group diagnostic state: name, raw normalized fader, mute.",
         inputSchema: {
             type: "object",
             properties: {
@@ -1684,7 +1684,7 @@ export const TOOLS: Tool[] = [
     },
     {
         name: "osc_get_main_strip",
-        description: "Get main stereo bus: fader, mute, pan, 6-band EQ, dynamics, plus mono bus status",
+        description: "Get main stereo bus diagnostic strip: raw normalized fader, mute, pan, 6-band EQ, dynamics, plus mono bus status. For a simple user-facing main LR level in dB, use osc_main_fader instead.",
         inputSchema: {
             type: "object",
             properties: {},
