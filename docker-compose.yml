@@ -8,6 +8,7 @@ services:
     ports:
       - "8787:8787"
     environment:
+      XMS_SPEAKER_MAP: '{"laurent":{"bus":"Laurent","channel":"guit-Laurent"},"thomas":{"channel":"OH"}}'
       HTTP_HOST: 0.0.0.0
       HTTP_PORT: 8787
       # Set this to the LAN IP or DNS name clients should use to reach the NAS/container host.
