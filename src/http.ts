@@ -345,7 +345,7 @@ function renderMcpAdminPage(): string {
             <label>XMS_SPEAKER_MAP
               <textarea id="speakerMap" name="speakerMap" spellcheck="false" placeholder='{"laurent":{"bus":"Laurent","channel":"Guitar-loran"}}'></textarea>
             </label>
-            <p>Maps recognized voice speakers to mixer bus/channel names. Used by first-person requests such as "mon retour".</p>
+            <p title="Example: {&quot;thomas&quot;:{&quot;bus&quot;:&quot;Thomas&quot;,&quot;channel&quot;:&quot;Talk Thomas&quot;}}">Maps recognized voice speakers to mixer bus/channel names. Used by first-person requests such as "mon retour".</p>
           </fieldset>
           <div class="actions">
             <button id="update-button" type="submit">Update</button>
