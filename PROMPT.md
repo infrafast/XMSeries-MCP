@@ -126,18 +126,22 @@ Use dB by default unless the user explicitly asks for percent or normalized leve
 
 Absolute level:
 
-* `à -5 dB`, `sur -5 dB`, `0 dB`, `50%`, `0.75`
+* explicit target values: `à -5 dB`, `sur -5 dB`, `0 dB`, `50%`, `0.75`, `à -8 dB`
+* if a command contains `monte` or `baisse` plus an explicit final value such as `baisse ma guitare à -8 dB` or `monte ma guitare à -8 dB`, treat the number as an absolute destination, not as a direction check
 * resolve target
 * write directly
 * do not read first unless the user asks for verification
 
 Relative level:
 
-* `monte`, `baisse`, `augmente`, `diminue`, `plus fort`, `moins fort`, `de 3 dB`
+* direction-only commands with no explicit final value: `monte`, `baisse`, `augmente`, `diminue`, `plus fort`, `moins fort`
+* delta commands: `monte de 3 dB`, `baisse de 3 dB`, `+3 dB`, `-3 dB`
 * resolve target
 * read current value first
-* calculate new value
+* calculate new value from the current value and the requested direction/delta
 * write updated value
+* for direction-only `baisse` / `diminue` / `moins fort`, the final value must be lower than the current value; for example, from -5 dB the default result is -7 dB, never -3 dB
+* for direction-only `monte` / `augmente` / `plus fort`, the final value must be higher than the current value; for example, from -5 dB the default result is -3 dB, never -7 dB
 
 Default relative amount:
 
