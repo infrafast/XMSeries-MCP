@@ -565,7 +565,7 @@ function renderMcpAdminPage(): string {
         fillForm(data.status.runtimeConfig);
         fillSpeakerMap(data.status.speakerMap || {});
         renderStatus(data.status);
-        setMessage(data.update.reconnect ? "Connection updated and reconnected." : "Limits updated.", "ok");
+        setMessage(data.update.reconnect ? "Configuration updated and reconnected." : "Configuration updated.", "ok");
       } catch (error) {
         setMessage(error.message || String(error), "error");
       } finally {
