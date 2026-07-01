@@ -17,6 +17,26 @@ Fuzzy matches are suggestions only: never perform a write/mute/routing action fr
 
 If no unique valid target is found, stop and ask for clarification. Never guess.
 
+### Stage source ownership aliases
+
+The current stage channel labels use an instrument-owner convention. Translate the following natural French ownership phrases to their exact mixer channel labels before calling `osc_find_named_target`:
+
+* `guitare de Claude`, `guitare Claude`, `la guitare à Claude` -> `guitar-clode`
+* `guitare de Laurent`, `guitare Laurent`, `la guitare à Laurent` -> `guitar-loran`
+* `guitare d'Anto`, `guitare de Anto`, `guitare Anto`, `la guitare à Anto` -> `guitar-anto`
+* `basse de Mike`, `basse Mike`, `la basse à Mike` -> `basse-mike`
+
+These are source aliases, not destination aliases. Resolve them with `osc_find_named_target` restricted to `channel`. Keep the exact mixer spellings `guitar`, `clode`, `loran`, `anto`, and `basse-mike`; do not silently rewrite the console labels.
+
+In a source-to-destination command, parse ownership before resolving the destination. For example, `monte la guitare de Claude sur Laurent` means:
+
+1. resolve source `guitar-clode` in family `channel`
+2. resolve destination `Laurent` in family `bus`
+3. read the current `guitar-clode` channel send to the Laurent bus
+4. apply the requested relative increase to that send
+
+Do not resolve `Laurent` in this example as channel `guitar-loran`: its position after `sur` makes it the bus destination. If the exact source channel or destination bus is absent or not unique, ask for clarification and do not write.
+
 ## 2. Decision order
 
 Apply this order strictly:
@@ -156,6 +176,19 @@ French STT ambiguity:
 If a French transcription says `montre le son`, `montre le volume`, or `montre <target>` in a clear mixer level context, interpret `montre` as the likely STT error `monte` and treat it as a relative level increase.
 
 Do not apply this correction when the user clearly asks to display, show, list, inspect, read, or report information.
+
+Treat possible noun/verb homophones according to their grammatical position before asking for clarification.
+
+For a source-to-destination phrase shaped like `<direction> <source candidate> sur|dans|vers|chez <destination candidate>`:
+
+* the first token such as `monte`, `augmente`, `baisse`, or `diminue` is the level direction
+* the text between the direction and the destination connector is a source name candidate, even when it resembles another direction word
+* the text after the connector is the destination name candidate, not the fader target
+* resolve both candidates with `osc_find_named_target` according to the mandatory target-resolution and destination rules before deciding that the request is contradictory
+
+In particular, interpret `monte basse sur Claude` as a request to increase the send from the named source `Basse` to the destination `Claude`. Resolve `Basse` as the source and `Claude` as the destination; do not reinterpret `basse` as `baisse`, and do not ask whether the user wants to raise or lower the bus Claude merely because the source name is a homophone. If `Basse` or `Claude` does not resolve uniquely under the normal exact/contains rules, stop and ask for clarification as usual.
+
+Only treat directions as contradictory when the utterance contains two actual direction instructions, for example `monte puis baisse la basse`, rather than a direction followed by a resolvable target name.
 
 ## 7. Tool usage
 
