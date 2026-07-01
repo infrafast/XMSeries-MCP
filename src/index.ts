@@ -217,7 +217,7 @@ function appendOscTrace(toolResult: any, commands: string[], toolName?: string):
 }
 
 type NamedTargetFamily = "channel" | "bus" | "fxreturn" | "aux" | "dca" | "matrix";
-type NamedTargetMatchType = "exact" | "contains" | "fuzzy";
+type NamedTargetMatchType = "exact" | "contains" | "structured" | "fuzzy";
 
 interface NamedTargetMatch {
     family: NamedTargetFamily;
@@ -235,6 +235,40 @@ function normalizeMixerName(value: string): string {
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, " ")
         .trim();
+}
+
+const OWNERSHIP_FILLER_TOKENS = new Set(["a", "d", "de", "des", "du", "l", "la", "le", "les"]);
+const OWNERSHIP_TOKEN_ALIASES: Record<string, string> = {
+    guitare: "guitar",
+    guitares: "guitar",
+};
+
+export function normalizeOwnershipMixerName(value: string): string {
+    return normalizeMixerName(value)
+        .split(" ")
+        .filter((token) => token && !OWNERSHIP_FILLER_TOKENS.has(token))
+        .map((token) => OWNERSHIP_TOKEN_ALIASES[token] || token)
+        .join(" ");
+}
+
+function normalizeFrenchPhoneticToken(value: string): string {
+    return value
+        .replace(/eau/g, "o")
+        .replace(/au/g, "o")
+        .replace(/ent$/g, "an");
+}
+
+export function isStructuredOwnershipMatch(query: string, candidate: string): boolean {
+    const queryTokens = normalizeOwnershipMixerName(query).split(" ").filter(Boolean);
+    const candidateTokens = normalizeOwnershipMixerName(candidate).split(" ").filter(Boolean);
+
+    if (queryTokens.length < 2 || queryTokens.length !== candidateTokens.length) return false;
+    if (queryTokens[0] !== candidateTokens[0]) return false;
+
+    return queryTokens.slice(1).every(
+        (queryToken, index) =>
+            normalizeFrenchPhoneticToken(queryToken) === normalizeFrenchPhoneticToken(candidateTokens[index + 1])
+    );
 }
 
 function editDistance(a: string, b: string): number {
@@ -352,6 +386,12 @@ async function findNamedTargets(
         .map(({ normalizedName: _normalizedName, ...candidate }) => ({ ...candidate, matchType: "contains" as const }));
 
     if (containsMatches.length > 0) return containsMatches;
+
+    const structuredMatches = candidates
+        .filter((candidate) => isStructuredOwnershipMatch(query, candidate.name))
+        .map(({ normalizedName: _normalizedName, ...candidate }) => ({ ...candidate, matchType: "structured" as const }));
+
+    if (structuredMatches.length > 0) return structuredMatches;
 
     return candidates
         .map((candidate) => ({ ...candidate, fuzzyDistance: fuzzyNameDistance(normalizedQuery, candidate.normalizedName) }))
@@ -941,7 +981,7 @@ export const TOOLS: Tool[] = [
     },
     {
         name: "osc_find_named_target",
-        description: "Resolve a user-facing mixer label to concrete indexes in one deterministic scan. Use this before any operation that names a channel, bus/monitor, FX return, aux return, DCA, or matrix by label. Exact name matches win over partial/contains matches: if an exact match exists, contains matches in other names are not ambiguity. If no exact match exists, returns contains matches, then limited fuzzy matches for likely speech-recognition spelling errors. If zero matches or multiple equally plausible matches are returned, ask the user to clarify instead of guessing.",
+        description: "Resolve a user-facing mixer label to concrete indexes in one deterministic scan. Use this before any operation that names a channel, bus/monitor, FX return, aux return, DCA, or matrix by label. Exact name matches win over partial/contains matches. Structured ownership phrases such as 'guitare de Claude' can match labels such as 'guitar-clode' after article, language, and limited French phonetic normalization. A unique structured match is safe to use; fuzzy matches remain suggestions requiring confirmation. If zero matches or multiple equally plausible matches are returned, ask the user to clarify instead of guessing.",
         inputSchema: {
             type: "object",
             properties: {

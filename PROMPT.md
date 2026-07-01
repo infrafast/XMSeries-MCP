@@ -17,25 +17,27 @@ Fuzzy matches are suggestions only: never perform a write/mute/routing action fr
 
 If no unique valid target is found, stop and ask for clarification. Never guess.
 
-### Stage source ownership aliases
+### Instrument-owner channel names
 
-The current stage channel labels use an instrument-owner convention. Translate the following natural French ownership phrases to their exact mixer channel labels before calling `osc_find_named_target`:
+Mixer channel labels may use a generic `<instrument>-<owner>` convention, while users naturally say `<instrument> de <owner>`, `<instrument> d'<owner>`, `<instrument> <owner>`, or `le/la <instrument> à <owner>`.
 
-* `guitare de Claude`, `guitare Claude`, `la guitare à Claude` -> `guitar-clode`
-* `guitare de Laurent`, `guitare Laurent`, `la guitare à Laurent` -> `guitar-loran`
-* `guitare d'Anto`, `guitare de Anto`, `guitare Anto`, `la guitare à Anto` -> `guitar-anto`
-* `basse de Mike`, `basse Mike`, `la basse à Mike` -> `basse-mike`
+Pass the complete natural ownership phrase to `osc_find_named_target`, restricted to `channel`. The resolver removes French ownership articles/connectors, normalizes common language variants such as `guitare` to `guitar`, and applies limited French phonetic normalization to the owner token. This must work from the live mixer labels rather than from a hard-coded list, for example:
 
-These are source aliases, not destination aliases. Resolve them with `osc_find_named_target` restricted to `channel`. Keep the exact mixer spellings `guitar`, `clode`, `loran`, `anto`, and `basse-mike`; do not silently rewrite the console labels.
+* `guitare de Claude` may resolve channel `guitar-clode`
+* `guitare de Laurent` may resolve channel `guitar-loran`
+* `basse de Mike` may resolve channel `basse-mike`
+* `saxophone de Luc` may resolve channel `saxophone-luc`
 
-In a source-to-destination command, parse ownership before resolving the destination. For example, `monte la guitare de Claude sur Laurent` means:
+A single `structured` match is a valid deterministic ownership match. Multiple structured matches are ambiguous and require clarification. Ordinary `fuzzy` matches remain suggestions only and still require confirmation.
 
-1. resolve source `guitar-clode` in family `channel`
+In a source-to-destination command, parse and resolve the complete ownership phrase before resolving the destination. For example, `monte la guitare de Claude sur Laurent` means:
+
+1. resolve source phrase `guitare de Claude` in family `channel`
 2. resolve destination `Laurent` in family `bus`
-3. read the current `guitar-clode` channel send to the Laurent bus
+3. read the resolved channel send to the Laurent bus
 4. apply the requested relative increase to that send
 
-Do not resolve `Laurent` in this example as channel `guitar-loran`: its position after `sur` makes it the bus destination. If the exact source channel or destination bus is absent or not unique, ask for clarification and do not write.
+Do not resolve `Laurent` in this example as an owner channel: its position after `sur` makes it the bus destination. If the source channel or destination bus is absent or not unique, ask for clarification and do not write.
 
 ## 2. Decision order
 

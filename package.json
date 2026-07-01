@@ -14,6 +14,7 @@
         "start:http": "node dist/http.js",
         "prepare": "npm run build",
         "test": "node test-connection.js",
+        "test:name-resolution": "npm run build && node test-name-resolution.mjs",
         "test:llm-tools": "node test-llm-tools.js",
         "start:openai": "node dist/openai-remote.js"
     },

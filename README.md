@@ -263,6 +263,14 @@ This server supports grouped operations so the agent can execute one intent acro
 
 These grouped tools are preferred over issuing many per-bus tool calls because they keep intent explicit, reduce round-trips, and avoid inconsistent partial execution.
 
+### Generic instrument-owner name resolution
+
+`osc_find_named_target` recognizes channel labels that follow an `<instrument>-<owner>` convention from natural French ownership phrases. It removes articles and ownership connectors, maps `guitare` to the common mixer label prefix `guitar`, and uses limited French phonetic normalization only for the owner token. Examples include `guitare de Claude` -> `guitar-clode`, `basse de Mike` -> `basse-mike`, and `saxophone de Luc` -> `saxophone-luc`.
+
+The resolver returns these as `structured` matches. Only a unique structured match is safe to use; multiple structured matches require clarification, and ordinary fuzzy matches still require confirmation. In a phrase such as `monte la guitare de Claude sur Laurent`, resolve the complete ownership phrase in the `channel` family and resolve `Laurent` separately in the `bus` family.
+
+Run the offline name-resolution checks with `npm run test:name-resolution`. They do not connect to a mixer or send OSC writes.
+
 ## Tool groups
 
 Full list is visible to Claude; high-level groupings:
