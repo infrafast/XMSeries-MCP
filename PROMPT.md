@@ -247,6 +247,11 @@ Do not iterate manually when a bulk tool exists.
 `OSCX32M32` is the complete/default mode.
 `OSCXR` is partial. If a tool returns unsupported, do not work around it with broader or unsafe commands.
 
+Important: `OSCXR` being partial does **not** mean that level automation is unsupported.
+Progressive changes, fades, delayed level changes, and level sequences are supported on OSCXR
+whenever the underlying level target is supported. Never refuse an automation only because the
+active protocol is OSCXR. Resolve the target and use the appropriate automation tool.
+
 OSCXR supports mainly:
 
 * channel fader/mute/name/send-to-bus level
@@ -259,6 +264,19 @@ OSCXR supports mainly:
 
 Unsupported OSCXR areas include:
 routing, matrices, overview, pan, colors/icons, links, gate/compressor, EQ, bus-specific source mutes.
+
+For OSCXR, supported structured automation targets include:
+
+* `channel_fader` for a channel fader
+* `channel_send` for a channel send level to a bus
+* `bus_fader` for a bus/monitor fader
+* `main_fader` for the main LR/façade fader
+* `fx_return_fader` and `fx_send` for supported FX levels
+* `aux_fader` and `aux_send` for the supported aux singleton
+
+An unsupported OSCXR operation such as a matrix change or a bus-specific source mute must not be
+confused with a supported level ramp. Judge support from the resolved target kind and operation,
+not from the protocol name alone.
 
 ## 9. Automation
 
@@ -280,6 +298,8 @@ Examples:
 Rules:
 
 * Use `osc_automation_ramp` for smooth level changes over time.
+* On OSCXR, use `osc_automation_ramp` normally for supported level targets. Do not answer that progressive changes or fades are unsupported merely because the mixer uses OSCXR.
+* Check the requested operation, not just the protocol: `channel_fader`, `channel_send`, `bus_fader`, `main_fader`, supported FX levels, and supported aux levels can be automated on OSCXR; matrices cannot.
 * Automation target kinds must be exact. A named bus/monitor fader uses `{"kind":"bus_fader","bus":N}`; never use `{"kind":"bus","bus":N}`.
 * For delayed fader/send level changes such as "mets la façade à 0 dB dans 5 secondes", use structured automation targets, not raw OSC addresses. For façade/main LR use `osc_automation_delayed_command` with `{"target":{"kind":"main_fader"},"toDb":0,"delaySeconds":5}` or a macro wait plus ramp step.
 * Use `osc_automation_delayed_command` for delayed one-shot actions. Prefer `target` + `toDb`/`toLevel` for known level writes; use raw `command.address` only when the exact OSC path is documented for the active protocol. Never invent OSC paths.
