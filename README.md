@@ -269,6 +269,8 @@ These grouped tools are preferred over issuing many per-bus tool calls because t
 
 The resolver returns these as `structured` matches. Only a unique structured match is safe to use; multiple structured matches require clarification, and ordinary fuzzy matches still require confirmation. In a phrase such as `monte la guitare de Claude sur Laurent`, resolve the complete ownership phrase in the `channel` family and resolve `Laurent` separately in the `bus` family.
 
+For source-to-return commands, prefer `osc_resolve_channel_to_bus`. It accepts separate `source` and `destination` strings, resolves the source only among channels and the destination only among buses, and returns `safeToWrite:true` only when both sides are unique non-fuzzy matches. For example, `monte la batterie sur Anthony` becomes `{ "source": "batterie", "destination": "Anthony" }`; never merge it into a channel lookup for `batterie de Anthony`.
+
 Run the offline name-resolution checks with `npm run test:name-resolution`. They do not connect to a mixer or send OSC writes.
 
 ## Tool groups

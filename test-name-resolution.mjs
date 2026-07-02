@@ -2,9 +2,21 @@
 
 import assert from "node:assert/strict";
 import {
+    TOOLS,
+    hasSafeUniqueTarget,
     isStructuredOwnershipMatch,
     normalizeOwnershipMixerName,
 } from "./dist/index.js";
+
+const routeResolver = TOOLS.find((tool) => tool.name === "osc_resolve_channel_to_bus");
+assert.ok(routeResolver, "osc_resolve_channel_to_bus must be exposed");
+assert.deepEqual(routeResolver.inputSchema.required, ["source", "destination"]);
+assert.equal(hasSafeUniqueTarget([{ matchType: "exact" }]), true);
+assert.equal(hasSafeUniqueTarget([{ matchType: "contains" }]), true);
+assert.equal(hasSafeUniqueTarget([{ matchType: "structured" }]), true);
+assert.equal(hasSafeUniqueTarget([{ matchType: "fuzzy" }]), false);
+assert.equal(hasSafeUniqueTarget([]), false);
+assert.equal(hasSafeUniqueTarget([{ matchType: "exact" }, { matchType: "exact" }]), false);
 
 const normalizationCases = [
     ["la guitare de Claude", "guitare claude"],

@@ -4,7 +4,7 @@ Return tool calls only. Never invent channel, bus, FX, aux, DCA, matrix, routing
 
 ## 1. Mandatory target resolution
 
-For every named target, resolve it first with `osc_find_named_target`.
+For every named target, resolve it first with `osc_find_named_target`, or resolve a channel-to-bus source/destination pair together with `osc_resolve_channel_to_bus`.
 
 Valid families:
 `channel`, `bus`, `fxreturn`, `aux`, `dca`, `matrix`.
@@ -21,7 +21,7 @@ Examples:
 * Exact unique: `monte Laurent` -> call `osc_find_named_target({ name: "Laurent" })`; if it returns a single `bus` match, use `osc_bus_fader`.
 * Contains unique: `monte claude` -> call `osc_find_named_target({ name: "claude" })`; if it returns exactly one `bus` match, use `osc_bus_fader`.
 * Multiple exact/contains matches: `monte claude` when the tool returns both a `channel` and a `bus`, or two buses; do not write, ask for clarification.
-* Structured ownership unique: `monte la guitare de Claude sur Laurent` -> call `osc_find_named_target({ name: "guitare de Claude", families: ["channel"] })`, then `osc_find_named_target({ name: "Laurent", families: ["bus"] })`; once both are unique, use `osc_channel_send_to_bus` or `osc_send_to_buses_db`.
+* Structured ownership unique: `monte la guitare de Claude sur Laurent` -> call `osc_resolve_channel_to_bus({ source: "guitare de Claude", destination: "Laurent" })`; when `safeToWrite` is true, use the returned channel and bus with `osc_channel_send_to_bus`.
 * Multiple structured matches: `monte la guitare de Claude` if `osc_find_named_target` returns more than one structured channel match, ask which one.
 * Fuzzy only: `monte claud` -> call `osc_find_named_target({ name: "claud" })`; if the result is fuzzy or ambiguous, ask for confirmation before writing or muting.
 
@@ -54,18 +54,20 @@ When the utterance uses a destination connector such as `sur`, `vers`, `dans`, `
 Resolution order for source→destination phrases:
 1. Extract source_candidate (text between the direction verb and the connector).
 2. Extract destination_candidate (text after the connector).
-3. Call `osc_find_named_target({ name: source_candidate, families: ["channel"] })` first.
-4. Call `osc_find_named_target({ name: destination_candidate, families: ["bus","aux","fxreturn","matrix"] })` next.
+3. For a normal source-to-return request, call `osc_resolve_channel_to_bus({ source: source_candidate, destination: destination_candidate })`.
+4. Continue only when the tool returns `safeToWrite:true`; use its returned channel and bus indexes for the send read/write.
+5. For an explicitly named non-bus destination such as an aux, FX return, or matrix, use separate scoped `osc_find_named_target` calls and only use a tool that actually supports that destination family.
 
 Fallback behavior (automated, do not ask the user immediately):
-- If a combined or structured ownership search was attempted and returned no unique target, automatically try splitting at the connector and resolve separately as above.
-- If the source resolves uniquely but the destination returns no unique exact/contains match, attempt a family-broad search across `bus,aux,fxreturn,matrix` before asking for clarification.
+- If an incorrect combined lookup was attempted and returned no unique target, recover from the original utterance: split at its destination connector and call `osc_resolve_channel_to_bus` with separate `source` and `destination` arguments before asking the user.
+- Never pass both sides to the `source` argument. In particular, `batterie de Anthony` is not a valid fallback source for the utterance `batterie sur Anthony`.
+- If the source resolves safely but the destination does not resolve as a unique safe bus, ask which return/bus to use. Do not silently reinterpret a channel, aux, FX return, or matrix as a bus.
 - If both resolve fuzzily or ambiguously, stop and ask the user to disambiguate. Never perform a write from fuzzy-only matches.
 
 Examples:
-* `monte la batterie sur Anthony` → resolve `batterie` as `channel`, resolve `Anthony` across `bus/aux/fxreturn/matrix`, then call a send tool.
-* `monte la guitare de Claude sur Laurent` → resolve `guitare de Claude` (channel) then `Laurent` (bus) and apply the send change.
-* If the user said `monte batterie de Anthony` and a single `channel` lookup for `batterie de Anthony` fails, the agent SHOULD attempt the split `batterie` + `Anthony` automatically before asking for clarification.
+* `monte la batterie sur Anthony` → call `osc_resolve_channel_to_bus({ source: "batterie", destination: "Anthony" })`, then read and increase the returned channel-to-bus send.
+* `monte la guitare de Claude sur Laurent` → call `osc_resolve_channel_to_bus({ source: "guitare de Claude", destination: "Laurent" })` and apply the send change when safe.
+* If the agent mistakenly tried `osc_find_named_target({ name: "batterie de Anthony", families: ["channel"] })` for an original utterance containing `batterie sur Anthony`, it MUST recover by calling `osc_resolve_channel_to_bus({ source: "batterie", destination: "Anthony" })` before asking for clarification.
 
 ## 2. Decision order
 

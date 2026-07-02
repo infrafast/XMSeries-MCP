@@ -54,40 +54,15 @@ export function getOscRuntimeConfig(): OscRuntimeConfig {
 }
 const DEBUG_ENABLED = process.env.DEBUG === "1" || process.env.DEBUG?.toLowerCase() === "true";
 const PROMPT_RESOURCE_URI = "agent://prompt/system";
-        const fuzzyMatches = candidates
-            .map((candidate) => ({ ...candidate, fuzzyDistance: fuzzyNameDistance(normalizedQuery, candidate.normalizedName) }))
-            .filter((candidate): candidate is typeof candidate & { fuzzyDistance: number } => candidate.fuzzyDistance !== null)
-            .sort((a, b) => a.fuzzyDistance - b.fuzzyDistance)
-            .map(({ normalizedName: _normalizedName, fuzzyDistance: _fuzzyDistance, ...candidate }) => ({
-                ...candidate,
-                matchType: "fuzzy" as const,
-            }));
+const PROMPT_NAME = "agent_prompt";
+const LEGACY_PROMPT_NAME = "xmseries_mixer_assistant";
+const PROMPT_FILE = process.env.MCP_PROMPT_FILE
+    ? path.resolve(process.env.MCP_PROMPT_FILE)
+    : path.resolve(__dirname, "..", "PROMPT.md");
+
+async function readAgentPrompt(): Promise<string> {
+    return await readFile(PROMPT_FILE, "utf8");
 }
-        if (fuzzyMatches.length > 0) return fuzzyMatches;
-
-        // Fallback: if the query contains a destination connector (e.g. 'sur', 'vers', 'dans', 'chez', 'to', 'in'),
-        // try splitting the phrase into source (left) and destination (right) and re-run scoped searches.
-        const connectorRegex = /\b(sur|vers|dans|chez|to|in)\b/i;
-        if (connectorRegex.test(query)) {
-            const parts = query.split(connectorRegex);
-            if (parts.length >= 3) {
-                const left = parts[0].trim();
-                const right = parts.slice(2).join(" ").trim();
-                // Try left as channel if caller allowed channel family
-                if (families.includes("channel") && left) {
-                    const leftMatches = await findNamedTargets(left, ["channel"]);
-                    if (leftMatches && leftMatches.length > 0) return leftMatches;
-                }
-                // Try right as bus/aux/fxreturn/matrix if caller allowed any of these
-                const destFamilies: NamedTargetFamily[] = ["bus", "aux", "fxreturn", "matrix"];
-                if (families.some((f) => destFamilies.includes(f)) && right) {
-                    const rightMatches = await findNamedTargets(right, destFamilies.filter((f) => families.includes(f)) as NamedTargetFamily[]);
-                    if (rightMatches && rightMatches.length > 0) return rightMatches;
-                }
-            }
-        }
-
-        return [];
 
 function createOscClient(config: OscRuntimeConfig): OSCClient {
     return new OSCClient(config.host, config.port, config.protocol, {
@@ -225,7 +200,7 @@ function appendOscTrace(toolResult: any, commands: string[], toolName?: string):
     }
 
     const traceText =
-        toolName === "osc_find_named_target"
+        toolName === "osc_find_named_target" || toolName === "osc_resolve_channel_to_bus"
             ? `OSC trace:\n${commands.length} name-resolution OSC read(s) omitted from the MCP response; see server logs for details.`
             : `OSC trace:\n${commands.join("\n")}`;
 
@@ -242,13 +217,17 @@ function appendOscTrace(toolResult: any, commands: string[], toolName?: string):
 }
 
 type NamedTargetFamily = "channel" | "bus" | "fxreturn" | "aux" | "dca" | "matrix";
-type NamedTargetMatchType = "exact" | "contains" | "structured" | "fuzzy";
+export type NamedTargetMatchType = "exact" | "contains" | "structured" | "fuzzy";
 
 interface NamedTargetMatch {
     family: NamedTargetFamily;
     index: number;
     name: string;
     matchType: NamedTargetMatchType;
+}
+
+export function hasSafeUniqueTarget(matches: Array<{ matchType: NamedTargetMatchType }>): boolean {
+    return matches.length === 1 && matches[0].matchType !== "fuzzy";
 }
 
 const NAMED_TARGET_FAMILIES: NamedTargetFamily[] = ["channel", "bus", "fxreturn", "aux", "dca", "matrix"];
@@ -1001,6 +980,24 @@ export const TOOLS: Tool[] = [
                 },
             },
             required: ["speaker"],
+        },
+    },
+    {
+        name: "osc_resolve_channel_to_bus",
+        description: "Resolve a source channel and destination mix bus as one route without merging their names. Use this first for source-to-return phrases such as 'monte la batterie sur Anthony': source='batterie', destination='Anthony'. The result is safe for a send write only when safeToWrite=true; fuzzy or ambiguous matches are never safe.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                source: {
+                    type: "string",
+                    description: "Source channel name or complete ownership phrase, such as 'batterie' or 'guitare de Claude'. Never include the destination.",
+                },
+                destination: {
+                    type: "string",
+                    description: "Destination mix-bus/return name, such as 'Anthony'. Never include the source.",
+                },
+            },
+            required: ["source", "destination"],
         },
     },
     {
@@ -2081,6 +2078,60 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                                     searchedFamilies: selectedFamilies,
                                     matches,
                                     unique: matches.length === 1,
+                                },
+                                null,
+                                2
+                            ),
+                        },
+                    ],
+                };
+            }
+
+            case "osc_resolve_channel_to_bus": {
+                const { source, destination } = args as { source?: string; destination?: string };
+                const sourceQuery = String(source || "").trim();
+                const destinationQuery = String(destination || "").trim();
+                if (!sourceQuery || !destinationQuery) {
+                    throw new Error("Both source and destination are required for channel-to-bus resolution.");
+                }
+
+                const sourceMatches = await findNamedTargets(sourceQuery, ["channel"]);
+                const destinationMatches = await findNamedTargets(destinationQuery, ["bus"]);
+                const sourceMatch = sourceMatches.length === 1 ? sourceMatches[0] : null;
+                const destinationMatch = destinationMatches.length === 1 ? destinationMatches[0] : null;
+                const sourceSafe = hasSafeUniqueTarget(sourceMatches);
+                const destinationSafe = hasSafeUniqueTarget(destinationMatches);
+
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: JSON.stringify(
+                                {
+                                    source: {
+                                        query: sourceQuery,
+                                        searchedFamilies: ["channel"],
+                                        matches: sourceMatches,
+                                        unique: sourceMatches.length === 1,
+                                        safe: sourceSafe,
+                                    },
+                                    destination: {
+                                        query: destinationQuery,
+                                        searchedFamilies: ["bus"],
+                                        matches: destinationMatches,
+                                        unique: destinationMatches.length === 1,
+                                        safe: destinationSafe,
+                                    },
+                                    safeToWrite: sourceSafe && destinationSafe,
+                                    route:
+                                        sourceSafe && destinationSafe
+                                            ? {
+                                                  channel: sourceMatch?.index,
+                                                  channelName: sourceMatch?.name,
+                                                  bus: destinationMatch?.index,
+                                                  busName: destinationMatch?.name,
+                                              }
+                                            : null,
                                 },
                                 null,
                                 2
