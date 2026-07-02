@@ -238,16 +238,11 @@ function normalizeMixerName(value: string): string {
 }
 
 const OWNERSHIP_FILLER_TOKENS = new Set(["a", "d", "de", "des", "du", "l", "la", "le", "les"]);
-const OWNERSHIP_TOKEN_ALIASES: Record<string, string> = {
-    guitare: "guitar",
-    guitares: "guitar",
-};
 
 export function normalizeOwnershipMixerName(value: string): string {
     return normalizeMixerName(value)
         .split(" ")
         .filter((token) => token && !OWNERSHIP_FILLER_TOKENS.has(token))
-        .map((token) => OWNERSHIP_TOKEN_ALIASES[token] || token)
         .join(" ");
 }
 
@@ -255,7 +250,8 @@ function normalizeFrenchPhoneticToken(value: string): string {
     return value
         .replace(/eau/g, "o")
         .replace(/au/g, "o")
-        .replace(/ent$/g, "an");
+        .replace(/ent$/g, "an")
+        .replace(/guitares?$/g, "guitar");
 }
 
 export function isStructuredOwnershipMatch(query: string, candidate: string): boolean {
@@ -263,12 +259,15 @@ export function isStructuredOwnershipMatch(query: string, candidate: string): bo
     const candidateTokens = normalizeOwnershipMixerName(candidate).split(" ").filter(Boolean);
 
     if (queryTokens.length < 2 || queryTokens.length !== candidateTokens.length) return false;
-    if (queryTokens[0] !== candidateTokens[0]) return false;
 
-    return queryTokens.slice(1).every(
-        (queryToken, index) =>
-            normalizeFrenchPhoneticToken(queryToken) === normalizeFrenchPhoneticToken(candidateTokens[index + 1])
-    );
+    const normalizedQueryTokens = queryTokens.map(normalizeFrenchPhoneticToken);
+    const normalizedCandidateTokens = candidateTokens.map(normalizeFrenchPhoneticToken);
+
+    if (normalizedQueryTokens[0] !== normalizedCandidateTokens[0]) return false;
+
+    return normalizedQueryTokens
+        .slice(1)
+        .every((queryToken, index) => queryToken === normalizedCandidateTokens[index + 1]);
 }
 
 function editDistance(a: string, b: string): number {

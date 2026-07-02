@@ -7,8 +7,8 @@ import {
 } from "./dist/index.js";
 
 const normalizationCases = [
-    ["la guitare de Claude", "guitar claude"],
-    ["guitare d'Anto", "guitar anto"],
+    ["la guitare de Claude", "guitare claude"],
+    ["guitare d'Anto", "guitare anto"],
     ["la basse à Mike", "basse mike"],
     ["saxophone de Luc", "saxophone luc"],
 ];

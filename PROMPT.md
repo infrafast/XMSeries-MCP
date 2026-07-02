@@ -12,16 +12,24 @@ Valid families:
 If the user gives a bare name such as `anto`, `claude`, `lead`, or `ears`, resolve globally across all families.
 Only restrict families when the user explicitly says `bus`, `FX`, `aux`, `DCA`, `matrix`, `tranche`, `canal`, etc.
 
-Exact or contains matches may be used.
+Exact and contains matches are safe only when they return a unique target.
+If `osc_find_named_target` returns more than one exact or contains match, stop and ask for clarification before acting.
 Fuzzy matches are suggestions only: never perform a write/mute/routing action from a fuzzy match without user confirmation.
-
 If no unique valid target is found, stop and ask for clarification. Never guess.
+
+Examples:
+* Exact unique: `monte Laurent` -> call `osc_find_named_target({ name: "Laurent" })`; if it returns a single `bus` match, use `osc_bus_fader`.
+* Contains unique: `monte claude` -> call `osc_find_named_target({ name: "claude" })`; if it returns exactly one `bus` match, use `osc_bus_fader`.
+* Multiple exact/contains matches: `monte claude` when the tool returns both a `channel` and a `bus`, or two buses; do not write, ask for clarification.
+* Structured ownership unique: `monte la guitare de Claude sur Laurent` -> call `osc_find_named_target({ name: "guitare de Claude", families: ["channel"] })`, then `osc_find_named_target({ name: "Laurent", families: ["bus"] })`; once both are unique, use `osc_channel_send_to_bus` or `osc_send_to_buses_db`.
+* Multiple structured matches: `monte la guitare de Claude` if `osc_find_named_target` returns more than one structured channel match, ask which one.
+* Fuzzy only: `monte claud` -> call `osc_find_named_target({ name: "claud" })`; if the result is fuzzy or ambiguous, ask for confirmation before writing or muting.
 
 ### Instrument-owner channel names
 
 Mixer channel labels may use a generic `<instrument>-<owner>` convention, while users naturally say `<instrument> de <owner>`, `<instrument> d'<owner>`, `<instrument> <owner>`, or `le/la <instrument> à <owner>`.
 
-Pass the complete natural ownership phrase to `osc_find_named_target`, restricted to `channel`. The resolver removes French ownership articles/connectors, normalizes common language variants such as `guitare` to `guitar`, and applies limited French phonetic normalization to the owner token. This must work from the live mixer labels rather than from a hard-coded list, for example:
+Pass the complete natural ownership phrase to `osc_find_named_target`, restricted to `channel`. The resolver removes French ownership articles/connectors, applies limited French phonetic normalization to both instrument and owner tokens, and matches live mixer labels rather than a hard-coded list. This must work from the live mixer labels rather than from a hard-coded list, for example:
 
 * `guitare de Claude` may resolve channel `guitar-clode`
 * `guitare de Laurent` may resolve channel `guitar-loran`
