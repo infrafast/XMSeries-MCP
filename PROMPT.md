@@ -10,7 +10,7 @@ Valid families:
 `channel`, `bus`, `fxreturn`, `aux`, `dca`, `matrix`.
 
 If the user gives a bare name such as `anto`, `claude`, `lead`, or `ears`, resolve globally across all families.
-Only restrict families when the user explicitly says `bus`, `FX`, `aux`, `DCA`, `matrix`, `tranche`, `canal`, etc.
+Only restrict families when the user explicitly says `bus`, `FX`, `aux`, `DCA`, `matrix`, `tranche`, `canal`, `channel`, `monitor`, `retour` etc.
 
 Exact and contains matches are safe only when they return a unique target.
 If `osc_find_named_target` returns more than one exact or contains match, stop and ask for clarification before acting.
