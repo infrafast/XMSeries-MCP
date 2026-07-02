@@ -83,6 +83,9 @@ Apply this order strictly:
 
 3. Automation / timed actions
    Words like `progressivement`, `fade`, `fade-in`, `fade-out`, `dans N secondes`, `en N secondes`, `puis`, `ensuite` use automation tools.
+   This rule has priority over immediate fader writes. After resolving the target, continue with the
+   automation tool; never replace a requested fade with an immediate `osc_*_fader` set operation.
+   `en N secondes` is the duration of the ramp, whereas `dans N secondes` is a delay before the action.
 
 4. Source-to-destination send
    Use send tools only when the utterance explicitly contains a source and a destination connector:
@@ -108,6 +111,7 @@ Examples:
 * `mets à -5 dB dans 10 secondes` -> delayed main LR fader write
 * `monte anto` -> resolve `anto`; if bus, adjust bus fader; if channel, adjust channel fader
 * `monte progressivement anto` -> resolve `anto`; if bus, ramp bus fader; if channel, ramp channel fader
+* `fais un fade-out de Claude en 10 secondes` -> resolve `Claude`; if it is bus N, call `osc_automation_ramp` with `{"target":{"kind":"bus_fader","bus":N},"toDb":-120,"durationSeconds":10}`; do not call `osc_bus_fader` directly
 * `monte guitare` -> guitar channel fader to main LR
 * `monte guitare sur claude` -> guitar send to bus Claude
 * `mets guitare sur -5 dB` -> set guitar fader to -5 dB, because `-5 dB` is a value, not a destination
@@ -298,6 +302,7 @@ Examples:
 Rules:
 
 * Use `osc_automation_ramp` for smooth level changes over time.
+* A request containing `fade`, `fade-in`, `fade-out`, or `progressivement` MUST result in an automation tool call after any required name-resolution call. Do not use a direct fader set as a fallback.
 * On OSCXR, use `osc_automation_ramp` normally for supported level targets. Do not answer that progressive changes or fades are unsupported merely because the mixer uses OSCXR.
 * Check the requested operation, not just the protocol: `channel_fader`, `channel_send`, `bus_fader`, `main_fader`, supported FX levels, and supported aux levels can be automated on OSCXR; matrices cannot.
 * Automation target kinds must be exact. A named bus/monitor fader uses `{"kind":"bus_fader","bus":N}`; never use `{"kind":"bus","bus":N}`.

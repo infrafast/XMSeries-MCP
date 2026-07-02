@@ -1053,13 +1053,13 @@ export const TOOLS: Tool[] = [
     },
     {
         name: "osc_automation_ramp",
-        description: "Start a background automation that ramps one numeric OSC mixer target over time. Use this for fade-in, fade-out, progressive level changes, and smooth mix changes. Returns immediately with an automation id.",
+        description: "Start a background automation that ramps one numeric mixer level over time. MUST be used for fade-in, fade-out, 'progressively', 'en N secondes', and other smooth level changes instead of setting a fader directly. Fully supported on OSCXR for mapped level targets including channel_fader, channel_send, bus_fader, main_fader, FX, and aux levels; OSCXR partial support is not a reason to refuse these ramps. Example: after resolving 'fade-out de Claude en 10 secondes' to bus 2, call with target={kind:'bus_fader',bus:2}, toDb=-120, durationSeconds=10. Returns immediately with an automation id.",
         inputSchema: {
             type: "object",
             properties: {
                 target: {
                     type: "object",
-                    description: "Target to automate. Use channel_fader for source on main LR, channel_send for source to bus, bus_fader for a named bus/monitor fader, main_fader, fx_return_fader, fx_send, aux_fader, aux_send, matrix_fader, or raw. Never use kind='bus'; use kind='bus_fader'.",
+                    description: "Target to automate. Use channel_fader for source on main LR, channel_send for source to bus, bus_fader for a named bus/monitor fader, main_fader, fx_return_fader, fx_send, aux_fader, aux_send, matrix_fader, or raw. Never use kind='bus'; use kind='bus_fader'. On OSCXR all listed mapped level targets are supported except matrix_fader.",
                     properties: {
                         kind: { type: "string", enum: ["channel_fader", "channel_send", "bus_fader", "main_fader", "fx_return_fader", "fx_send", "aux_fader", "aux_send", "matrix_fader", "raw"] },
                         channel: { type: "number" },
