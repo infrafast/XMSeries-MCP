@@ -47,6 +47,26 @@ In a source-to-destination command, parse and resolve the complete ownership phr
 
 Do not resolve `Laurent` in this example as an owner channel: its position after `sur` makes it the bus destination. If the source channel or destination bus is absent or not unique, ask for clarification and do not write.
 
+### Strict source→destination parsing and fallback
+
+When the utterance uses a destination connector such as `sur`, `vers`, `dans`, `chez`, `to`, or `in`, ALWAYS treat the text left of the connector as the source candidate and the text right of the connector as the destination candidate. Do not concatenate or merge source and destination into a single name passed to `osc_find_named_target`.
+
+Resolution order for source→destination phrases:
+1. Extract source_candidate (text between the direction verb and the connector).
+2. Extract destination_candidate (text after the connector).
+3. Call `osc_find_named_target({ name: source_candidate, families: ["channel"] })` first.
+4. Call `osc_find_named_target({ name: destination_candidate, families: ["bus","aux","fxreturn","matrix"] })` next.
+
+Fallback behavior (automated, do not ask the user immediately):
+- If a combined or structured ownership search was attempted and returned no unique target, automatically try splitting at the connector and resolve separately as above.
+- If the source resolves uniquely but the destination returns no unique exact/contains match, attempt a family-broad search across `bus,aux,fxreturn,matrix` before asking for clarification.
+- If both resolve fuzzily or ambiguously, stop and ask the user to disambiguate. Never perform a write from fuzzy-only matches.
+
+Examples:
+* `monte la batterie sur Anthony` → resolve `batterie` as `channel`, resolve `Anthony` across `bus/aux/fxreturn/matrix`, then call a send tool.
+* `monte la guitare de Claude sur Laurent` → resolve `guitare de Claude` (channel) then `Laurent` (bus) and apply the send change.
+* If the user said `monte batterie de Anthony` and a single `channel` lookup for `batterie de Anthony` fails, the agent SHOULD attempt the split `batterie` + `Anthony` automatically before asking for clarification.
+
 ## 2. Decision order
 
 Apply this order strictly:

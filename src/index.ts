@@ -54,15 +54,40 @@ export function getOscRuntimeConfig(): OscRuntimeConfig {
 }
 const DEBUG_ENABLED = process.env.DEBUG === "1" || process.env.DEBUG?.toLowerCase() === "true";
 const PROMPT_RESOURCE_URI = "agent://prompt/system";
-const PROMPT_NAME = "agent_prompt";
-const LEGACY_PROMPT_NAME = "xmseries_mixer_assistant";
-const PROMPT_FILE = process.env.MCP_PROMPT_FILE
-    ? path.resolve(process.env.MCP_PROMPT_FILE)
-    : path.resolve(__dirname, "..", "PROMPT.md");
-
-async function readAgentPrompt(): Promise<string> {
-    return await readFile(PROMPT_FILE, "utf8");
+        const fuzzyMatches = candidates
+            .map((candidate) => ({ ...candidate, fuzzyDistance: fuzzyNameDistance(normalizedQuery, candidate.normalizedName) }))
+            .filter((candidate): candidate is typeof candidate & { fuzzyDistance: number } => candidate.fuzzyDistance !== null)
+            .sort((a, b) => a.fuzzyDistance - b.fuzzyDistance)
+            .map(({ normalizedName: _normalizedName, fuzzyDistance: _fuzzyDistance, ...candidate }) => ({
+                ...candidate,
+                matchType: "fuzzy" as const,
+            }));
 }
+        if (fuzzyMatches.length > 0) return fuzzyMatches;
+
+        // Fallback: if the query contains a destination connector (e.g. 'sur', 'vers', 'dans', 'chez', 'to', 'in'),
+        // try splitting the phrase into source (left) and destination (right) and re-run scoped searches.
+        const connectorRegex = /\b(sur|vers|dans|chez|to|in)\b/i;
+        if (connectorRegex.test(query)) {
+            const parts = query.split(connectorRegex);
+            if (parts.length >= 3) {
+                const left = parts[0].trim();
+                const right = parts.slice(2).join(" ").trim();
+                // Try left as channel if caller allowed channel family
+                if (families.includes("channel") && left) {
+                    const leftMatches = await findNamedTargets(left, ["channel"]);
+                    if (leftMatches && leftMatches.length > 0) return leftMatches;
+                }
+                // Try right as bus/aux/fxreturn/matrix if caller allowed any of these
+                const destFamilies: NamedTargetFamily[] = ["bus", "aux", "fxreturn", "matrix"];
+                if (families.some((f) => destFamilies.includes(f)) && right) {
+                    const rightMatches = await findNamedTargets(right, destFamilies.filter((f) => families.includes(f)) as NamedTargetFamily[]);
+                    if (rightMatches && rightMatches.length > 0) return rightMatches;
+                }
+            }
+        }
+
+        return [];
 
 function createOscClient(config: OscRuntimeConfig): OSCClient {
     return new OSCClient(config.host, config.port, config.protocol, {
