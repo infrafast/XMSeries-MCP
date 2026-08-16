@@ -1612,7 +1612,7 @@ export class OSCClient {
 
     async getFullFxChain(): Promise<any[]> {
         if (this.protocol === "OSCXR") {
-            this.unsupportedForXR("Full FX chain includes source assignment fields not mapped in PROTOCOL.md yet; use osc_get_all_effects and osc_get_fxreturn_strip.");
+            this.unsupportedForXR("Full FX chain includes source assignment fields not mapped in PROTOCOL.md yet.");
         }
         // For each FX slot: type, source assignment, params, and FX return state
         const chains: any[] = [];

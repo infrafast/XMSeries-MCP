@@ -1279,26 +1279,6 @@ export const TOOLS: Tool[] = [
         },
     },
     {
-        name: "osc_set_channel_name",
-        description: "Set the name of a channel",
-        inputSchema: {
-            type: "object",
-            properties: {
-                channel: {
-                    type: "number",
-                    description: "Channel number (1-32)",
-                    minimum: 1,
-                    maximum: 32,
-                },
-                name: {
-                    type: "string",
-                    description: "Channel name (X32 accepts up to 12 characters; longer names get silently truncated by the console)",
-                },
-            },
-            required: ["channel", "name"],
-        },
-    },
-    {
         name: "osc_get_channel_name",
         description: "Get the name of a channel",
         inputSchema: {
@@ -1661,55 +1641,6 @@ export const TOOLS: Tool[] = [
             required: ["mute"],
         },
     },
-    // ========== Matrix ==========
-    {
-        name: "osc_matrix_fader",
-        description: "Get or set a matrix fader. Use unit='db' for dB requests; default unit='db' for reads; set actions require explicit unit. X32/M32 only; matrices are not mapped in OSCXR.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                action: { type: "string", enum: ["get", "set"] },
-                matrix: {
-                    type: "number",
-                    description: "Matrix number (1-6)",
-                    minimum: 1,
-                    maximum: 6,
-                },
-                unit: {
-                    type: "string",
-                    enum: ["level", "percent", "db"],
-                    description: "level = normalized 0.0..1.0; percent = 0..100%; db = X32/M32 fader dB table. Defaults to db for reads; required for set.",
-                },
-                value: {
-                    type: "number",
-                    description: "Required for action='set', together with explicit unit. Normalized level when unit='level', percentage when unit='percent', dB value when unit='db'.",
-                    minimum: -120,
-                    maximum: 100,
-                },
-            },
-            required: ["action", "matrix"],
-        },
-    },
-    {
-        name: "osc_mute_matrix",
-        description: "Mute or unmute a matrix output",
-        inputSchema: {
-            type: "object",
-            properties: {
-                matrix: {
-                    type: "number",
-                    description: "Matrix number (1-6)",
-                    minimum: 1,
-                    maximum: 6,
-                },
-                mute: {
-                    type: "boolean",
-                    description: "True to mute, false to unmute",
-                },
-            },
-            required: ["matrix", "mute"],
-        },
-    },
     // ========== Effects ==========
     {
         name: "osc_get_effect_on",
@@ -1724,140 +1655,6 @@ export const TOOLS: Tool[] = [
                 },
             },
             required: ["effect"],
-        },
-    },
-    {
-        name: "osc_get_all_effects",
-        description: "Get a summary of all configured FX slots using the current runtime fxCount, including type and first 8 parameters",
-        inputSchema: {
-            type: "object",
-            properties: {},
-        },
-    },
-    {
-        name: "osc_get_channel_strip",
-        description: "Get full channel diagnostic strip: name, raw normalized fader, mute, pan, headamp (gain/phantom), EQ, gate, compressor, and bus sends. For a simple user-facing channel fader level in dB, use osc_channel_fader instead.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                channel: {
-                    type: "number",
-                    description: "Channel number (1-32)",
-                    minimum: 1,
-                    maximum: 32,
-                },
-            },
-            required: ["channel"],
-        },
-    },
-    {
-        name: "osc_get_bus_strip",
-        description: "Get full mix bus diagnostic strip: name, raw normalized fader, mute, pan, EQ, dynamics. For a simple user-facing bus fader level in dB, use osc_bus_fader instead.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                bus: {
-                    type: "number",
-                    description: "Bus number (1-16)",
-                    minimum: 1,
-                    maximum: 16,
-                },
-            },
-            required: ["bus"],
-        },
-    },
-    {
-        name: "osc_get_aux_strip",
-        description: "Get aux input diagnostic strip: name, raw normalized fader, mute, pan, source. For a simple user-facing aux fader level in dB, use osc_aux_fader instead.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                aux: {
-                    type: "number",
-                    description: "Aux input number (1-8)",
-                    minimum: 1,
-                    maximum: 8,
-                },
-            },
-            required: ["aux"],
-        },
-    },
-    {
-        name: "osc_get_fxreturn_strip",
-        description: "Get FX return diagnostic strip: name, raw normalized fader, mute, pan. Use this for FX return diagnostics; the fader field is a raw normalized OSC value.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                fxreturn: {
-                    type: "number",
-                    description: "FX return number within the current runtime fxCount.",
-                    minimum: 1,
-                },
-            },
-            required: ["fxreturn"],
-        },
-    },
-    {
-        name: "osc_get_matrix_strip",
-        description: "Get matrix output diagnostic strip: name, raw normalized fader, mute, pan, EQ. For a simple user-facing matrix fader level in dB, use osc_matrix_fader instead.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                matrix: {
-                    type: "number",
-                    description: "Matrix number (1-6)",
-                    minimum: 1,
-                    maximum: 6,
-                },
-            },
-            required: ["matrix"],
-        },
-    },
-    {
-        name: "osc_get_dca",
-        description: "Get DCA group diagnostic state: name, raw normalized fader, mute.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                dca: {
-                    type: "number",
-                    description: "DCA group number within the current runtime dcaCount.",
-                    minimum: 1,
-                },
-            },
-            required: ["dca"],
-        },
-    },
-    {
-        name: "osc_get_main_strip",
-        description: "Get main stereo bus diagnostic strip: raw normalized fader, mute, pan, 6-band EQ, dynamics, plus mono bus status. For a simple user-facing main LR level in dB, use osc_main_fader instead.",
-        inputSchema: {
-            type: "object",
-            properties: {},
-        },
-    },
-    {
-        name: "osc_get_headamp",
-        description: "Get headamp/preamp settings: gain and phantom power for a given headamp index (0-63 for local, 64-127 for AES50-A, 128-191 for AES50-B)",
-        inputSchema: {
-            type: "object",
-            properties: {
-                index: {
-                    type: "number",
-                    description: "Headamp index (0-191)",
-                    minimum: 0,
-                    maximum: 191,
-                },
-            },
-            required: ["index"],
-        },
-    },
-    {
-        name: "osc_get_console_overview",
-        description: "Get a high-level overview of the ENTIRE console using the current runtime channel/bus/FX/DCA limits, plus matrices, aux inputs, and main bus. Warning: this reads many parameters so takes several seconds.",
-        inputSchema: {
-            type: "object",
-            properties: {},
         },
     },
     {
@@ -1877,33 +1674,6 @@ export const TOOLS: Tool[] = [
                 },
             },
             required: ["effect", "on"],
-        },
-    },
-    {
-        name: "osc_set_effect_param",
-        description: "Set a parameter value for an effect",
-        inputSchema: {
-            type: "object",
-            properties: {
-                effect: {
-                    type: "number",
-                    description: "Effect number within the current runtime fxCount.",
-                    minimum: 1,
-                },
-                param: {
-                    type: "number",
-                    description: "Parameter number (1-16)",
-                    minimum: 1,
-                    maximum: 16,
-                },
-                value: {
-                    type: "number",
-                    description: "Parameter value (0.0 to 1.0)",
-                    minimum: 0,
-                    maximum: 1,
-                },
-            },
-            required: ["effect", "param", "value"],
         },
     },
     // ========== Status ==========
@@ -2299,19 +2069,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 };
             }
 
-            case "osc_set_channel_name": {
-                const { channel, name } = args as { channel: number; name: string };
-                await osc.setChannelName(channel, name);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Set channel ${channel} name to "${name}"`,
-                        },
-                    ],
-                };
-            }
-
             case "osc_get_channel_name": {
                 const { channel } = args as { channel: number };
                 const name = await osc.getChannelName(channel);
@@ -2608,37 +2365,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 };
             }
 
-            // ========== Matrix ==========
-            case "osc_matrix_fader": {
-                const { matrix, ...levelInput } = args as unknown as { matrix: number } & LevelToolInput;
-                const operation = parseLevelOperation(levelInput);
-                const label = `Matrix ${matrix} fader`;
-                if (operation.action === "get") {
-                    const level = await osc.getMatrixFader(matrix);
-                    return { content: [{ type: "text", text: formatLevelRead(label, level, operation.unit) }] };
-                }
-
-                const target = levelValueToNormalized(operation);
-                await osc.setMatrixFader(matrix, target.level);
-                return { content: [{ type: "text", text: `Set ${label.toLowerCase()} to ${target.text}` }] };
-            }
-
-            case "osc_mute_matrix": {
-                const { matrix, mute } = args as {
-                    matrix: number;
-                    mute: boolean;
-                };
-                await osc.muteMatrix(matrix, mute);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Matrix ${matrix} ${mute ? "muted" : "unmuted"}`,
-                        },
-                    ],
-                };
-            }
-
             // ========== Effects ==========
 
             case "osc_get_effect_on": {
@@ -2646,84 +2372,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 const fxOn = await osc.getEffectOn(effect);
                 return {
                     content: [{ type: "text", text: `FX slot ${effect} is ${fxOn ? "enabled" : "disabled"}` }],
-                };
-            }
-
-
-            case "osc_get_all_effects": {
-                const allFx = await osc.getAllEffects();
-                return {
-                    content: [{ type: "text", text: `All FX slots:\n${JSON.stringify(allFx, null, 2)}` }],
-                };
-            }
-
-            case "osc_get_channel_strip": {
-                const { channel } = args as { channel: number };
-                const strip = await osc.getChannelStrip(channel);
-                return {
-                    content: [{ type: "text", text: `Channel ${channel} full strip:\n${JSON.stringify(strip, null, 2)}` }],
-                };
-            }
-
-            case "osc_get_bus_strip": {
-                const { bus } = args as { bus: number };
-                const busStrip = await osc.getBusStrip(bus);
-                return {
-                    content: [{ type: "text", text: `Bus ${bus} strip:\n${JSON.stringify(busStrip, null, 2)}` }],
-                };
-            }
-
-            case "osc_get_aux_strip": {
-                const { aux } = args as { aux: number };
-                const auxStrip = await osc.getAuxStrip(aux);
-                return {
-                    content: [{ type: "text", text: `Aux ${aux} strip:\n${JSON.stringify(auxStrip, null, 2)}` }],
-                };
-            }
-
-            case "osc_get_fxreturn_strip": {
-                const { fxreturn } = args as { fxreturn: number };
-                const fxrStrip = await osc.getFxReturnStrip(fxreturn);
-                return {
-                    content: [{ type: "text", text: `FX Return ${fxreturn} strip:\n${JSON.stringify(fxrStrip, null, 2)}` }],
-                };
-            }
-
-            case "osc_get_matrix_strip": {
-                const { matrix } = args as { matrix: number };
-                const mtxStrip = await osc.getMatrixStrip(matrix);
-                return {
-                    content: [{ type: "text", text: `Matrix ${matrix} strip:\n${JSON.stringify(mtxStrip, null, 2)}` }],
-                };
-            }
-
-            case "osc_get_dca": {
-                const { dca } = args as { dca: number };
-                const dcaData = await osc.getDCA(dca);
-                return {
-                    content: [{ type: "text", text: `DCA ${dca}:\n${JSON.stringify(dcaData, null, 2)}` }],
-                };
-            }
-
-            case "osc_get_main_strip": {
-                const mainStrip = await osc.getMainStrip();
-                return {
-                    content: [{ type: "text", text: `Main bus:\n${JSON.stringify(mainStrip, null, 2)}` }],
-                };
-            }
-
-            case "osc_get_headamp": {
-                const { index } = args as { index: number };
-                const ha = await osc.getHeadamp(index);
-                return {
-                    content: [{ type: "text", text: `Headamp ${index}:\n${JSON.stringify(ha, null, 2)}` }],
-                };
-            }
-
-            case "osc_get_console_overview": {
-                const overview = await osc.getConsoleOverview();
-                return {
-                    content: [{ type: "text", text: `Console overview:\n${JSON.stringify(overview, null, 2)}` }],
                 };
             }
 
@@ -2738,23 +2386,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                         {
                             type: "text",
                             text: `Effect ${effect} ${on ? "enabled" : "disabled"}`,
-                        },
-                    ],
-                };
-            }
-
-            case "osc_set_effect_param": {
-                const { effect, param, value } = args as {
-                    effect: number;
-                    param: number;
-                    value: number;
-                };
-                await osc.setEffectParam(effect, param, value);
-                return {
-                    content: [
-                        {
-                            type: "text",
-                            text: `Set effect ${effect} parameter ${param} to ${(value * 100).toFixed(1)}%`,
                         },
                     ],
                 };

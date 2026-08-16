@@ -10,10 +10,8 @@ For developpers: https://deepwiki.com/infrafast/XMSeries-MCP
 
 MCP tools organized into groups. Highlights beyond the original small MCP server:
 
-- **Deep channel strips** — headamp/preamp context, fader, name, sends, and mute
-- **Broad bus / matrix / aux / FX-return / DCA / main coverage** — faders, mutes, names, and focused strip reads
-- **FX chain visibility** — type + all 16 params per slot, source assignment, return-channel state
-- **Bulk section reads** — `osc_get_channel_strip`, `osc_get_bus_strip`, `osc_get_console_overview`, etc., so Claude can grab a coherent snapshot in one shot instead of 40 round-trips
+- **Focused channel, bus, aux, FX-return, and main coverage** — faders, mutes, names, sends, returns, and status tools for common live operations
+- **FX return control** — read and mute/unmute FX return state without exposing low-level FX parameter editing
 - **dB-aware level helpers** — `osc_db_to_fader_level`, `osc_fader_level_to_db`, and factorized fader/send tools with `unit:"db"` use the X32/M32 161-point pseudo-log Level table (`0.7500 = 0 dB`, `1.0000 = +10 dB`)
 - **Timed automation** — background ramps/fades, delayed OSC actions, and temporal macros through `osc_automation_*` tools, so agents do not perform timing-sensitive work with repeated LLM tool calls
 
@@ -200,13 +198,13 @@ A few X32/M32 quirks that will bite you if you do not know them. These mostly ap
 
 Routing tools are not exposed in this server profile.
 
-**2. FX racks are user-configurable.** Do not assume slot 1 is always a reverb or slot 5 is always a GEQ. Read `osc_get_all_effects` before reasoning about FX slots.
+**2. FX racks are user-configurable.** Do not assume slot 1 is always a reverb or slot 5 is always a GEQ. This focused profile exposes FX return level/send/mute state, not full FX algorithm introspection.
 
 **3. FX slots have no `/on` or `/mix` addresses.** FX are always instantiated on X32. "Turn off FX 3" really means "mute the FX 3 return channel." `osc_set_effect_on` does this automatically. Wet/dry varies by FX algorithm and lives in the per-slot params, not a global mix.
 
 **4. FX slot numbers are unpadded.** `/fx/1/type` works; `/fx/01/type` silently fails. Every other numeric address in X32 uses zero-padded 2-digit numbers (`/ch/05/...`, `/bus/12/...`) — FX is the exception.
 
-**5. FX parameter tools use normalized OSC values.** This repository exposes FX overview reads and parameter writes, but it does not include a named FX algorithm schema. `osc_set_effect_param` writes the normalized parameter value expected by `/fx/N/par/PP`.
+**5. FX parameters are intentionally not exposed.** This focused profile avoids low-level normalized FX parameter writes because it does not include a named FX algorithm schema.
 
 **6. OSC types are strict.** X32 silently drops messages where the type tag does not match. This server now exposes only dedicated typed tools for supported operations; raw OSC custom writes are intentionally not available.
 
@@ -223,8 +221,8 @@ For any question about the current mixer state, call the relevant read/get tool 
 For broad inspection, start with low-risk read tools:
 
 1. `osc_get_mixer_status`
-2. `osc_get_console_overview`
-3. Focused strip reads such as `osc_get_channel_strip`, `osc_get_bus_strip`, and `osc_get_main_strip` for detailed diagnostics. For simple user-facing fader level questions, prefer the dedicated fader read tools such as `osc_main_fader` with `unit:"db"`; strip payloads include raw normalized OSC values.
+
+For live mix state questions, read the relevant focused fader, mute, send, or FX-return tool directly.
 
 Routing tools are not exposed in this server profile. For XAir/XR-compatible targets, expect unsupported X32-only requests to return `Unsupported for OSCXR: ...`.
 
@@ -303,7 +301,6 @@ The raw OSC fader values are normalized floats from `0.0` to `1.0`. For user-fac
 - `osc_bus_fader` with `unit:"db"` for buses
 - `osc_aux_fader` with `unit:"db"` for aux returns
 - `osc_main_fader` with `unit:"db"` for main LR
-- `osc_matrix_fader` with `unit:"db"` for X32/M32 matrices
 
 For safety, every fader/send `action:"set"` must include an explicit `unit`. Read actions still default to dB. If you pass a normalized fader level such as `0.575`, set `unit:"level"`; if you pass a dB value such as `-7`, set `unit:"db"`.
 
