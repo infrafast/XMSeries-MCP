@@ -1,0 +1,81 @@
+name: STDIO lifecycle autopatch
+
+on:
+  push:
+    branches:
+      - fix/stdio-lifecycle-cleanup
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/stdio-lifecycle-cleanup
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.20.0'
+          cache: npm
+
+      - name: Apply lifecycle hardening
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          automation = Path('src/automation.ts')
+          text = automation.read_text(encoding='utf-8')
+          marker = '''    list(): AutomationJobSnapshot[] {\n        return [...this.jobs.values()].map((job) => this.snapshot(job));\n    }\n'''
+          replacement = '''    cancelAll(): void {\n        for (const job of this.jobs.values()) {\n            if (job.status === "running") {\n                this.cancel(job.id);\n            }\n        }\n    }\n\n    list(): AutomationJobSnapshot[] {\n        return [...this.jobs.values()].map((job) => this.snapshot(job));\n    }\n'''
+          if marker not in text:
+              raise SystemExit('Expected automation list method was not found')
+          text = text.replace(marker, replacement, 1)
+          automation.write_text(text, encoding='utf-8')
+
+          index = Path('src/index.ts')
+          text = index.read_text(encoding='utf-8')
+          marker = '''let osc = createOscClient(oscRuntimeConfig);\nconst automation = new AutomationEngine();\nlet oscConnectPromise: Promise<void> | null = null;\n'''
+          replacement = '''let osc = createOscClient(oscRuntimeConfig);\nconst automation = new AutomationEngine();\nlet shuttingDown = false;\nlet oscConnectPromise: Promise<void> | null = null;\n'''
+          if marker not in text:
+              raise SystemExit('Expected OSC runtime marker was not found')
+          text = text.replace(marker, replacement, 1)
+
+          close_marker = '''function closeOscClient(client: OSCClient): void {\n    try {\n        client.close();\n    } catch (error) {\n        console.error("OSC close error:", error);\n    }\n}\n'''
+          close_replacement = '''function closeOscClient(client: OSCClient): void {\n    try {\n        client.close();\n    } catch (error) {\n        console.error("OSC close error:", error);\n    }\n}\n\nfunction shutdown(exitCode: number): void {\n    if (shuttingDown) return;\n    shuttingDown = true;\n    automation.cancelAll();\n    closeOscClient(osc);\n    process.exit(exitCode);\n}\n'''
+          if close_marker not in text:
+              raise SystemExit('Expected OSC close helper was not found')
+          text = text.replace(close_marker, close_replacement, 1)
+
+          old_main = '''    const server = createOscMcpServer();\n    const transport = new StdioServerTransport();\n    await server.connect(transport);\n\n    console.error("OSC MCP Server running");\n}\n\nif (process.argv[1] && path.resolve(process.argv[1]) === __filename) {\n    main().catch((error) => {\n        console.error("Fatal error:", error);\n        process.exit(1);\n    });\n}\n'''
+          new_main = '''    const server = createOscMcpServer();\n    const transport = new StdioServerTransport();\n    transport.onclose = () => {\n        console.error("STDIO transport closed");\n        shutdown(0);\n    };\n    transport.onerror = (error) => {\n        console.error("STDIO transport error:", error);\n        shutdown(1);\n    };\n    await server.connect(transport);\n\n    console.error("OSC MCP Server running");\n}\n\nif (process.argv[1] && path.resolve(process.argv[1]) === __filename) {\n    process.once("SIGINT", () => shutdown(0));\n    process.once("SIGTERM", () => shutdown(0));\n    main().catch((error) => {\n        console.error("Fatal error:", error);\n        shutdown(1);\n    });\n}\n'''
+          if old_main not in text:
+              raise SystemExit('Expected stdio main block was not found')
+          text = text.replace(old_main, new_main, 1)
+          index.write_text(text, encoding='utf-8')
+
+          test = Path('test-lifecycle.mjs')
+          test.write_text('''import assert from "node:assert/strict";\nimport fs from "node:fs";\n\nconst index = fs.readFileSync("src/index.ts", "utf8");\nconst automation = fs.readFileSync("src/automation.ts", "utf8");\n\nassert.match(index, /transport\.onclose[\\s\\S]*shutdown\(0\)/);\nassert.match(index, /transport\.onerror[\\s\\S]*shutdown\(1\)/);\nassert.ok(index.includes('process.once("SIGINT", () => shutdown(0))'));\nassert.ok(index.includes('process.once("SIGTERM", () => shutdown(0))'));\nassert.ok(index.includes("automation.cancelAll();"));\nassert.ok(index.includes("closeOscClient(osc);"));\nassert.ok(automation.includes("cancelAll(): void"));\nconsole.log("stdio lifecycle checks passed");\n''', encoding='utf-8')
+          PY
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate patch
+        run: |
+          npm run build
+          node test-lifecycle.mjs
+
+      - name: Commit validated patch
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git rm .github/workflows/stdio-lifecycle-autopatch.yml
+          git add src/index.ts src/automation.ts test-lifecycle.mjs
+          git commit -m "fix: terminate stdio server resources on disconnect"
+          git push origin HEAD:fix/stdio-lifecycle-cleanup
