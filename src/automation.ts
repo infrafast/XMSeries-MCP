@@ -76,6 +76,14 @@ export class AutomationEngine {
         return this.snapshot(job);
     }
 
+    cancelAll(): void {
+        for (const job of this.jobs.values()) {
+            if (job.status === "running") {
+                this.cancel(job.id);
+            }
+        }
+    }
+
     list(): AutomationJobSnapshot[] {
         return [...this.jobs.values()].map((job) => this.snapshot(job));
     }

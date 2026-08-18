@@ -76,6 +76,7 @@ function createOscClient(config: OscRuntimeConfig): OSCClient {
 // Initialize OSC client
 let osc = createOscClient(oscRuntimeConfig);
 const automation = new AutomationEngine();
+let shuttingDown = false;
 let oscConnectPromise: Promise<void> | null = null;
 
 export function connectOscDevice(): Promise<void> {
@@ -91,6 +92,14 @@ function closeOscClient(client: OSCClient): void {
     } catch (error) {
         console.error("OSC close error:", error);
     }
+}
+
+function shutdown(exitCode: number): void {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    automation.cancelAll();
+    closeOscClient(osc);
+    process.exit(exitCode);
 }
 
 function levelDbPayload(result: ReturnType<typeof dbToFaderLevel>): string {
@@ -2462,14 +2471,24 @@ async function main() {
 
     const server = createOscMcpServer();
     const transport = new StdioServerTransport();
+    transport.onclose = () => {
+        console.error("STDIO transport closed");
+        shutdown(0);
+    };
+    transport.onerror = (error) => {
+        console.error("STDIO transport error:", error);
+        shutdown(1);
+    };
     await server.connect(transport);
 
     console.error("OSC MCP Server running");
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+    process.once("SIGINT", () => shutdown(0));
+    process.once("SIGTERM", () => shutdown(0));
     main().catch((error) => {
         console.error("Fatal error:", error);
-        process.exit(1);
+        shutdown(1);
     });
 }
