@@ -1,7 +1,8 @@
 name: Apply compact return target prompt update
-on:
+"on":
   push:
-    branches: [docs/compact-return-target-resolution]
+    branches:
+      - docs/compact-return-target-resolution
 permissions:
   contents: write
 jobs:
@@ -45,15 +46,13 @@ Examples:
           if old not in s:
               raise SystemExit('target-resolution block not found')
           s = s.replace(old, new, 1)
-
           old2 = '''When the utterance uses a destination connector such as `sur`, `vers`, `dans`, `chez`, `to`, or `in`, ALWAYS treat the text left of the connector as the source candidate and the text right of the connector as the destination candidate. Do not concatenate or merge source and destination into a single name passed to `osc_find_named_target`.
 '''
           new2 = '''Use `osc_resolve_channel_to_bus` only for a real source→destination phrase with an explicit connector (`sur`, `vers`, `dans`, `chez`, `to`, `in`). Words such as `bus`, `retour`, or `monitor` alone never create a source→destination command. When a connector is present, the text before it is the source candidate and the text after it is the destination candidate; never merge them into one name.
 '''
           if old2 not in s:
               raise SystemExit('source-destination paragraph not found')
-          s = s.replace(old2, new2, 1)
-          p.write_text(s)
+          p.write_text(s.replace(old2, new2, 1))
           PY
       - name: Sanity check
         run: |
