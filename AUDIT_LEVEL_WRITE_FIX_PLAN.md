@@ -1,0 +1,1 @@
+Temporary audit plan: force OSC float typing for fader/send level writes and make osc_adjust_level verification retry delayed reads instead of relying on one immediate read. This file is temporary and must not be merged.
