@@ -70,6 +70,9 @@ export function computeRelativeLevelAdjustment(
     input: Omit<RelativeLevelAdjustmentInput, "target">
 ): RelativeLevelAdjustmentResult {
     const before = faderLevelToDb(currentLevel);
+    if (before.db === null) {
+        throw new Error("Cannot apply a relative level adjustment from -inf. Set an explicit absolute level first.");
+    }
     const beforeDb = before.db;
     const hasDelta = typeof input.deltaDb === "number" && Number.isFinite(input.deltaDb);
     const hasDirection = input.direction === "up" || input.direction === "down";
@@ -99,48 +102,57 @@ export function computeRelativeLevelAdjustment(
     }
 
     const requested = faderLevelToDb(requestedLevel);
-    const requestedDb = requested.db;
+    const requestedDb = requested.db ?? -120;
     const requestedDeltaDb = requestedDb - beforeDb;
-    let targetDb = requestedDb;
+    let boundedDb = requestedDb;
     let clamped = false;
 
-    if (input.maxDb !== undefined && targetDb > input.maxDb) {
-        targetDb = input.maxDb;
+    if (input.maxDb !== undefined && boundedDb > input.maxDb) {
+        boundedDb = input.maxDb;
         clamped = true;
     }
-    if (input.minDb !== undefined && targetDb < input.minDb) {
-        targetDb = input.minDb;
+    if (input.minDb !== undefined && boundedDb < input.minDb) {
+        boundedDb = input.minDb;
         clamped = true;
     }
 
-    let target = dbToFaderLevel(targetDb);
-    let effectiveDeltaDb = target.db - beforeDb;
+    const bounded = dbToFaderLevel(boundedDb);
+    const boundedActualDb = bounded.db ?? -120;
+    const boundedDeltaDb = boundedActualDb - beforeDb;
     const requestedDirection = Math.sign(requestedDeltaDb);
-    const effectiveDirection = Math.sign(effectiveDeltaDb);
+    const boundedDirection = Math.sign(boundedDeltaDb);
     const toleranceDb = 0.51;
 
     if (
         requestedDirection !== 0 &&
-        (effectiveDirection !== 0 && effectiveDirection !== requestedDirection ||
-            Math.abs(effectiveDeltaDb) > Math.abs(requestedDeltaDb) + toleranceDb)
+        ((boundedDirection !== 0 && boundedDirection !== requestedDirection) ||
+            Math.abs(boundedDeltaDb) > Math.abs(requestedDeltaDb) + toleranceDb)
     ) {
-        target = before;
-        targetDb = beforeDb;
-        effectiveDeltaDb = 0;
-        clamped = true;
+        return {
+            beforeDb,
+            requestedDb,
+            targetDb: beforeDb,
+            requestedDeltaDb,
+            effectiveDeltaDb: 0,
+            minDb: input.minDb,
+            maxDb: input.maxDb,
+            clamped: true,
+            noOp: true,
+            targetLevel: before.level,
+        };
     }
 
     return {
         beforeDb,
         requestedDb,
-        targetDb: target.db,
+        targetDb: boundedActualDb,
         requestedDeltaDb,
-        effectiveDeltaDb: target.db - beforeDb,
+        effectiveDeltaDb: boundedActualDb - beforeDb,
         minDb: input.minDb,
         maxDb: input.maxDb,
         clamped,
-        noOp: target.level === before.level,
-        targetLevel: target.level,
+        noOp: bounded.level === before.level,
+        targetLevel: bounded.level,
     };
 }
 
@@ -156,6 +168,7 @@ async function applyRelativeLevelAdjustment(input: RelativeLevelAdjustmentInput)
 
     const verifiedLevel = await adapter.read();
     const verified = faderLevelToDb(verifiedLevel);
+    const verifiedDb = verified.db ?? -120;
     if (Math.abs(verifiedLevel - computed.targetLevel) > 0.002) {
         throw new Error(
             `Relative level verification failed for ${adapter.label}: expected ${computed.targetLevel.toFixed(6)} (${formatDb(computed.targetDb)}), ` +
@@ -173,8 +186,8 @@ async function applyRelativeLevelAdjustment(input: RelativeLevelAdjustmentInput)
         clamped: computed.clamped,
         noOp: computed.noOp,
         targetDb: computed.targetDb,
-        verifiedDb: verified.db,
-        effectiveDeltaDb: verified.db - computed.beforeDb,
+        verifiedDb,
+        effectiveDeltaDb: verifiedDb - computed.beforeDb,
     });
 }
 '''
@@ -279,4 +292,4 @@ if old not in prompt:
     raise SystemExit('PROMPT relative-level block not found')
 pp.write_text(prompt.replace(old, new, 1))
 
-Path('test-relative-level-safety.mjs').write_text('''import assert from "node:assert/strict";\nimport { computeRelativeLevelAdjustment } from "./dist/index.js";\nimport { dbToFaderLevel } from "./dist/level-table.js";\n\nfunction at(db) { return dbToFaderLevel(db).level; }\n\n{\n  const r = computeRelativeLevelAdjustment(at(-35), { deltaDb: 1, maxDb: -25 });\n  assert.equal(r.beforeDb, -35);\n  assert.equal(r.targetDb, -34);\n  assert.equal(r.effectiveDeltaDb, 1);\n  assert.equal(r.clamped, false);\n}\n\n{\n  const r = computeRelativeLevelAdjustment(at(-26), { deltaDb: 3, maxDb: -25 });\n  assert.equal(r.targetDb, -25);\n  assert.equal(r.effectiveDeltaDb, 1);\n  assert.equal(r.clamped, true);\n}\n\n{\n  const r = computeRelativeLevelAdjustment(at(-20), { deltaDb: 1, maxDb: -25 });\n  assert.equal(r.targetDb, -20);\n  assert.equal(r.effectiveDeltaDb, 0);\n  assert.equal(r.noOp, true);\n}\n\n{\n  const r = computeRelativeLevelAdjustment(at(-35), { deltaDb: -1, minDb: -50 });\n  assert.equal(r.targetDb, -36);\n  assert.equal(r.effectiveDeltaDb, -1);\n}\n\nconsole.log("relative level safety checks passed");\n''')
+Path('test-relative-level-safety.mjs').write_text('''import assert from "node:assert/strict";\nimport { computeRelativeLevelAdjustment } from "./dist/index.js";\nimport { dbToFaderLevel } from "./dist/level-table.js";\n\nfunction at(db) { return dbToFaderLevel(db).level; }\n\n{\n  const r = computeRelativeLevelAdjustment(at(-35), { deltaDb: 1, maxDb: -25 });\n  assert.equal(r.beforeDb, -35);\n  assert.equal(r.targetDb, -34);\n  assert.equal(r.effectiveDeltaDb, 1);\n  assert.equal(r.clamped, false);\n}\n\n{\n  const r = computeRelativeLevelAdjustment(at(-26), { deltaDb: 3, maxDb: -25 });\n  assert.equal(r.targetDb, -25);\n  assert.equal(r.effectiveDeltaDb, 1);\n  assert.equal(r.clamped, true);\n}\n\n{\n  const r = computeRelativeLevelAdjustment(at(-20), { deltaDb: 1, maxDb: -25 });\n  assert.equal(r.targetDb, -20);\n  assert.equal(r.effectiveDeltaDb, 0);\n  assert.equal(r.noOp, true);\n}\n\n{\n  const r = computeRelativeLevelAdjustment(at(-35), { deltaDb: -1, minDb: -50 });\n  assert.equal(r.targetDb, -36);\n  assert.equal(r.effectiveDeltaDb, -1);\n}\n\nassert.throws(() => computeRelativeLevelAdjustment(0, { deltaDb: 1 }), /-inf/);\n\nconsole.log("relative level safety checks passed");\n''')
