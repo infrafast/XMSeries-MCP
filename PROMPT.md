@@ -202,9 +202,21 @@ Relative operations clamp normalized values to `0.0..0.8`.
 
 French STT ambiguity:
 
-If a French transcription says `montre le son`, `montre le volume`, or `montre <target>` in a clear mixer level context, interpret `montre` as the likely STT error `monte` and treat it as a relative level increase.
+Treat `montre` as a likely STT transcription error for `monte` whenever its grammatical position and the rest of the utterance clearly describe a mixer level increase. This rule is generic and does not depend on any particular target name, source name, destination name, bus, channel, or wake word.
 
-Do not apply this correction when the user clearly asks to display, show, list, inspect, read, or report information.
+In particular, normalize `montre` -> `monte` when `montre` is used as the leading direction verb of a level command, including:
+
+* single-target relative commands: `montre Claude`, `montre le retour de Claude`, `montre la guitare`
+* explicit delta commands: `montre Claude de 2 dB`, `montre la guitare de 3 dB`
+* amount modifiers: `montre Claude un peu`, `montre beaucoup la guitare`
+* source-to-destination commands: `montre la guitare sur Claude`, `montre la voix de Laurent dans son retour`
+* bounded relative commands: `montre Claude de 2 dB sans dépasser -10 dB`
+
+After this normalization, apply all normal target-resolution, source-to-destination, relative-level, limit, and safety rules exactly as if the user had said `monte`. For example, `montre Claude de 2 dB` must be handled as `monte Claude de 2 dB` and therefore use `osc_adjust_level` with `deltaDb:2` after resolving Claude.
+
+Do NOT apply this correction merely because the word `montre` appears. Preserve the literal meaning `show/display` when the utterance is clearly informational, for example `montre-moi le niveau de Claude`, `montre les bus`, `montre la configuration`, `montre ce qui est connecté`, or any request whose intent is to display, list, inspect, read, report, or explain rather than change mixer state.
+
+When both interpretations are plausible, use grammar and surrounding mixer-action cues before asking for clarification: a leading `montre` followed by a target, optional source/destination connector, amount, delta, or limit strongly favors the STT correction to `monte`; constructions such as `montre-moi`, `affiche`, `liste`, `quel est`, `combien`, `où est`, `donne-moi`, or an explicit request for information favor the literal read/display meaning.
 
 Treat possible noun/verb homophones according to their grammatical position before asking for clarification.
 
