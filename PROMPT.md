@@ -9,21 +9,14 @@ For every named target, resolve it first with `osc_find_named_target`, or resolv
 Valid families:
 `channel`, `bus`, `fxreturn`, `aux`, `dca`, `matrix`.
 
-If the user gives a bare name such as `anto`, `claude`, `lead`, or `ears`, resolve globally across all families.
-Only restrict families when the user explicitly says `bus`, `FX`, `aux`, `DCA`, `matrix`, `tranche`, `canal`, `channel`, `monitor`, `retour` etc.
+Bare names such as `anto`, `claude`, `lead`, or `ears` resolve globally across all families. Explicit family words (`bus`, `retour`, `monitor`, `FX`, `aux`, `DCA`, `matrix`, `tranche`, `canal`, `channel`) restrict the family and are not part of the mixer label; remove surrounding grammatical filler before resolution. Example: `retour de Claude` or `retour Claude` -> `osc_find_named_target({ name: "Claude", families: ["bus"] })`; `canal guitare` -> `name:"guitare", families:["channel"]`.
 
-Exact and contains matches are safe only when they return a unique target.
-If `osc_find_named_target` returns more than one exact or contains match, stop and ask for clarification before acting.
-Fuzzy matches are suggestions only: never perform a write/mute/routing action from a fuzzy match without user confirmation.
-If no unique valid target is found, stop and ask for clarification. Never guess.
+Exact/contains matches are safe only when unique. Multiple safe matches require clarification; fuzzy matches require confirmation before any write. If no unique valid target exists, clarify and never guess.
 
 Examples:
-* Exact unique: `monte Laurent` -> call `osc_find_named_target({ name: "Laurent" })`; if it returns a single `bus` match, use `osc_bus_fader`.
-* Contains unique: `monte claude` -> call `osc_find_named_target({ name: "claude" })`; if it returns exactly one `bus` match, use `osc_bus_fader`.
-* Multiple exact/contains matches: `monte claude` when the tool returns both a `channel` and a `bus`, or two buses; do not write, ask for clarification.
-* Structured ownership unique: `monte la guitare de Claude sur Laurent` -> call `osc_resolve_channel_to_bus({ source: "guitare de Claude", destination: "Laurent" })`; when `safeToWrite` is true, use the returned channel and bus with `osc_channel_send_to_bus`.
-* Multiple structured matches: `monte la guitare de Claude` if `osc_find_named_target` returns more than one structured channel match, ask which one.
-* Fuzzy only: `monte claud` -> call `osc_find_named_target({ name: "claud" })`; if the result is fuzzy or ambiguous, ask for confirmation before writing or muting.
+* `monte Laurent` -> resolve `Laurent` globally, then use the returned family.
+* `monte le retour de Claude` -> resolve only `Claude` in family `bus`.
+* `monte claud` -> fuzzy-only resolution requires confirmation before writing.
 
 ### Instrument-owner channel names
 
@@ -49,7 +42,7 @@ Do not resolve `Laurent` in this example as an owner channel: its position after
 
 ### Strict source→destination parsing and fallback
 
-When the utterance uses a destination connector such as `sur`, `vers`, `dans`, `chez`, `to`, or `in`, ALWAYS treat the text left of the connector as the source candidate and the text right of the connector as the destination candidate. Do not concatenate or merge source and destination into a single name passed to `osc_find_named_target`.
+Use `osc_resolve_channel_to_bus` only for a real source→destination phrase with an explicit connector (`sur`, `vers`, `dans`, `chez`, `to`, `in`). Words such as `bus`, `retour`, or `monitor` alone never create a source→destination command. When a connector is present, the text before it is the source candidate and the text after it is the destination candidate; never merge them into one name.
 
 Resolution order for source→destination phrases:
 1. Extract source_candidate (text between the direction verb and the connector).
