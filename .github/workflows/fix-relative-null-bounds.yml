@@ -24,13 +24,15 @@ jobs:
           s = s.replace('if (input.minDb !== undefined && input.maxDb !== undefined && input.minDb > input.maxDb)', 'if (input.minDb != null && input.maxDb != null && input.minDb > input.maxDb)')
           s = s.replace('if (input.maxDb !== undefined && boundedDb > input.maxDb)', 'if (input.maxDb != null && boundedDb > input.maxDb)')
           s = s.replace('if (input.minDb !== undefined && boundedDb < input.minDb)', 'if (input.minDb != null && boundedDb < input.minDb)')
+          s = s.replace('            minDb: input.minDb,\n            maxDb: input.maxDb,', '            minDb: input.minDb ?? undefined,\n            maxDb: input.maxDb ?? undefined,')
+          s = s.replace('        minDb: input.minDb,\n        maxDb: input.maxDb,', '        minDb: input.minDb ?? undefined,\n        maxDb: input.maxDb ?? undefined,')
           p.write_text(s)
 
           t = Path('test-relative-level-safety.mjs')
           ts = t.read_text()
           marker = 'assert.throws(() => computeRelativeLevelAdjustment(0, { deltaDb: 1 }), /-inf/);\n'
-          addition = '''{\n  const r = computeRelativeLevelAdjustment(at(-10), { direction: "down", amount: "normal", minDb: null, maxDb: null });\n  assert.ok(r.targetDb < r.beforeDb);\n  assert.equal(r.minDb, null);\n  assert.equal(r.maxDb, null);\n}\n\n'''
-          if addition not in ts:
+          addition = '''{\n  const r = computeRelativeLevelAdjustment(at(-10), { direction: "down", amount: "normal", minDb: null, maxDb: null });\n  assert.ok(r.targetDb < r.beforeDb);\n  assert.equal(r.minDb, undefined);\n  assert.equal(r.maxDb, undefined);\n}\n\n'''
+          if 'minDb: null, maxDb: null' not in ts:
               ts = ts.replace(marker, addition + marker)
           t.write_text(ts)
           PY
