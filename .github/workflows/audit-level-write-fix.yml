@@ -1,0 +1,79 @@
+name: Apply audited level write fixes
+"on":
+  push:
+    branches:
+      - fix/audit-level-write-verification
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[level-write-audit-applied]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch level writes and relative verification
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/osc-client.ts')
+          s = p.read_text()
+          marker = '''    async sendRaw(address: string, args?: any[], options?: { allowOfflineWrite?: boolean }): Promise<void> {\n        await this.sendCommand(address, args, options);\n    }\n'''
+          addition = marker + '''\n    async sendLevelRaw(address: string, level: number, options?: { allowOfflineWrite?: boolean }): Promise<void> {\n        await this.sendCommand(address, [coerceOscArg(level, "float")], options);\n    }\n\n    async writeLevelAndVerify(address: string, level: number, options?: { tolerance?: number; label?: string; attempts?: number; retryDelayMs?: number }): Promise<any> {\n        return await this.writeAndVerify(address, [coerceOscArg(level, "float")], options);\n    }\n'''
+          if marker not in s:
+              raise SystemExit('sendRaw marker not found')
+          s = s.replace(marker, addition, 1)
+          replacements = {
+            'await this.writeAndVerify(path, [level], { label: `channel ${channel} fader` });': 'await this.writeLevelAndVerify(path, level, { label: `channel ${channel} fader` });',
+            'await this.sendCommand(path, [level], { allowOfflineWrite: true });': 'await this.sendLevelRaw(path, level, { allowOfflineWrite: true });',
+            'await this.writeAndVerify(path, [level], { label: `bus ${bus} fader` });': 'await this.writeLevelAndVerify(path, level, { label: `bus ${bus} fader` });',
+            'await this.writeAndVerify(path, [level], { label: `aux ${aux} fader` });': 'await this.writeLevelAndVerify(path, level, { label: `aux ${aux} fader` });',
+            'await this.writeAndVerify(path, [level], { label: `channel ${channel} send to bus ${bus}` });': 'await this.writeLevelAndVerify(path, level, { label: `channel ${channel} send to bus ${bus}` });',
+            'await this.writeAndVerify(path, [level], { label: `FX return ${effect} send to bus ${bus}` });': 'await this.writeLevelAndVerify(path, level, { label: `FX return ${effect} send to bus ${bus}` });',
+            'await this.writeAndVerify(path, [level], { label: `FX return ${effect} fader` });': 'await this.writeLevelAndVerify(path, level, { label: `FX return ${effect} fader` });',
+            'await this.writeAndVerify(path, [level], { label: `aux ${aux} send to bus ${bus}` });': 'await this.writeLevelAndVerify(path, level, { label: `aux ${aux} send to bus ${bus}` });',
+            'await this.writeAndVerify(path, [level], { label: `channel ${channel} send to aux ${aux}` });': 'await this.writeLevelAndVerify(path, level, { label: `channel ${channel} send to aux ${aux}` });',
+            'await this.writeAndVerify(`${this.getMainStereoPath()}/mix/fader`, [level], { label: "main LR fader" });': 'await this.writeLevelAndVerify(`${this.getMainStereoPath()}/mix/fader`, level, { label: "main LR fader" });',
+            'await this.writeAndVerify(path, [level], { label: `matrix ${matrix} fader` });': 'await this.writeLevelAndVerify(path, level, { label: `matrix ${matrix} fader` });',
+          }
+          for old, new in replacements.items():
+              s = s.replace(old, new)
+          p.write_text(s)
+
+          p = Path('src/index.ts')
+          s = p.read_text()
+          s = s.replace('write: (level) => osc.sendRaw(address, [level], { allowOfflineWrite: true }),', 'write: (level) => osc.sendLevelRaw(address, level, { allowOfflineWrite: true }),')
+          s = s.replace('write: (level) => osc.sendRaw(`${mainStereoPath()}/mix/fader`, [level], { allowOfflineWrite: true }),', 'write: (level) => osc.sendLevelRaw(`${mainStereoPath()}/mix/fader`, level, { allowOfflineWrite: true }),')
+          old = '''    const verifiedLevel = await adapter.read();\n    const verified = faderLevelToDb(verifiedLevel);\n    const verifiedDb = verified.db ?? -120;\n    if (Math.abs(verifiedLevel - computed.targetLevel) > 0.002) {\n        throw new Error(\n            `Relative level verification failed for ${adapter.label}: expected ${computed.targetLevel.toFixed(6)} (${formatDb(computed.targetDb)}), ` +\n            `read ${verifiedLevel.toFixed(6)} (${formatDb(verified.db)}).`\n        );\n    }\n'''
+          new = '''    let verifiedLevel = beforeLevel;\n    let verified = faderLevelToDb(verifiedLevel);\n    const verifyAttempts = computed.noOp ? 1 : 5;\n    for (let attempt = 1; attempt <= verifyAttempts; attempt += 1) {\n        if (!computed.noOp) await new Promise((resolve) => setTimeout(resolve, 60));\n        verifiedLevel = await adapter.read();\n        verified = faderLevelToDb(verifiedLevel);\n        if (Math.abs(verifiedLevel - computed.targetLevel) <= 0.002) break;\n    }\n    const verifiedDb = verified.db ?? -120;\n    if (Math.abs(verifiedLevel - computed.targetLevel) > 0.002) {\n        throw new Error(\n            `Relative level verification failed for ${adapter.label}: expected ${computed.targetLevel.toFixed(6)} (${formatDb(computed.targetDb)}), ` +\n            `read ${verifiedLevel.toFixed(6)} (${formatDb(verified.db)}) after ${verifyAttempts} verification read(s).`\n        );\n    }\n'''
+          if old not in s:
+              raise SystemExit('relative verification block not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+
+          t = Path('test-relative-level-safety.mjs')
+          ts = t.read_text()
+          if 'coerceOscArg' not in ts:
+              ts = ts.replace('import { dbToFaderLevel } from "./dist/level-table.js";\n', 'import { dbToFaderLevel } from "./dist/level-table.js";\nimport { coerceOscArg } from "./dist/osc-client.js";\n')
+              ts += '''\n{\n  const zeroAsFloat = coerceOscArg(0, "float");\n  assert.equal(typeof zeroAsFloat, "number");\n  assert.notEqual(zeroAsFloat, 0);\n  assert.ok(Math.abs(zeroAsFloat) < 0.000001);\n}\n'''
+          t.write_text(ts)
+          PY
+      - name: Validate
+        run: |
+          npm ci
+          npm run build
+          node test-relative-level-safety.mjs
+          node test-lifecycle.mjs
+          npm run test:name-resolution
+          git diff --check
+          grep -F 'sendLevelRaw' src/index.ts
+          grep -F 'writeLevelAndVerify' src/osc-client.ts
+          grep -F 'verifyAttempts = computed.noOp ? 1 : 5' src/index.ts
+      - name: Commit fix only
+        run: |
+          rm -f .github/workflows/audit-level-write-fix.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/index.ts src/osc-client.ts test-relative-level-safety.mjs .github/workflows/audit-level-write-fix.yml
+          git commit -m 'fix: harden OSC level writes and verification [level-write-audit-applied]'
+          git push
