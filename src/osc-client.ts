@@ -373,6 +373,14 @@ export class OSCClient {
         await this.sendCommand(address, args, options);
     }
 
+    async sendLevelRaw(address: string, level: number, options?: { allowOfflineWrite?: boolean }): Promise<void> {
+        await this.sendCommand(address, [coerceOscArg(level, "float")], options);
+    }
+
+    async writeLevelAndVerify(address: string, level: number, options?: { tolerance?: number; label?: string; attempts?: number; retryDelayMs?: number }): Promise<any> {
+        return await this.writeAndVerify(address, [coerceOscArg(level, "float")], options);
+    }
+
     async readRaw(address: string, args?: any[]): Promise<any> {
         return await this.sendAndReceive(address, args);
     }
@@ -527,12 +535,12 @@ export class OSCClient {
 
     async setFader(channel: number, level: number): Promise<void> {
         const path = `${this.getChannelPath(channel)}/mix/fader`;
-        await this.writeAndVerify(path, [level], { label: `channel ${channel} fader` });
+        await this.writeLevelAndVerify(path, level, { label: `channel ${channel} fader` });
     }
 
     async setFaderUnchecked(channel: number, level: number): Promise<void> {
         const path = `${this.getChannelPath(channel)}/mix/fader`;
-        await this.sendCommand(path, [level], { allowOfflineWrite: true });
+        await this.sendLevelRaw(path, level, { allowOfflineWrite: true });
     }
 
     async getFader(channel: number): Promise<number> {
@@ -807,7 +815,7 @@ export class OSCClient {
 
     async setBusFader(bus: number, level: number): Promise<void> {
         const path = `${this.getBusPath(bus)}/mix/fader`;
-        await this.writeAndVerify(path, [level], { label: `bus ${bus} fader` });
+        await this.writeLevelAndVerify(path, level, { label: `bus ${bus} fader` });
     }
 
     async getBusFader(bus: number): Promise<number> {
@@ -846,7 +854,7 @@ export class OSCClient {
 
     async setAuxFader(aux: number, level: number): Promise<void> {
         const path = `${this.getAuxPath(aux)}/mix/fader`;
-        await this.writeAndVerify(path, [level], { label: `aux ${aux} fader` });
+        await this.writeLevelAndVerify(path, level, { label: `aux ${aux} fader` });
     }
 
     async getAuxFader(aux: number): Promise<number> {
@@ -875,12 +883,12 @@ export class OSCClient {
 
     async sendToBus(channel: number, bus: number, level: number): Promise<void> {
         const path = `${this.getChannelPath(channel)}/mix/${this.getBusSendSegment(bus)}/level`;
-        await this.writeAndVerify(path, [level], { label: `channel ${channel} send to bus ${bus}` });
+        await this.writeLevelAndVerify(path, level, { label: `channel ${channel} send to bus ${bus}` });
     }
 
     async sendToBusUnchecked(channel: number, bus: number, level: number): Promise<void> {
         const path = `${this.getChannelPath(channel)}/mix/${this.getBusSendSegment(bus)}/level`;
-        await this.writeAndVerify(path, [level], { label: `channel ${channel} send to bus ${bus}` });
+        await this.writeLevelAndVerify(path, level, { label: `channel ${channel} send to bus ${bus}` });
     }
 
     async getSendToBus(channel: number, bus: number): Promise<number> {
@@ -895,7 +903,7 @@ export class OSCClient {
 
     async sendFxToBus(effect: number, bus: number, level: number): Promise<void> {
         const path = `${this.getFxReturnPath(effect)}/mix/${this.getBusSendSegment(bus)}/level`;
-        await this.writeAndVerify(path, [level], { label: `FX return ${effect} send to bus ${bus}` });
+        await this.writeLevelAndVerify(path, level, { label: `FX return ${effect} send to bus ${bus}` });
     }
 
     async getFxToBus(effect: number, bus: number): Promise<number> {
@@ -910,7 +918,7 @@ export class OSCClient {
 
     async setFxReturnFader(effect: number, level: number): Promise<void> {
         const path = `${this.getFxReturnPath(effect)}/mix/fader`;
-        await this.writeAndVerify(path, [level], { label: `FX return ${effect} fader` });
+        await this.writeLevelAndVerify(path, level, { label: `FX return ${effect} fader` });
     }
 
     async getFxReturnFader(effect: number): Promise<number> {
@@ -925,7 +933,7 @@ export class OSCClient {
 
     async sendAuxToBus(aux: number, bus: number, level: number): Promise<void> {
         const path = `${this.getAuxBusPath(aux, bus)}/level`;
-        await this.writeAndVerify(path, [level], { label: `aux ${aux} send to bus ${bus}` });
+        await this.writeLevelAndVerify(path, level, { label: `aux ${aux} send to bus ${bus}` });
     }
 
     async getAuxToBus(aux: number, bus: number): Promise<number> {
@@ -941,7 +949,7 @@ export class OSCClient {
     async sendToAux(channel: number, aux: number, level: number): Promise<void> {
         this.requireX32("Channel sends to aux");
         const path = `${this.getChannelPath(channel)}/mix/${(aux + 15).toString().padStart(2, "0")}/level`;
-        await this.writeAndVerify(path, [level], { label: `channel ${channel} send to aux ${aux}` });
+        await this.writeLevelAndVerify(path, level, { label: `channel ${channel} send to aux ${aux}` });
     }
 
     async setSendPrePost(channel: number, bus: number, pre: boolean): Promise<void> {
@@ -953,7 +961,7 @@ export class OSCClient {
     // ========== Main Mix ==========
 
     async setMainFader(level: number): Promise<void> {
-        await this.writeAndVerify(`${this.getMainStereoPath()}/mix/fader`, [level], { label: "main LR fader" });
+        await this.writeLevelAndVerify(`${this.getMainStereoPath()}/mix/fader`, level, { label: "main LR fader" });
     }
 
     async getMainFader(): Promise<number> {
@@ -976,7 +984,7 @@ export class OSCClient {
     async setMatrixFader(matrix: number, level: number): Promise<void> {
         this.requireX32("Matrix controls");
         const path = `/mtx/${matrix.toString().padStart(2, "0")}/mix/fader`;
-        await this.writeAndVerify(path, [level], { label: `matrix ${matrix} fader` });
+        await this.writeLevelAndVerify(path, level, { label: `matrix ${matrix} fader` });
     }
 
     async getMatrixFader(matrix: number): Promise<number> {
