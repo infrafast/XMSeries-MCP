@@ -707,13 +707,20 @@ async function applyRelativeLevelAdjustment(input: RelativeLevelAdjustmentInput)
         await adapter.write(computed.targetLevel);
     }
 
-    const verifiedLevel = await adapter.read();
-    const verified = faderLevelToDb(verifiedLevel);
+    let verifiedLevel = beforeLevel;
+    let verified = faderLevelToDb(verifiedLevel);
+    const verifyAttempts = computed.noOp ? 1 : 5;
+    for (let attempt = 1; attempt <= verifyAttempts; attempt += 1) {
+        if (!computed.noOp) await new Promise((resolve) => setTimeout(resolve, 60));
+        verifiedLevel = await adapter.read();
+        verified = faderLevelToDb(verifiedLevel);
+        if (Math.abs(verifiedLevel - computed.targetLevel) <= 0.002) break;
+    }
     const verifiedDb = verified.db ?? -120;
     if (Math.abs(verifiedLevel - computed.targetLevel) > 0.002) {
         throw new Error(
             `Relative level verification failed for ${adapter.label}: expected ${computed.targetLevel.toFixed(6)} (${formatDb(computed.targetDb)}), ` +
-            `read ${verifiedLevel.toFixed(6)} (${formatDb(verified.db)}).`
+            `read ${verifiedLevel.toFixed(6)} (${formatDb(verified.db)}) after ${verifyAttempts} verification read(s).`
         );
     }
 
@@ -809,7 +816,7 @@ function targetAdapter(target: AutomationTargetSpec): AutomationTargetAdapter {
             return {
                 label: `channel ${channel} fader`,
                 read: () => osc.getFader(channel),
-                write: (level) => osc.sendRaw(address, [level], { allowOfflineWrite: true }),
+                write: (level) => osc.sendLevelRaw(address, level, { allowOfflineWrite: true }),
             };
         }
         case "channel_send": {
@@ -819,7 +826,7 @@ function targetAdapter(target: AutomationTargetSpec): AutomationTargetAdapter {
             return {
                 label: `channel ${channel} send to bus ${bus}`,
                 read: () => osc.getSendToBus(channel, bus),
-                write: (level) => osc.sendRaw(address, [level], { allowOfflineWrite: true }),
+                write: (level) => osc.sendLevelRaw(address, level, { allowOfflineWrite: true }),
             };
         }
         case "bus_fader": {
@@ -828,14 +835,14 @@ function targetAdapter(target: AutomationTargetSpec): AutomationTargetAdapter {
             return {
                 label: `bus ${bus} fader`,
                 read: () => osc.getBusFader(bus),
-                write: (level) => osc.sendRaw(address, [level], { allowOfflineWrite: true }),
+                write: (level) => osc.sendLevelRaw(address, level, { allowOfflineWrite: true }),
             };
         }
         case "main_fader":
             return {
                 label: "main LR fader",
                 read: () => osc.getMainFader(),
-                write: (level) => osc.sendRaw(`${mainStereoPath()}/mix/fader`, [level], { allowOfflineWrite: true }),
+                write: (level) => osc.sendLevelRaw(`${mainStereoPath()}/mix/fader`, level, { allowOfflineWrite: true }),
             };
         case "fx_return_fader": {
             const effect = requireNumber(target.effect, "effect");
@@ -843,7 +850,7 @@ function targetAdapter(target: AutomationTargetSpec): AutomationTargetAdapter {
             return {
                 label: `FX return ${effect} fader`,
                 read: () => osc.getFxReturnFader(effect),
-                write: (level) => osc.sendRaw(address, [level], { allowOfflineWrite: true }),
+                write: (level) => osc.sendLevelRaw(address, level, { allowOfflineWrite: true }),
             };
         }
         case "fx_send": {
@@ -853,7 +860,7 @@ function targetAdapter(target: AutomationTargetSpec): AutomationTargetAdapter {
             return {
                 label: `FX return ${effect} send to bus ${bus}`,
                 read: () => osc.getFxToBus(effect, bus),
-                write: (level) => osc.sendRaw(address, [level], { allowOfflineWrite: true }),
+                write: (level) => osc.sendLevelRaw(address, level, { allowOfflineWrite: true }),
             };
         }
         case "aux_fader": {
@@ -862,7 +869,7 @@ function targetAdapter(target: AutomationTargetSpec): AutomationTargetAdapter {
             return {
                 label: `aux ${aux} fader`,
                 read: () => osc.getAuxFader(aux),
-                write: (level) => osc.sendRaw(address, [level], { allowOfflineWrite: true }),
+                write: (level) => osc.sendLevelRaw(address, level, { allowOfflineWrite: true }),
             };
         }
         case "aux_send": {
@@ -872,7 +879,7 @@ function targetAdapter(target: AutomationTargetSpec): AutomationTargetAdapter {
             return {
                 label: `aux ${aux} send to bus ${bus}`,
                 read: () => osc.getAuxToBus(aux, bus),
-                write: (level) => osc.sendRaw(address, [level], { allowOfflineWrite: true }),
+                write: (level) => osc.sendLevelRaw(address, level, { allowOfflineWrite: true }),
             };
         }
         case "matrix_fader": {
@@ -881,7 +888,7 @@ function targetAdapter(target: AutomationTargetSpec): AutomationTargetAdapter {
             return {
                 label: `matrix ${matrix} fader`,
                 read: () => osc.getMatrixFader(matrix),
-                write: (level) => osc.sendRaw(address, [level], { allowOfflineWrite: true }),
+                write: (level) => osc.sendLevelRaw(address, level, { allowOfflineWrite: true }),
             };
         }
         case "raw": {

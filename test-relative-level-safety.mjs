@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { computeRelativeLevelAdjustment } from "./dist/index.js";
 import { dbToFaderLevel } from "./dist/level-table.js";
+import { coerceOscArg } from "./dist/osc-client.js";
 
 function at(db) { return dbToFaderLevel(db).level; }
 
@@ -42,3 +43,10 @@ function at(db) { return dbToFaderLevel(db).level; }
 assert.throws(() => computeRelativeLevelAdjustment(0, { deltaDb: 1 }), /-inf/);
 
 console.log("relative level safety checks passed");
+
+{
+  const zeroAsFloat = coerceOscArg(0, "float");
+  assert.equal(typeof zeroAsFloat, "number");
+  assert.notEqual(zeroAsFloat, 0);
+  assert.ok(Math.abs(zeroAsFloat) < 0.000001);
+}
