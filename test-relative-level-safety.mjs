@@ -32,6 +32,13 @@ function at(db) { return dbToFaderLevel(db).level; }
   assert.equal(r.effectiveDeltaDb, -1);
 }
 
+{
+  const r = computeRelativeLevelAdjustment(at(-10), { direction: "down", amount: "normal", minDb: null, maxDb: null });
+  assert.ok(r.targetDb < r.beforeDb);
+  assert.equal(r.minDb, undefined);
+  assert.equal(r.maxDb, undefined);
+}
+
 assert.throws(() => computeRelativeLevelAdjustment(0, { deltaDb: 1 }), /-inf/);
 
 console.log("relative level safety checks passed");

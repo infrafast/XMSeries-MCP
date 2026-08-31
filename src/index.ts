@@ -569,8 +569,8 @@ interface RelativeLevelAdjustmentInput {
     deltaDb?: number;
     direction?: RelativeLevelDirection;
     amount?: RelativeLevelAmount;
-    minDb?: number;
-    maxDb?: number;
+    minDb?: number | null;
+    maxDb?: number | null;
 }
 
 interface RelativeLevelAdjustmentResult {
@@ -621,9 +621,9 @@ export function computeRelativeLevelAdjustment(
     if (hasDelta === hasDirection) {
         throw new Error("Relative level adjustment requires exactly one of deltaDb or direction.");
     }
-    if (input.minDb !== undefined && !Number.isFinite(input.minDb)) throw new Error("minDb must be numeric.");
-    if (input.maxDb !== undefined && !Number.isFinite(input.maxDb)) throw new Error("maxDb must be numeric.");
-    if (input.minDb !== undefined && input.maxDb !== undefined && input.minDb > input.maxDb) {
+    if (input.minDb != null && !Number.isFinite(input.minDb)) throw new Error("minDb must be numeric.");
+    if (input.maxDb != null && !Number.isFinite(input.maxDb)) throw new Error("maxDb must be numeric.");
+    if (input.minDb != null && input.maxDb != null && input.minDb > input.maxDb) {
         throw new Error("minDb cannot be greater than maxDb.");
     }
 
@@ -648,11 +648,11 @@ export function computeRelativeLevelAdjustment(
     let boundedDb = requestedDb;
     let clamped = false;
 
-    if (input.maxDb !== undefined && boundedDb > input.maxDb) {
+    if (input.maxDb != null && boundedDb > input.maxDb) {
         boundedDb = input.maxDb;
         clamped = true;
     }
-    if (input.minDb !== undefined && boundedDb < input.minDb) {
+    if (input.minDb != null && boundedDb < input.minDb) {
         boundedDb = input.minDb;
         clamped = true;
     }
@@ -675,8 +675,8 @@ export function computeRelativeLevelAdjustment(
             targetDb: beforeDb,
             requestedDeltaDb,
             effectiveDeltaDb: 0,
-            minDb: input.minDb,
-            maxDb: input.maxDb,
+            minDb: input.minDb ?? undefined,
+            maxDb: input.maxDb ?? undefined,
             clamped: true,
             noOp: true,
             targetLevel: before.level,
@@ -689,8 +689,8 @@ export function computeRelativeLevelAdjustment(
         targetDb: boundedActualDb,
         requestedDeltaDb,
         effectiveDeltaDb: boundedActualDb - beforeDb,
-        minDb: input.minDb,
-        maxDb: input.maxDb,
+        minDb: input.minDb ?? undefined,
+        maxDb: input.maxDb ?? undefined,
         clamped,
         noOp: bounded.level === before.level,
         targetLevel: bounded.level,
