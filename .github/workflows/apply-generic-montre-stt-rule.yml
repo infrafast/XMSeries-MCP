@@ -1,0 +1,29 @@
+name: Apply generic montre STT rule
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-generic-montre-stt-rule.yml'
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply patch
+        run: python scripts/_patch_generic_montre_stt_rule.py
+      - name: Verify prompt invariants
+        run: |
+          grep -Fq 'normalize `montre` -> `monte`' PROMPT.md
+          grep -Fq '`montre Claude de 2 dB` must be handled as `monte Claude de 2 dB`' PROMPT.md
+          grep -Fq 'Do NOT apply this correction merely because the word `montre` appears.' PROMPT.md
+          git diff --check
+      - name: Commit validated prompt change and remove temporary helpers
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm scripts/_patch_generic_montre_stt_rule.py .github/workflows/apply-generic-montre-stt-rule.yml
+          git add -A
+          git commit -m 'prompt: generalize French montre STT correction'
+          git push
