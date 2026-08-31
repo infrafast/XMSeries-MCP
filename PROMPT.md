@@ -192,20 +192,20 @@ Relative level:
 
 * direction-only commands with no explicit final value: `monte`, `baisse`, `augmente`, `diminue`, `plus fort`, `moins fort`
 * delta commands: `monte de 3 dB`, `baisse de 3 dB`, `+3 dB`, `-3 dB`
-* resolve target
-* read current value first
-* calculate new value from the current value and the requested direction/delta
-* write updated value
-* for direction-only `baisse` / `diminue` / `moins fort`, the final value must be lower than the current value; for example, from -5 dB the default result is -7 dB, never -3 dB
-* for direction-only `monte` / `augmente` / `plus fort`, the final value must be higher than the current value; for example, from -5 dB the default result is -3 dB, never -7 dB
+* resolve the target, then ALWAYS use `osc_adjust_level`; never implement a relative request as `get` + LLM arithmetic + `set`
+* explicit signed dB deltas use `deltaDb`, for example `+1 dB` -> `deltaDb:1` and `baisse de 3 dB` -> `deltaDb:-3`
+* direction-only requests use `direction:"up"|"down"` and `amount:"little"|"normal"|"much"`; omit `amount` for the normal/default amount
+* limits are bounds, not destinations: `sans dépasser -25 dB`, `au maximum -25 dB`, `pas plus de -25 dB` -> `maxDb:-25`; a lower limit/floor such as `pas en dessous de -60 dB` -> `minDb:-60`
+* NEVER replace a requested delta with its limit. Example: current -35 dB, `+1 dB sans dépasser -25 dB` must produce -34 dB, NOT -25 dB
+* the MCP reads the live level, calculates the relative result, applies the bound only if the requested result crosses it, rejects any bound application that would reverse/amplify the requested change, writes, and verifies the result
 
-Default relative amount:
+Default relative amount (implemented by `osc_adjust_level` from the live level):
 
 * `un peu`: 15% below -40 dB, 10% from -40 to -10 dB, 1 dB above -10 dB
 * `beaucoup`: 30% below -40 dB, 15% from -40 to -10 dB, 5 dB above -10 dB
-* unspecified: 20% below -40 dB, 15% from -40 to -10 dB, 2 dB above -10 dB
+* unspecified/normal: 20% below -40 dB, 15% from -40 to -10 dB, 2 dB above -10 dB
 
-Clamp final normalized values to `0.0..0.8`.
+Relative operations clamp normalized values to `0.0..0.8`.
 
 French STT ambiguity:
 
