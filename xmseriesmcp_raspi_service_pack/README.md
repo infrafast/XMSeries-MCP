@@ -37,16 +37,29 @@ xmseriesmcp noauto
 
 ## Expected architecture
 
-NAS Synology / LiveStageAssistant calls:
+NAS Synology / LiveStageAssistant or another MCP client calls:
 
 ```text
 http://100.96.255.63:8787/mcp
 ```
 
+A public HTTPS tunnel such as Tailscale Funnel can proxy the same endpoint without changing the MCP transport URL path.
+
 Raspberry Pi / XMSeries-MCP calls the mixer directly:
 
 ```text
 192.168.100.16:10023
+```
+
+The HTTP MCP endpoint uses **stateless Streamable HTTP**. It does not allocate or retain `Mcp-Session-Id` values. A fresh MCP transport is created for each protocol request while the mixer runtime remains process-global. This means a Raspberry Pi or XMSeries-MCP restart does not leave remote clients dependent on an HTTP session that existed before the restart; once the service and tunnel are reachable again, clients can continue using the same `/mcp` URL.
+
+Client configuration remains:
+
+```json
+{
+  "type": "streamable-http",
+  "url": "http://HOST:8787/mcp"
+}
 ```
 
 ## Prerequisites

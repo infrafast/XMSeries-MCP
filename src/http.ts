@@ -2,10 +2,8 @@
 
 import cors from "cors";
 import express from "express";
-import { randomUUID } from "crypto";
 import os from "os";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import {
     configureOscRuntime,
     configureSpeakerMapConfig,
@@ -594,8 +592,6 @@ export async function startHttpServer(): Promise<void> {
     app.use(cors());
     app.use(express.json());
 
-    const transports: Record<string, StreamableHTTPServerTransport> = {};
-
     app.use((req, res, next) => {
         if (isAuthorized(req)) {
             next();
@@ -611,6 +607,7 @@ export async function startHttpServer(): Promise<void> {
             ok: true,
             scheme: HTTP_SCHEME,
             transport: "streamable-http",
+            sessionMode: "stateless",
             oscHost: oscConfig.host,
             oscPort: oscConfig.port,
             oscProtocol: oscConfig.protocol,
@@ -623,11 +620,6 @@ export async function startHttpServer(): Promise<void> {
     });
 
     app.get("/mcp", (req, res, next) => {
-        if (req.headers["mcp-session-id"]) {
-            next();
-            return;
-        }
-
         const accept = req.header("accept") || "";
         const wantsHtml = accept.includes("text/html") || accept.includes("*/*") || accept === "";
         if (!wantsHtml) {
@@ -674,35 +666,18 @@ export async function startHttpServer(): Promise<void> {
     });
 
     app.all("/mcp", async (req, res) => {
-        const sessionId = req.headers["mcp-session-id"] as string | undefined;
-        let transport = sessionId ? transports[sessionId] : undefined;
+        const transport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: undefined,
+            enableJsonResponse: true,
+        });
+        const server = createOscMcpServer();
+        await server.connect(transport);
 
-        if (!transport) {
-            if (!sessionId && isInitializeRequest(req.body)) {
-                transport = new StreamableHTTPServerTransport({
-                    sessionIdGenerator: () => randomUUID(),
-                    onsessioninitialized: (sid) => {
-                        transports[sid] = transport!;
-                    },
-                });
-
-                transport.onclose = () => {
-                    if (transport?.sessionId) {
-                        delete transports[transport.sessionId];
-                    }
-                };
-
-                const server = createOscMcpServer();
-                await server.connect(transport);
-            } else {
-                res.status(400).json({
-                    error: "Bad Request: missing or invalid MCP session",
-                });
-                return;
-            }
+        try {
+            await transport.handleRequest(req, res, req.body);
+        } finally {
+            await transport.close();
         }
-
-        await transport.handleRequest(req, res, req.body);
     });
 
     app.listen(HTTP_PORT, HTTP_HOST, () => {
@@ -728,6 +703,7 @@ export async function startHttpServer(): Promise<void> {
         console.error(`Health: ${HTTP_SCHEME}://${HTTP_HOST}:${HTTP_PORT}/health`);
         console.error(`Agent MCP URL: ${mcpUrl}`);
         console.error(`Agent health URL: ${healthUrl}`);
+        console.error("Streamable HTTP sessions: stateless (no Mcp-Session-Id)");
         const oscConfig = getOscRuntimeConfig();
         console.error(`OSC: ${oscConfig.host}:${oscConfig.port} (${oscConfig.protocol})`);
         console.error(`OSC limits: ${oscConfig.channelCount} channel(s), ${oscConfig.busCount} bus(es), ${oscConfig.fxCount} FX slot/return(s), ${oscConfig.dcaCount} DCA group(s)`);
