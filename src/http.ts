@@ -21,6 +21,20 @@ const HTTP_PORT = parseInt(process.env.HTTP_PORT || "8787", 10);
 const HTTP_PUBLIC_HOST = process.env.HTTP_PUBLIC_HOST;
 const HTTP_SCHEME = "http";
 const MCP_AUTH_TOKEN = process.env.MCP_AUTH_TOKEN;
+const MODERN_PROTOCOL_VERSION = "2026-07-28";
+const LEGACY_PROTOCOL_VERSION = "2025-11-25";
+
+function normalizeUnsupportedModernProtocol(req: express.Request): boolean {
+    const protocolVersion = req.header("mcp-protocol-version");
+    if (protocolVersion !== MODERN_PROTOCOL_VERSION) return false;
+
+    // Keep the stable v1 SDK behavior for existing 2025-era clients such as
+    // LiveStageAssistant. Rewriting only the unsupported modern probe allows
+    // 2026-capable clients to fall back cleanly instead of tripping the v1
+    // transport's protocol-version validator.
+    req.headers["mcp-protocol-version"] = LEGACY_PROTOCOL_VERSION;
+    return true;
+}
 
 function getConnectableHost(): string {
     if (HTTP_PUBLIC_HOST) {
@@ -675,6 +689,11 @@ export async function startHttpServer(): Promise<void> {
     });
 
     app.all("/mcp", async (req, res) => {
+        const downgradedModernProbe = normalizeUnsupportedModernProtocol(req);
+        if (downgradedModernProbe) {
+            console.error("MCP 2026-07-28 request detected; using legacy 2025 compatibility for client fallback");
+        }
+
         const transport = new StreamableHTTPServerTransport({
             sessionIdGenerator: undefined,
             enableJsonResponse: true,
