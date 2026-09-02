@@ -296,7 +296,7 @@ function renderMcpAdminPage(): string {
         <h1>XMSeries MCP</h1>
         <p>Runtime mixer connection and MCP HTTP endpoint.</p>
       </div>
-      <div class="endpoint">MCP endpoint: <strong>./mcp</strong></div>
+      <div class="endpoint">MCP endpoint: <strong id="mcp-endpoint">/mcp</strong></div>
     </header>
     <div class="grid">
       <section>
@@ -390,12 +390,15 @@ function renderMcpAdminPage(): string {
     const toolCountEl = document.getElementById("tool-count");
     const pill = document.getElementById("online-pill");
     const updateButton = document.getElementById("update-button");
+    const endpointEl = document.getElementById("mcp-endpoint");
     const fields = ["host", "port", "protocol", "channelCount", "busCount", "fxCount", "dcaCount"];
-    const mcpBase = new URL(".", window.location.href).pathname.replace(/\/$/, "");
+    const mcpBase = window.location.pathname.replace(/\/$/, "");
 
     function mcpRelative(path = "") {
       return mcpBase + path;
     }
+
+    endpointEl.textContent = mcpBase;
 
     function setMessage(text, kind) {
       message.textContent = text || "";
@@ -460,7 +463,7 @@ function renderMcpAdminPage(): string {
         mcpServers: {
           mixer: {
             type: "streamable-http",
-            url: window.location.origin + window.location.pathname
+            url: window.location.origin + mcpBase
           }
         }
       };
