@@ -392,7 +392,8 @@ function renderMcpAdminPage(): string {
     const updateButton = document.getElementById("update-button");
     const endpointEl = document.getElementById("mcp-endpoint");
     const fields = ["host", "port", "protocol", "channelCount", "busCount", "fxCount", "dcaCount"];
-    const mcpBase = window.location.pathname.replace(/\/$/, "");
+    const currentPath = window.location.pathname;
+    const mcpBase = currentPath.endsWith("/") ? currentPath.slice(0, -1) : currentPath;
 
     function mcpRelative(path = "") {
       return mcpBase + path;
