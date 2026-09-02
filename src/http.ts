@@ -296,7 +296,7 @@ function renderMcpAdminPage(): string {
         <h1>XMSeries MCP</h1>
         <p>Runtime mixer connection and MCP HTTP endpoint.</p>
       </div>
-      <div class="endpoint">MCP endpoint: <strong>/mcp</strong></div>
+      <div class="endpoint">MCP endpoint: <strong>./mcp</strong></div>
     </header>
     <div class="grid">
       <section>
@@ -391,6 +391,11 @@ function renderMcpAdminPage(): string {
     const pill = document.getElementById("online-pill");
     const updateButton = document.getElementById("update-button");
     const fields = ["host", "port", "protocol", "channelCount", "busCount", "fxCount", "dcaCount"];
+    const mcpBase = new URL(".", window.location.href).pathname.replace(/\/$/, "");
+
+    function mcpRelative(path = "") {
+      return mcpBase + path;
+    }
 
     function setMessage(text, kind) {
       message.textContent = text || "";
@@ -455,7 +460,7 @@ function renderMcpAdminPage(): string {
         mcpServers: {
           mixer: {
             type: "streamable-http",
-            url: window.location.origin + "/mcp"
+            url: window.location.origin + window.location.pathname
           }
         }
       };
@@ -507,7 +512,7 @@ function renderMcpAdminPage(): string {
     }
 
     async function loadStatus() {
-      const response = await fetch("/mcp/status", { headers: { accept: "application/json" } });
+      const response = await fetch(mcpRelative("/status"), { headers: { accept: "application/json" } });
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error || "Unable to read mixer status");
@@ -519,7 +524,7 @@ function renderMcpAdminPage(): string {
     }
 
     async function loadTools() {
-      const response = await fetch("/mcp/tools", { headers: { accept: "application/json" } });
+      const response = await fetch(mcpRelative("/tools"), { headers: { accept: "application/json" } });
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error || "Unable to read tool list");
@@ -528,7 +533,7 @@ function renderMcpAdminPage(): string {
     }
 
     async function loadResources() {
-      const response = await fetch("/mcp/resources", { headers: { accept: "application/json" } });
+      const response = await fetch(mcpRelative("/resources"), { headers: { accept: "application/json" } });
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error || "Unable to read resource list");
@@ -551,7 +556,7 @@ function renderMcpAdminPage(): string {
       setBusy(true);
       setMessage("Updating mixer runtime...");
       try {
-        const response = await fetch("/mcp/config", {
+        const response = await fetch(mcpRelative("/config"), {
           method: "POST",
           headers: { "content-type": "application/json", accept: "application/json" },
           body: JSON.stringify(payloadFromForm())
