@@ -3,6 +3,7 @@ set -euo pipefail
 
 SERVICE="xmseriesmcp.service"
 HEALTH_URL="http://127.0.0.1:8787/health"
+PUBLIC_BASE_URL="https://raspberrypi-1.tail70348.ts.net/xm"
 
 cmd="${1:-}"
 
@@ -48,20 +49,20 @@ case "$cmd" in
     echo
     ;;
 
+  endpoint)
+    echo "Local : http://127.0.0.1:8787/mcp"
+    echo "Public: ${PUBLIC_BASE_URL}/mcp"
+    ;;
+
   test-remote)
-    IP="$(tailscale ip -4 2>/dev/null | head -n 1)"
-    if [ -z "$IP" ]; then
-      echo "No Tailscale IPv4 found."
-      exit 1
-    fi
-    echo "Local health:  $HEALTH_URL"
-    echo "Remote health: http://$IP:8787/health"
-    curl -s "http://$IP:8787/health"
+    echo "Local health : $HEALTH_URL"
+    echo "Public health: ${PUBLIC_BASE_URL}/health"
+    curl -fsS "${PUBLIC_BASE_URL}/health"
     echo
     ;;
 
   *)
-    echo "Usage: xmseriesmcp {start|stop|restart|status|logs|auto|noauto|last-state|health|test-remote}"
+    echo "Usage: xmseriesmcp {start|stop|restart|status|logs|auto|noauto|last-state|health|endpoint|test-remote}"
     exit 1
     ;;
 esac
