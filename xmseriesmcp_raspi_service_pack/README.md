@@ -30,6 +30,7 @@ xmseriesmcp restart
 xmseriesmcp status
 xmseriesmcp logs
 xmseriesmcp health
+xmseriesmcp endpoint
 xmseriesmcp test-remote
 xmseriesmcp last-state
 xmseriesmcp noauto
@@ -37,28 +38,40 @@ xmseriesmcp noauto
 
 ## Expected architecture
 
-NAS Synology / LiveStageAssistant or another MCP client calls:
+XMSeries-MCP listens on the Raspberry Pi on port `8787` and is published through the validated Tailscale Funnel path `/xm`:
 
 ```text
-http://100.96.255.63:8787/mcp
+Local MCP   : http://127.0.0.1:8787/mcp
+Public MCP  : https://raspberrypi-1.tail70348.ts.net/xm/mcp
+Public health: https://raspberrypi-1.tail70348.ts.net/xm/health
 ```
 
-A public HTTPS tunnel such as Tailscale Funnel can proxy the same endpoint without changing the MCP transport URL path.
+The service pack declares the stable Funnel hostname as:
+
+```text
+HTTP_PUBLIC_HOST=raspberrypi-1.tail70348.ts.net
+```
+
+The Funnel rule is:
+
+```bash
+sudo tailscale funnel --https=443 --set-path=/xm --bg 8787
+```
 
 Raspberry Pi / XMSeries-MCP calls the mixer directly:
 
 ```text
-192.168.100.16:10023
+192.168.100.16:10024
 ```
 
-The HTTP MCP endpoint uses **stateless Streamable HTTP**. It does not allocate or retain `Mcp-Session-Id` values. A fresh MCP transport is created for each protocol request while the mixer runtime remains process-global. This means a Raspberry Pi or XMSeries-MCP restart does not leave remote clients dependent on an HTTP session that existed before the restart; once the service and tunnel are reachable again, clients can continue using the same `/mcp` URL.
+The HTTP MCP endpoint uses **stateless Streamable HTTP**. It does not allocate or retain `Mcp-Session-Id` values. A fresh MCP transport is created for each protocol request while the mixer runtime remains process-global. This means a Raspberry Pi or XMSeries-MCP restart does not leave remote clients dependent on an HTTP session that existed before the restart; once the service and Funnel are reachable again, clients can continue using the same public `/xm/mcp` URL.
 
-Client configuration remains:
+Client configuration for the validated public rack endpoint is:
 
 ```json
 {
   "type": "streamable-http",
-  "url": "http://HOST:8787/mcp"
+  "url": "https://raspberrypi-1.tail70348.ts.net/xm/mcp"
 }
 ```
 
