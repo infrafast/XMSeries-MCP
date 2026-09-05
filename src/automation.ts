@@ -50,6 +50,14 @@ export class AutomationEngine {
     private nextId = 1;
 
     start(label: string, actions: AutomationAction[]): AutomationJobSnapshot {
+        for (const action of actions) {
+            if (action.type === "ramp" && (!Number.isFinite(action.durationSeconds) || action.durationSeconds <= 0)) {
+                throw new Error(
+                    "Ramp automation requires durationSeconds > 0. Use the immediate fader/send tool for an instantaneous level set."
+                );
+            }
+        }
+
         const id = `auto-${this.nextId++}`;
         const job: AutomationJob = {
             id,
@@ -125,12 +133,6 @@ export class AutomationEngine {
         const stepMs = Math.max(20, action.stepMs ?? 100);
         const from = action.from ?? await action.read();
         const to = action.to;
-
-        if (durationMs === 0) {
-            await action.write(to);
-            await this.verifyRampFinalValue(job, action, clamp01(to));
-            return;
-        }
 
         const steps = Math.max(1, Math.ceil(durationMs / stepMs));
         for (let i = 1; i <= steps; i++) {
