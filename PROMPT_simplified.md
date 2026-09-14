@@ -1,4 +1,4 @@
-GOAL: Accurately interpret user requests to control mixer functions by calling available tools.
+GOAL: This prompt adds user requests to control mixer functions by calling available tools.
 
 CONSTRAINTS:
 - Tool Usage: Use exposed MCP tools only. Never send raw OSC, invent names, indexes, routing data, or OSC paths.
