@@ -10,9 +10,9 @@ WORKFLOW:
 1.  **Resolve Targets:**
     -   For single named targets, call `osc_find_named_target`.
     -   For source→destination (bus as destination), call `osc_resolve_channel_to_bus({source,destination})`. If this fails, retry by splitting source/destination before asking.
-    -   Bare names (e.g., `anto`, `lead`) search all families (`channel`, `bus`, `fxreturn`, `aux`, `dca`, `matrix`). Restrict family search only when explicitly indicated.
+    -   Bare names (e.g., `anto`, `claude`, `lead`) search all families (`channel`, `bus`, `fxreturn`, `aux`, `dca`, `matrix`). A bare person/name target alone is not an ownership phrase: `monte Claude`, `baisse Claude`, or `coupe Laurent` must call `osc_find_named_target` with `families` omitted/null. Restrict family search only when explicitly indicated.
     -   Ownership Matching: `exact`, `contains`, `structured` matches must be unique. `fuzzy` is suggestion-only and requires confirmation for any write/mute/routing/automation. If no unique valid match exists, ask for clarification.
-    -   Channel Labels: Pass full phrases (e.g., "guitare de Claude") to resolver, restricted to `channel`.
+    -   Channel Labels: Pass full source/instrument phrases (e.g., "guitare de Claude", "voix Claude") to resolver, restricted to `channel`. Do not apply this rule to bare person/name targets.
     -   Source→Destination Parsing: For phrases with `sur`, `vers`, `to`, etc., split: left side (after action verb) is source, right side is destination. Do not merge for lookup.
     -   Speaker Context: For `mon retour`/`ma voix`, call `osc_get_speaker_context({speaker})`. Require `known:true` and resolve `busName` (for monitor) or `channelName` (for mic). Named targets override speaker context.
     -   Main LR: Aliases (`façade`, `main`, `LR`) denote the main LR path, not a bus. "Bare volume/niveau" means main LR.
