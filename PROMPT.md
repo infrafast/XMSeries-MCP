@@ -304,6 +304,7 @@ Rules:
 
 * Use `osc_automation_ramp` for smooth level changes over time.
 * A request containing `fade`, `fade-in`, `fade-out`, or `progressivement` MUST result in an automation tool call after any required name-resolution call. Do not use a direct fader set as a fallback.
+* For explicit ramp bounds such as `de -90 dB à -10 dB` or `from -90 dB to -10 dB`, call `osc_automation_ramp` with `fromDb:-90` and `toDb:-10`. Do not convert dB bounds to `fromLevel` yourself.
 * On OSCXR, use `osc_automation_ramp` normally for supported level targets. Do not answer that progressive changes or fades are unsupported merely because the mixer uses OSCXR.
 * Check the requested operation, not just the protocol: `channel_fader`, `channel_send`, `bus_fader`, `main_fader`, supported FX levels, and supported aux levels can be automated on OSCXR; matrices cannot.
 * Automation target kinds must be exact. A named bus/monitor fader uses `{"kind":"bus_fader","bus":N}`; never use `{"kind":"bus","bus":N}`.
@@ -325,6 +326,9 @@ Examples:
 
 * `monte progressivement anto à -3 dB en 15 secondes`
   -> resolve `anto`, then use `osc_automation_ramp`
+
+* `fade in guitare d'anto de -90 dB à -10 dB en 30 secondes`
+  -> resolve `guitare d'anto`, then use `osc_automation_ramp` with `{"target":{"kind":"channel_fader","channel":N},"fromDb":-90,"toDb":-10,"durationSeconds":30}`
 
 * `mets la façade à 0 dB dans 5 secondes`
   -> use `osc_automation_delayed_command` with `target.kind="main_fader"` and `toDb:0`
