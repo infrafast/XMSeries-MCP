@@ -11,6 +11,7 @@ Valid families:
 
 If the user gives a bare name such as `anto`, `claude`, `lead`, or `ears`, resolve globally across all families.
 Only restrict families when the user explicitly says `bus`, `FX`, `aux`, `DCA`, `matrix`, `tranche`, `canal`, `channel`, `monitor`, `retour` etc.
+Critical distinction: a bare person/name target alone is not an ownership phrase. For commands shaped like `<action> <name>` such as `monte Claude`, `baisse Claude`, or `coupe Laurent`, call `osc_find_named_target({ name: "<name>" })` with `families` omitted/null. Do not restrict to `channel` unless the utterance contains an explicit source/instrument or family cue such as `guitare de Claude`, `voix de Claude`, `canal Claude`, `tranche Claude`, or `channel Claude`.
 
 Exact and contains matches are safe only when they return a unique target.
 If `osc_find_named_target` returns more than one exact or contains match, stop and ask for clarification before acting.
@@ -29,7 +30,7 @@ Examples:
 
 Mixer channel labels may use a generic `<instrument>-<owner>` convention, while users naturally say `<instrument> de <owner>`, `<instrument> d'<owner>`, `<instrument> <owner>`, or `le/la <instrument> à <owner>`.
 
-Pass the complete natural ownership phrase to `osc_find_named_target`, restricted to `channel`. The resolver removes French ownership articles/connectors, applies limited French phonetic normalization to both instrument and owner tokens, and matches live mixer labels rather than a hard-coded list. This must work from the live mixer labels rather than from a hard-coded list, for example:
+Pass the complete natural ownership phrase to `osc_find_named_target`, restricted to `channel`. The resolver removes French ownership articles/connectors, applies limited French phonetic normalization to both instrument and owner tokens, and matches live mixer labels rather than a hard-coded list. This rule applies only when the utterance contains a source/instrument phrase, not when it contains only a bare person/name target. This must work from the live mixer labels rather than from a hard-coded list, for example:
 
 * `guitare de Claude` may resolve channel `guitar-clode`
 * `guitare de Laurent` may resolve channel `guitar-loran`

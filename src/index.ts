@@ -1200,7 +1200,7 @@ export const TOOLS: Tool[] = [
                 },
                 families: {
                     type: "array",
-                    description: "Object families to search. For a single named target with no explicit family word, omit this field or search all families so bus names are not missed. Narrow to ['channel'] only when the user explicitly says channel/tranche/canal/source, or when resolving the source side of a clear source-to-destination command. Narrow to ['bus'] only when resolving an explicit bus/monitor/retour destination.",
+                    description: "Object families to search. For a bare single named target with no explicit family word, omit this field or search all families so bus names are not missed. A bare person/name target alone, such as 'Claude' in 'baisse Claude', is not an ownership phrase and must search all families. Narrow to ['channel'] only when the user explicitly says channel/tranche/canal/source, when the utterance contains a source/instrument phrase such as 'guitare de Claude' or 'voix de Claude', or when resolving the source side of a clear source-to-destination command. Narrow to ['bus'] only when resolving an explicit bus/monitor/retour destination.",
                     items: {
                         type: "string",
                         enum: ["channel", "bus", "fxreturn", "aux", "dca", "matrix"],
