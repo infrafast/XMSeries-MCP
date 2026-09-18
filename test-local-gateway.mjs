@@ -21,6 +21,7 @@ let muteWrites = [];
 let sendLevel = 0.5;
 let sendWrites = [];
 let automationCalls = [];
+let automationJobs = [];
 let stale = false;
 
 const adapter = {
@@ -79,6 +80,15 @@ const adapter = {
     async scheduleSend(source, destination, toLevel, delaySeconds) {
         automationCalls.push({ kind: "send-delay", source, destination, toLevel, delaySeconds });
         return "auto-send-delay";
+    },
+    async listAutomations() {
+        return automationJobs;
+    },
+    async cancelAutomation(id) {
+        const job = automationJobs.find((entry) => entry.id === id);
+        if (!job) return null;
+        job.status = "cancelled";
+        return job;
     },
 };
 
@@ -376,6 +386,54 @@ async function ready(text) {
     assert.equal(automationCalls[0].source.name, "Batterie");
     assert.equal(automationCalls[0].destination.name, "Anthony");
     assert.equal(automationCalls[0].durationSeconds, 3);
+}
+
+// OR4B4 Local automation status is a read.
+{
+    automationJobs = [
+        { id: "auto-1", label: "Local ramp Voix", status: "completed" },
+        { id: "auto-2", label: "Local ramp Batterie", status: "running", currentAction: "ramp channel 6 fader" },
+    ];
+    const analyzed = await ready("statut des automations");
+    assert.equal(analyzed.effect, "read");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.match(result.responseText, /auto-2: running/);
+}
+
+// OR4B4 explicit automation cancellation remains a write plan.
+{
+    automationJobs = [{ id: "auto-3", label: "Long fade", status: "running" }];
+    const analyzed = await ready("annule l'automation auto-3");
+    assert.equal(analyzed.effect, "write");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(automationJobs[0].status, "cancelled");
+}
+
+// OR4B4 "last automation" snapshots the last running job during analysis.
+{
+    automationJobs = [
+        { id: "auto-4", label: "Done", status: "completed" },
+        { id: "auto-5", label: "Fade one", status: "running" },
+        { id: "auto-6", label: "Fade two", status: "running" },
+    ];
+    const analyzed = await ready("annule la dernière automation");
+    assert.equal(analyzed.effect, "write");
+    automationJobs.push({ id: "auto-7", label: "Later job", status: "running" });
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(automationJobs.find((entry) => entry.id === "auto-6").status, "cancelled");
+    assert.equal(automationJobs.find((entry) => entry.id === "auto-7").status, "running");
 }
 
 // Default/cloud inventory is unchanged; Local adds only two reserved tools.

@@ -38,6 +38,8 @@ export interface LocalMixerGatewayAdapter {
     startSendRamp(source: LocalMixerTarget, destination: LocalMixerTarget, toLevel: number, durationSeconds: number, fromLevel?: number): Promise<string>;
     scheduleLevel(target: LocalMixerTarget, toLevel: number, delaySeconds: number): Promise<string>;
     scheduleSend(source: LocalMixerTarget, destination: LocalMixerTarget, toLevel: number, delaySeconds: number): Promise<string>;
+    listAutomations(): Promise<Array<{ id: string; label?: string; status: string; currentAction?: string; error?: string }>>;
+    cancelAutomation(id: string): Promise<{ id: string; label?: string; status: string } | null>;
 }
 
 type LevelUnit = "db" | "percent";
@@ -54,6 +56,8 @@ type Intent =
     | { kind: "send_ramp_level"; sourceQuery: string; destinationQuery: string; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
     | { kind: "delay_level"; targetQuery: string; value: LevelValue; delaySeconds: number }
     | { kind: "send_delay_level"; sourceQuery: string; destinationQuery: string; value: LevelValue; delaySeconds: number }
+    | { kind: "automation_list" }
+    | { kind: "automation_cancel"; id?: string; lastRunning: boolean }
     | { kind: "mute"; targetQuery: string; mute: boolean };
 
 type TargetIntent = Extract<Intent, { targetQuery: string }>;
@@ -70,6 +74,8 @@ type LocalPlan =
     | { kind: "send_ramp_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
     | { kind: "delay_level"; targetQuery: string; target: LocalMixerTarget; value: LevelValue; delaySeconds: number }
     | { kind: "send_delay_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; value: LevelValue; delaySeconds: number }
+    | { kind: "automation_list" }
+    | { kind: "automation_cancel"; id: string }
     | { kind: "mute"; targetQuery: string; target: LocalMixerTarget; mute: boolean };
 
 interface LocalContinuation {
@@ -182,6 +188,34 @@ function parseIntent(raw: string): Intent | null {
         ].includes(normalized)
     ) {
         return { kind: "status" };
+    }
+
+    if (
+        [
+            "liste automations",
+            "liste les automations",
+            "liste des automations",
+            "statut automations",
+            "statut des automations",
+            "etat automations",
+            "etat des automations",
+            "automation status",
+            "list automations",
+        ].includes(normalized)
+    ) {
+        return { kind: "automation_list" };
+    }
+
+    const cancelLastAutomation = /^(?:annule|annuler|cancel|stop|arrete|arrête)\s+(?:(?:la|le)\s+)?(?:derniere|dernière|dernier|last)\s+(?:automation|automatisation|fade|rampe|ramp)$/iu.test(text);
+    if (cancelLastAutomation) {
+        return { kind: "automation_cancel", lastRunning: true };
+    }
+
+    const cancelAutomation = text.match(
+        /^\s*(?:annule|annuler|cancel|stop|arrete|arrête)\s+(?:(?:l['’]?|la\s+|le\s+)?(?:automation|automatisation|fade|rampe|ramp)\s+)?(auto-\d+)\s*$/iu,
+    );
+    if (cancelAutomation?.[1]) {
+        return { kind: "automation_cancel", id: cancelAutomation[1].toLowerCase(), lastRunning: false };
     }
 
     const parseLevelValue = (rawValue: string, rawUnit: string): LevelValue | null => {
@@ -564,13 +598,41 @@ export class LocalMixerCommandGateway {
             };
         }
 
-        if (intent.kind === "status") {
-            const stored = this.store.createPlan({ kind: "status" }, "read");
+        if (intent.kind === "status" || intent.kind === "automation_list") {
+            const stored = this.store.createPlan({ kind: intent.kind }, "read");
             return {
                 protocol: GATEWAY_PROTOCOL,
                 recognized: true,
                 status: "ready",
                 effect: "read",
+                planToken: stored.token,
+                expiresInMs: stored.expiresInMs,
+                responseText: null,
+            };
+        }
+
+        if (intent.kind === "automation_cancel") {
+            let id = intent.id;
+            if (intent.lastRunning) {
+                const jobs = await this.adapter.listAutomations();
+                const running = jobs.filter((job) => job.status === "running");
+                id = running.length > 0 ? running[running.length - 1].id : undefined;
+            }
+            if (!id) {
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    recognized: false,
+                    status: "unrecognized",
+                    effect: "none",
+                    responseText: "Aucune automation en cours à annuler.",
+                };
+            }
+            const stored = this.store.createPlan({ kind: "automation_cancel", id }, "write");
+            return {
+                protocol: GATEWAY_PROTOCOL,
+                recognized: true,
+                status: "ready",
+                effect: "write",
                 planToken: stored.token,
                 expiresInMs: stored.expiresInMs,
                 responseText: null,
@@ -623,6 +685,39 @@ export class LocalMixerCommandGateway {
                     protocol: GATEWAY_PROTOCOL,
                     ok: true,
                     responseText: normalizedStatusText(await this.adapter.status()),
+                };
+            }
+
+            if (plan.kind === "automation_list") {
+                const jobs = await this.adapter.listAutomations();
+                const responseText = jobs.length === 0
+                    ? "Aucune automation."
+                    : jobs.map((job) => {
+                        const detail = job.currentAction ? ` — ${job.currentAction}` : "";
+                        const error = job.error ? ` — erreur: ${job.error}` : "";
+                        return `${job.id}: ${job.status} (${job.label || "automation"})${detail}${error}`;
+                    }).join("; ");
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    ok: true,
+                    responseText,
+                };
+            }
+
+            if (plan.kind === "automation_cancel") {
+                const job = await this.adapter.cancelAutomation(plan.id);
+                if (!job) {
+                    return {
+                        protocol: GATEWAY_PROTOCOL,
+                        ok: false,
+                        errorCode: "execution_failed",
+                        responseText: `Automation introuvable : ${plan.id}.`,
+                    };
+                }
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    ok: true,
+                    responseText: `Automation ${job.id} : ${job.status}.`,
                 };
             }
 
