@@ -339,51 +339,34 @@ function namedTargetRange(family: NamedTargetFamily): number[] {
     return Array.from({ length: maxByFamily[family] }, (_, i) => i + 1);
 }
 
-async function findNamedTargets(
+export function rankNamedTargetCandidates(
     query: string,
-    families: NamedTargetFamily[] = NAMED_TARGET_FAMILIES
-): Promise<NamedTargetMatch[]> {
+    candidates: Array<{ family: NamedTargetFamily; index: number; name: string }>,
+): NamedTargetMatch[] {
     const normalizedQuery = normalizeMixerName(query);
     if (!normalizedQuery) return [];
 
-    const candidates: Array<Omit<NamedTargetMatch, "matchType"> & { normalizedName: string }> = [];
+    const normalizedCandidates = candidates.map((candidate) => ({
+        ...candidate,
+        normalizedName: normalizeMixerName(candidate.name),
+    }));
 
-    const exactMatches: NamedTargetMatch[] = [];
-    for (const family of families) {
-        for (const index of namedTargetRange(family)) {
-            const name = await readNamedTarget(family, index);
-            if (!name) continue;
-            const normalizedName = normalizeMixerName(name);
-
-            if (normalizedName === normalizedQuery) {
-                exactMatches.push({ family, index, name, matchType: "exact" });
-                continue;
-            }
-
-            candidates.push({
-                family,
-                index,
-                name,
-                normalizedName,
-            });
-        }
-    }
-
+    const exactMatches = normalizedCandidates
+        .filter((candidate) => candidate.normalizedName === normalizedQuery)
+        .map(({ normalizedName: _normalizedName, ...candidate }) => ({ ...candidate, matchType: "exact" as const }));
     if (exactMatches.length > 0) return exactMatches;
 
-    const containsMatches = candidates
+    const containsMatches = normalizedCandidates
         .filter((candidate) => candidate.normalizedName.includes(normalizedQuery))
         .map(({ normalizedName: _normalizedName, ...candidate }) => ({ ...candidate, matchType: "contains" as const }));
-
     if (containsMatches.length > 0) return containsMatches;
 
-    const structuredMatches = candidates
+    const structuredMatches = normalizedCandidates
         .filter((candidate) => isStructuredOwnershipMatch(query, candidate.name))
         .map(({ normalizedName: _normalizedName, ...candidate }) => ({ ...candidate, matchType: "structured" as const }));
-
     if (structuredMatches.length > 0) return structuredMatches;
 
-    return candidates
+    return normalizedCandidates
         .map((candidate) => ({ ...candidate, fuzzyDistance: fuzzyNameDistance(normalizedQuery, candidate.normalizedName) }))
         .filter((candidate): candidate is typeof candidate & { fuzzyDistance: number } => candidate.fuzzyDistance !== null)
         .sort((a, b) => a.fuzzyDistance - b.fuzzyDistance)
@@ -391,6 +374,23 @@ async function findNamedTargets(
             ...candidate,
             matchType: "fuzzy" as const,
         }));
+}
+
+async function findNamedTargets(
+    query: string,
+    families: NamedTargetFamily[] = NAMED_TARGET_FAMILIES
+): Promise<NamedTargetMatch[]> {
+    const candidates: Array<{ family: NamedTargetFamily; index: number; name: string }> = [];
+
+    for (const family of families) {
+        for (const index of namedTargetRange(family)) {
+            const name = await readNamedTarget(family, index);
+            if (!name) continue;
+            candidates.push({ family, index, name });
+        }
+    }
+
+    return rankNamedTargetCandidates(query, candidates);
 }
 
 async function localGatewayReadLevel(target: LocalMixerTarget): Promise<number> {
