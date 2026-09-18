@@ -1,5 +1,29 @@
 # OSC MCP Server - Agent Configuration Guide
 
+## Coding-agent capability symmetry rule
+
+This repository has two user-facing execution surfaces for mixer capabilities:
+
+1. the normal typed MCP tool surface used by LLM/cloud agents;
+2. the deterministic Local parser exposed through `lsa_local_analyze_command` / `lsa_local_execute_command`.
+
+For every new end-user mixer capability, coding agents must keep these surfaces **semantically symmetric**.
+
+A capability is not complete and must not be merged as finished unless all applicable items are done in the same change set:
+
+- expose or extend the normal typed MCP tool contract for the capability;
+- expose the equivalent deterministic Local natural-language intent/parser path;
+- route both surfaces into the same shared resolver/business/OSC/automation implementation instead of duplicating mixer logic;
+- add/update tool-level tests and deterministic-parser tests for the same semantic cases;
+- document the normal MCP capability where appropriate and update the **Local deterministic gateway** section of `README.md` with canonical phrases users can speak/type;
+- update `PROMPT.md` when the LLM/cloud agent needs new behavioral guidance for the capability;
+- preserve `lsa-command-gateway/v1`, one-shot write plans, stale-target checks and ambiguity/fuzzy-write safety.
+
+The rule is bidirectional: do not add a Local-only business capability without the corresponding normal MCP tool capability, and do not add a normal tool capability without its deterministic Local equivalent. If the repository owner explicitly scopes a capability out of one surface, document that exception in `README.md` and `ROADMAP.md` rather than silently leaving the surfaces divergent.
+
+Syntax aliases may differ from MCP schema names, but the underlying semantics, bounds, safety behavior and supported mixer families must remain aligned.
+
+
 This guide explains how to configure and use the OSC MCP server with different AI agents and platforms.
 
 ## Table of Contents
