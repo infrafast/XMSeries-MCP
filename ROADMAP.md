@@ -82,7 +82,7 @@ OR4B4 PR #12 merged on `main` as `968c94f69d4bd007191fff1762101707a94c70b5`. PR 
 - [~] dB and percent, absolute and relative values: implemented for single targets and channel-to-bus sends on PR #12; relative percent is defined deterministically as percentage points on normalized fader level;
 - [ ] grouped/bulk operations;
 - [ ] speaker-context defaults;
-- [~] fades/ramps and delayed actions through the existing MCP-side automation engine: PR #12 implements fade-in/out, progressive absolute/relative ramps, explicit from/to ranges, source-to-bus ramps and delayed level changes;
+- [~] fades/ramps and delayed actions through the existing MCP-side automation engine: PR #12 implements fade-in/out, progressive absolute/relative ramps, explicit from/to ranges, source-to-bus ramps and delayed level changes. Live Pi validation now confirms a real progressive fade on channel `batterie` to -30 dB over 2 seconds; delayed actions and source-to-bus ramps remain pending;
 - [ ] automation status/cancel through Local natural commands;
 - [x] preserve level vs mute semantics and all protocol-specific unsupported-operation guards by delegating execution to existing resolver/OSC/automation adapters.
 
