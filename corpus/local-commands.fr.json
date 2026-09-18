@@ -245,6 +245,62 @@
       }
     },
     {
+      "name": "mute-channel-send",
+      "utterance": "mute Batterie sur Anthony",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "mute_send",
+          "source": "Batterie",
+          "destination": "Anthony",
+          "mute": true
+        }
+      }
+    },
+    {
+      "name": "unmute-channel-send",
+      "utterance": "unmute Batterie sur Anthony",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "mute_send",
+          "source": "Batterie",
+          "destination": "Anthony",
+          "mute": false
+        }
+      }
+    },
+    {
+      "name": "mute-fx-send",
+      "utterance": "coupe Hall FX sur Anthony",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "mute_send",
+          "source": "Hall FX",
+          "destination": "Anthony",
+          "mute": true
+        }
+      }
+    },
+    {
+      "name": "unmute-aux-send",
+      "utterance": "réactive Playback dans Anthony",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "mute_send",
+          "source": "Playback",
+          "destination": "Anthony",
+          "mute": false
+        }
+      }
+    },
+    {
       "name": "send-absolute",
       "utterance": "mets Batterie sur Anthony à -20 dB",
       "expected": {
