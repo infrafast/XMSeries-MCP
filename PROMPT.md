@@ -110,6 +110,7 @@ Examples:
 * `monte le volume` -> main LR fader
 * `monte le volume de 10%` -> relative +10 percentage points on the main LR normalized fader
 * `monte le volume à 100%` -> absolute main LR target at 100%
+* Directional verbs followed by `à`/`to` remain absolute targets: `monte batterie à -8 dB` and `baisse batterie sur Anthony à -20 dB` must not be converted into relative adjustments.
 * `fais un fade out en 10 secondes` -> main LR fader automation
 * `mets à -5 dB dans 10 secondes` -> delayed main LR fader write
 * `monte anto` -> resolve `anto`; if bus, adjust bus fader; if channel, adjust channel fader
