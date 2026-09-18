@@ -518,6 +518,7 @@ The parser is intentionally bounded and deterministic. Prefer the canonical form
 | Relative percent | `monte batterie de 10%` · `baisse batterie de 1%` · `monte le volume de 100%` (Main LR) |
 | Channel -> bus absolute | `mets batterie sur Anthony à -20 dB` |
 | Channel -> bus relative | `monte batterie sur Anthony de 3 dB` |
+| Source -> bus read | `niveau de Batterie sur Anthony` · `quel est le niveau de Hall FX sur Anthony` · `donne le niveau de Playback dans Anthony` |
 | Source -> bus qualitative | `monte batterie sur Anthony` · `baisse un peu Playback dans Anthony` |
 | FX/aux -> bus absolute | `mets Hall FX sur Anthony à -18 dB` · `mets Playback sur Anthony à -20 dB` |
 | Source -> bus mute | `mute Batterie sur Anthony` · `coupe Hall FX sur Anthony` · `réactive Playback dans Anthony` |
@@ -545,7 +546,7 @@ Important syntax rules:
 - Percent values use the normalized fader range. An absolute `100%` means the top of the normalized fader range; a relative `+10%` means ten percentage points on that normalized range.
 - `fade in` / `fade out` without an explicit target defaults to **Main LR / façade**.
 - Main aliases currently include `main`, `main lr`, `lr`, `façade`, `master`, `master lr`, and `mix principal`.
-- Source-to-destination syntax supports **channel / FX return / aux return -> bus**. The source and destination are resolved independently and must each be safe and unique. Examples: `monte batterie sur Anthony`, `mets Hall FX sur Anthony à -18 dB`, `baisse un peu Playback dans Anthony`. Route mute/unmute such as `mute Batterie sur Anthony` is a distinct send operation and never degrades into whole-source mute. Qualitative route commands use the same adaptive `osc_adjust_level` semantics as cloud tools; a source name such as `Basse` remains a source candidate in `monte Basse sur Anthony`, not a contradictory direction.
+- Source-to-destination syntax supports **channel / FX return / aux return -> bus** for reads and writes. The source and destination are resolved independently and must each be safe and unique. Examples: `niveau de Batterie sur Anthony`, `monte batterie sur Anthony`, `mets Hall FX sur Anthony à -18 dB`, `baisse un peu Playback dans Anthony`. Route reads are strictly read-only. Route mute/unmute such as `mute Batterie sur Anthony` is a distinct send operation and never degrades into whole-source mute. Qualitative route commands use the same adaptive `osc_adjust_level` semantics as cloud tools; a source name such as `Basse` remains a source candidate in `monte Basse sur Anthony`, not a contradictory direction.
 - If a name is ambiguous or only fuzzy-matches, the gateway asks for clarification rather than guessing.
 - French STT robustness: `montre Batterie` and `montre le volume` are accepted as likely `monte` transcriptions in mixer-level command shapes. Explicit display/read forms such as `montre-moi le niveau de Batterie` are **not** rewritten into writes.
 - DCA writes are not yet part of the deterministic Local write surface.

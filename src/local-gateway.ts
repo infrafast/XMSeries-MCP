@@ -91,6 +91,7 @@ type Intent =
     | { kind: "set_level"; targetQuery: string; unit: LevelUnit; value: number }
     | { kind: "adjust_level"; targetQuery: string; unit: LevelUnit; delta: number }
     | { kind: "adjust_level_qualitative"; targetQuery: string; direction: LocalRelativeDirection; amount: LocalRelativeAmount }
+    | { kind: "send_read_level"; sourceQuery: string; destinationQuery: string }
     | { kind: "send_set_level"; sourceQuery: string; destinationQuery: string; unit: LevelUnit; value: number }
     | { kind: "send_adjust_level"; sourceQuery: string; destinationQuery: string; unit: LevelUnit; delta: number }
     | { kind: "send_adjust_level_qualitative"; sourceQuery: string; destinationQuery: string; direction: LocalRelativeDirection; amount: LocalRelativeAmount }
@@ -117,6 +118,7 @@ type LocalPlan =
     | { kind: "set_level"; targetQuery: string; target: LocalMixerTarget; unit: LevelUnit; value: number }
     | { kind: "adjust_level"; targetQuery: string; target: LocalMixerTarget; unit: LevelUnit; delta: number }
     | { kind: "adjust_level_qualitative"; targetQuery: string; target: LocalMixerTarget; direction: LocalRelativeDirection; amount: LocalRelativeAmount }
+    | { kind: "send_read_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget }
     | { kind: "send_set_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; unit: LevelUnit; value: number }
     | { kind: "send_adjust_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; unit: LevelUnit; delta: number }
     | { kind: "send_adjust_level_qualitative"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; direction: LocalRelativeDirection; amount: LocalRelativeAmount }
@@ -765,6 +767,21 @@ function parseIntent(raw: string): Intent | null {
         }
     }
 
+    const sendReadPatterns = [
+        /^\s*(?:quel(?:le)?\s+est\s+)?(?:le\s+)?(?:niveau|volume|fader)\s+(?:de\s+|du\s+|de la\s+|of\s+)(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s*\??\s*$/iu,
+        /^\s*(?:lis|donne|read|get)\s+(?:le\s+)?(?:niveau|volume|fader)\s+(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s*$/iu,
+    ];
+    for (const re of sendReadPatterns) {
+        const match = text.match(re);
+        if (match?.[1] && match[2]) {
+            const sourceQuery = cleanTarget(match[1]);
+            const destinationQuery = cleanTarget(match[2]);
+            if (sourceQuery && destinationQuery) {
+                return { kind: "send_read_level", sourceQuery, destinationQuery };
+            }
+        }
+    }
+
     const sendAbsolutePatterns = [
         /^\s*(?:mets|met|regle|règle|fixe|set|monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:niveau|volume|fader)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
         /^\s*(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
@@ -1260,6 +1277,7 @@ export class LocalMixerCommandGateway {
         }
 
         if (
+            intent.kind === "send_read_level" ||
             intent.kind === "send_set_level" ||
             intent.kind === "send_adjust_level" ||
             intent.kind === "send_adjust_level_qualitative" ||
@@ -1401,6 +1419,7 @@ export class LocalMixerCommandGateway {
             }
 
             if (
+                plan.kind === "send_read_level" ||
                 plan.kind === "send_set_level" ||
                 plan.kind === "send_adjust_level" ||
                 plan.kind === "send_adjust_level_qualitative" ||
@@ -1411,6 +1430,16 @@ export class LocalMixerCommandGateway {
             ) {
                 const source = await this.revalidateScopedTarget(plan.sourceQuery, plan.source, SEND_SOURCE_FAMILIES);
                 const destination = await this.revalidateScopedTarget(plan.destinationQuery, plan.destination, ["bus"]);
+                if (plan.kind === "send_read_level") {
+                    const level = await this.adapter.readSendLevel(source, destination);
+                    const converted = faderLevelToDb(level);
+                    return {
+                        protocol: GATEWAY_PROTOCOL,
+                        ok: true,
+                        responseText: `${displayName(source)} → ${displayName(destination)} est à ${formatDb(converted.db)}.`,
+                    };
+                }
+
                 if (plan.kind === "send_set_level") {
                     const converted = levelToNormalized(plan.unit, plan.value);
                     await this.adapter.writeSendLevel(source, destination, converted.level);
@@ -1629,12 +1658,13 @@ export class LocalMixerCommandGateway {
             };
         }
 
-        const stored = this.store.createPlan({ ...intent, source, destination }, "write");
+        const effect = intent.kind === "send_read_level" ? "read" : "write";
+        const stored = this.store.createPlan({ ...intent, source, destination }, effect);
         return {
             protocol: GATEWAY_PROTOCOL,
             recognized: true,
             status: "ready",
-            effect: "write",
+            effect,
             planToken: stored.token,
             expiresInMs: stored.expiresInMs,
             responseText: null,
