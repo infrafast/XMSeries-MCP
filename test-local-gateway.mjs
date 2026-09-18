@@ -27,6 +27,7 @@ let sendWrites = [];
 let sendMuteWrites = [];
 let automationCalls = [];
 let delayedMuteCalls = [];
+let delayedSendMuteCalls = [];
 let automationJobs = [];
 let bulkMuteCalls = [];
 let bulkSendCalls = [];
@@ -103,6 +104,10 @@ const adapter = {
     async scheduleSend(source, destination, toLevel, delaySeconds) {
         automationCalls.push({ kind: "send-delay", source, destination, toLevel, delaySeconds });
         return "auto-send-delay";
+    },
+    async scheduleSendMute(source, destination, mute, delaySeconds) {
+        delayedSendMuteCalls.push({ kind: "send-delay-mute", source, destination, mute, delaySeconds });
+        return "auto-send-mute-delay";
     },
     async listAutomations() {
         return automationJobs;
@@ -586,18 +591,42 @@ async function ready(text) {
     assert.equal(delayedMuteCalls[0].mute, true);
 }
 
-// Delayed route mute is not guessed by the single-target delayed-mute slice.
+// Delayed route mute schedules the same route-scoped primitive, never whole-source mute.
 {
     delayedMuteCalls = [];
+    delayedSendMuteCalls = [];
     sendMuteWrites = [];
-    const analyzed = await gateway.analyze({
+    const analyzed = await ready("mute Batterie sur Anthony dans 5 secondes");
+    assert.equal(analyzed.effect, "write");
+    const result = await gateway.execute({
         protocol: GATEWAY_PROTOCOL,
-        text: "mute Batterie sur Anthony dans 5 secondes",
+        planToken: analyzed.planToken,
     });
-    assert.notEqual(analyzed.status, "ready");
-    assert.equal(analyzed.effect, "none");
+    assert.equal(result.ok, true);
+    assert.equal(delayedSendMuteCalls.length, 1);
+    assert.equal(delayedSendMuteCalls[0].source.name, "Batterie");
+    assert.equal(delayedSendMuteCalls[0].destination.name, "Anthony");
+    assert.equal(delayedSendMuteCalls[0].mute, true);
+    assert.equal(delayedSendMuteCalls[0].delaySeconds, 5);
     assert.equal(delayedMuteCalls.length, 0);
     assert.equal(sendMuteWrites.length, 0);
+    assert.match(result.responseText, /auto-send-mute-delay/);
+}
+
+// Delayed route unmute accepts delay-first ordering and keeps source family identity.
+{
+    delayedSendMuteCalls = [];
+    const analyzed = await ready("dans 3 secondes, réactive Playback dans Anthony");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(delayedSendMuteCalls.length, 1);
+    assert.equal(delayedSendMuteCalls[0].source.family, "aux");
+    assert.equal(delayedSendMuteCalls[0].destination.family, "bus");
+    assert.equal(delayedSendMuteCalls[0].mute, false);
+    assert.equal(delayedSendMuteCalls[0].delaySeconds, 3);
 }
 
 // Mute/unmute
