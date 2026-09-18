@@ -545,6 +545,24 @@ const localCommandGateway = new LocalMixerCommandGateway({
                 throw new Error("Local send source must be a channel, FX return or aux return.");
         }
     },
+    setSendMute: async (source, destination, mute) => {
+        if (destination.family !== "bus") {
+            throw new Error("Local send mute requires a bus destination.");
+        }
+        switch (source.family) {
+            case "channel":
+                await osc.muteChannelToBus(source.index, destination.index, mute);
+                return;
+            case "fxreturn":
+                await osc.muteFxToBus(source.index, destination.index, mute);
+                return;
+            case "aux":
+                await osc.muteAuxToBus(source.index, destination.index, mute);
+                return;
+            default:
+                throw new Error("Local send mute source must be a channel, FX return or aux return.");
+        }
+    },
     startLevelRamp: async (target, toLevel, durationSeconds, fromLevel) => {
         const action = rampAction({
             target: localGatewayAutomationTarget(target),
