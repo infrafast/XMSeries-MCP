@@ -538,8 +538,8 @@ Important syntax rules:
 - **`à` means an absolute target**: `mets batterie à -30 dB`. With no named target, `mets/monte/baisse le volume à 100%` targets Main LR.
 - **`de` means a relative change**: `monte batterie de 3 dB`. With no named target, `monte le volume de 10%` adjusts Main LR relatively.
 - Qualitative commands (`monte`, `baisse`, `un peu`, `beaucoup`) use the same adaptive relative-level calculation as the cloud `osc_adjust_level` tool. They are not separate hard-coded Local dB steps.
-- **`en N secondes` means ramp duration**: the level moves progressively for that duration.
-- **`dans N secondes` means delayed execution**: the level stays unchanged until the delay expires, then the target is applied.
+- **`en N secondes` means ramp duration**: the level moves progressively for that duration. Temporal constituents may appear in different grammatical positions as long as the semantic markers remain explicit.
+- **`dans N secondes` means delayed execution**: the level stays unchanged until the delay expires, then the target is applied. `dans` is never reinterpreted as a ramp duration.
 - Percent values use the normalized fader range. An absolute `100%` means the top of the normalized fader range; a relative `+10%` means ten percentage points on that normalized range.
 - `fade in` / `fade out` without an explicit target defaults to **Main LR / façade**.
 - Main aliases currently include `main`, `main lr`, `lr`, `façade`, `master`, `master lr`, and `mix principal`.
