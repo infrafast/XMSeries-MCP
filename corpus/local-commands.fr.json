@@ -344,11 +344,33 @@
       }
     },
     {
-      "name": "delay-route-mute-fail-closed",
+      "name": "delay-route-mute",
       "utterance": "mute Batterie sur Anthony dans 5 secondes",
       "expected": {
-        "status": "clarification",
-        "effect": "none"
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "send_delay_mute",
+          "source": "Batterie",
+          "destination": "Anthony",
+          "mute": true,
+          "delaySeconds": 5
+        }
+      }
+    },
+    {
+      "name": "delay-route-unmute-prefix",
+      "utterance": "dans 3 secondes, réactive Playback dans Anthony",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "send_delay_mute",
+          "source": "Playback",
+          "destination": "Anthony",
+          "mute": false,
+          "delaySeconds": 3
+        }
       }
     },
     {
