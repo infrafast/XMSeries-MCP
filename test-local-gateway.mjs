@@ -326,6 +326,77 @@ async function ready(text) {
     assert.equal(qualitativeSendCalls[0].amount, "little");
 }
 
+// French STT "montre" is corrected to "monte" only in safe level-command shapes.
+{
+    qualitativeCalls = [];
+    const analyzed = await ready("montre Batterie");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(qualitativeCalls[0].target.name, "Batterie");
+    assert.equal(qualitativeCalls[0].direction, "up");
+}
+
+// "montre le volume" maps to Main LR increase.
+{
+    qualitativeCalls = [];
+    const analyzed = await ready("montre le volume");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(qualitativeCalls[0].target.family, "main");
+    assert.equal(qualitativeCalls[0].direction, "up");
+}
+
+// Explicit display/read-like "montre-moi" is never rewritten as a write.
+{
+    const analyzed = await gateway.analyze({
+        protocol: GATEWAY_PROTOCOL,
+        text: "montre-moi le niveau de Batterie",
+    });
+    assert.notEqual(analyzed.status, "ready");
+    assert.equal(analyzed.effect, "none");
+}
+
+// Natural plus/moins fort aliases use the same qualitative adapter.
+{
+    qualitativeCalls = [];
+    const up = await ready("un peu plus fort Batterie");
+    assert.equal((await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: up.planToken,
+    })).ok, true);
+    assert.equal(qualitativeCalls[0].target.name, "Batterie");
+    assert.equal(qualitativeCalls[0].direction, "up");
+    assert.equal(qualitativeCalls[0].amount, "little");
+
+    qualitativeCalls = [];
+    const down = await ready("Batterie moins fort");
+    assert.equal((await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: down.planToken,
+    })).ok, true);
+    assert.equal(qualitativeCalls[0].direction, "down");
+}
+
+// Natural plus fort route syntax preserves source and destination roles.
+{
+    qualitativeSendCalls = [];
+    const analyzed = await ready("plus fort Batterie sur Anthony");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(qualitativeSendCalls[0].source.name, "Batterie");
+    assert.equal(qualitativeSendCalls[0].destination.name, "Anthony");
+    assert.equal(qualitativeSendCalls[0].direction, "up");
+}
+
 // Mute/unmute
 {
     muteWrites = [];
