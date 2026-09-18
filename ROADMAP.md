@@ -105,3 +105,8 @@ Implement incrementally after XDG1 live acceptance:
 ## Cross-repository OR4B3 status
 
 LiveStageAssistant OR4B3 is merged into `realtime-voice-architecture` as `e244af4a2f5d474005ff6803c5818aa25f4f87aa`. The dedicated non-LLM Local engine and generic `lsa-command-gateway/v1` orchestrator passed PR CI on Python 3.11/3.12; post-merge CI is running. Pi end-to-end acceptance remains pending.
+
+
+### OR4C shared-core alignment
+
+QLCPlus-MCP PR #8 merged as `b46f0c5d9aa859281976bec48090dd9a8f0bfffe`. QLCPlus-MCP and XMSeries-MCP now both pin `stage-command-core@fa9f8baef06a668efb18b1bfc50060335689f287`; QLC PR and post-merge Node 20.20/22 CI are green. Both gateways remain on `lsa-command-gateway/v1`.
