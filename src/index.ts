@@ -19,9 +19,9 @@ import { coerceOscArg, MixerDisconnectedError, OSCClient, OSCProtocol, parseOscC
 import { dbToFaderLevel, faderLevelToDb, formatDb } from "./level-table.js";
 import { isLocalGatewayEnabled } from "@infrafast/stage-command-core";
 import {
-    LOCAL_GATEWAY_TOOLS,
     LocalMixerCommandGateway,
     type LocalMixerTarget,
+    withLocalGatewayTools,
 } from "./local-gateway.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -506,7 +506,7 @@ const localCommandGateway = new LocalMixerCommandGateway({
 export function getRuntimeTools(
     env: Readonly<Record<string, string | undefined>> = process.env,
 ): Tool[] {
-    return isLocalGatewayEnabled(env) ? [...TOOLS, ...LOCAL_GATEWAY_TOOLS] : [...TOOLS];
+    return withLocalGatewayTools(TOOLS, env);
 }
 
 type AutomationTargetKind =
