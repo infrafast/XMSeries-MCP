@@ -27,25 +27,33 @@ export interface LocalMixerTarget {
 }
 
 export interface LocalMixerGatewayAdapter {
-    resolve(query: string): Promise<LocalMixerTarget[]>;
+    resolve(query: string, families?: LocalMixerTargetFamily[]): Promise<LocalMixerTarget[]>;
     status(): Promise<any>;
     readLevel(target: LocalMixerTarget): Promise<number>;
     writeLevel(target: LocalMixerTarget, level: number): Promise<void>;
     setMute(target: LocalMixerTarget, mute: boolean): Promise<void>;
+    readSendLevel(source: LocalMixerTarget, destination: LocalMixerTarget): Promise<number>;
+    writeSendLevel(source: LocalMixerTarget, destination: LocalMixerTarget, level: number): Promise<void>;
 }
+
+type LevelUnit = "db" | "percent";
 
 type Intent =
     | { kind: "status" }
     | { kind: "read_level"; targetQuery: string }
-    | { kind: "set_level"; targetQuery: string; db: number }
-    | { kind: "adjust_level"; targetQuery: string; deltaDb: number }
+    | { kind: "set_level"; targetQuery: string; unit: LevelUnit; value: number }
+    | { kind: "adjust_level"; targetQuery: string; unit: LevelUnit; delta: number }
+    | { kind: "send_set_level"; sourceQuery: string; destinationQuery: string; unit: LevelUnit; value: number }
+    | { kind: "send_adjust_level"; sourceQuery: string; destinationQuery: string; unit: LevelUnit; delta: number }
     | { kind: "mute"; targetQuery: string; mute: boolean };
 
 type LocalPlan =
     | { kind: "status" }
     | { kind: "read_level"; targetQuery: string; target: LocalMixerTarget }
-    | { kind: "set_level"; targetQuery: string; target: LocalMixerTarget; db: number }
-    | { kind: "adjust_level"; targetQuery: string; target: LocalMixerTarget; deltaDb: number }
+    | { kind: "set_level"; targetQuery: string; target: LocalMixerTarget; unit: LevelUnit; value: number }
+    | { kind: "adjust_level"; targetQuery: string; target: LocalMixerTarget; unit: LevelUnit; delta: number }
+    | { kind: "send_set_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; unit: LevelUnit; value: number }
+    | { kind: "send_adjust_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; unit: LevelUnit; delta: number }
     | { kind: "mute"; targetQuery: string; target: LocalMixerTarget; mute: boolean };
 
 interface LocalContinuation {
@@ -104,6 +112,44 @@ function cleanTarget(value: string): string {
         .trim();
 }
 
+function parsePercent(value: string): number | null {
+    const number = parseDb(value);
+    return number !== null && Number.isFinite(number) ? number : null;
+}
+
+function levelToNormalized(unit: LevelUnit, value: number): { level: number; label: string } {
+    if (unit === "percent") {
+        const level = Math.min(1, Math.max(0, value / 100));
+        return { level, label: `${(level * 100).toFixed(1)}%` };
+    }
+    const converted = dbToFaderLevel(value);
+    return {
+        level: converted.level,
+        label: `${formatDb(converted.db)}${converted.clipped ? " (limité à la plage du fader)" : ""}`,
+    };
+}
+
+function adjustedLevel(currentLevel: number, unit: LevelUnit, delta: number): { level: number; beforeLabel: string; afterLabel: string } {
+    if (unit === "percent") {
+        const next = Math.min(1, Math.max(0, currentLevel + delta / 100));
+        return {
+            level: next,
+            beforeLabel: `${(currentLevel * 100).toFixed(1)}%`,
+            afterLabel: `${(next * 100).toFixed(1)}%`,
+        };
+    }
+    const before = faderLevelToDb(currentLevel);
+    if (before.db === null) {
+        throw new Error("Le niveau actuel est à -inf dB ; utilise une valeur absolue avant un ajustement relatif.");
+    }
+    const converted = dbToFaderLevel(before.db + delta);
+    return {
+        level: converted.level,
+        beforeLabel: formatDb(before.db),
+        afterLabel: formatDb(converted.db),
+    };
+}
+
 function parseIntent(raw: string): Intent | null {
     const text = raw.trim();
     const normalized = simplify(text);
@@ -120,6 +166,45 @@ function parseIntent(raw: string): Intent | null {
         ].includes(normalized)
     ) {
         return { kind: "status" };
+    }
+
+    const sendAbsolutePatterns = [
+        /^\s*(?:mets|met|regle|règle|fixe|set)\s+(?:le\s+)?(?:niveau|volume|fader)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
+        /^\s*(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
+    ];
+    for (const re of sendAbsolutePatterns) {
+        const match = text.match(re);
+        if (match?.[1] && match[2] && match[3] && match[4]) {
+            const unit: LevelUnit = match[4] === "%" ? "percent" : "db";
+            const value = unit === "percent" ? parsePercent(match[3]) : parseDb(match[3]);
+            if (value !== null) {
+                return {
+                    kind: "send_set_level",
+                    sourceQuery: cleanTarget(match[1]),
+                    destinationQuery: cleanTarget(match[2]),
+                    unit,
+                    value,
+                };
+            }
+        }
+    }
+
+    const sendRelative = text.match(
+        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:de|by)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
+    );
+    if (sendRelative?.[1] && sendRelative[2] && sendRelative[3] && sendRelative[4] && sendRelative[5]) {
+        const unit: LevelUnit = sendRelative[5] === "%" ? "percent" : "db";
+        const base = unit === "percent" ? parsePercent(sendRelative[4]) : parseDb(sendRelative[4]);
+        if (base !== null) {
+            const down = ["baisse", "diminue", "lower", "decrease"].includes(simplify(sendRelative[1]));
+            return {
+                kind: "send_adjust_level",
+                sourceQuery: cleanTarget(sendRelative[2]),
+                destinationQuery: cleanTarget(sendRelative[3]),
+                unit,
+                delta: down ? -Math.abs(base) : Math.abs(base),
+            };
+        }
     }
 
     const mutePatterns: Array<{ re: RegExp; mute: boolean }> = [
@@ -146,7 +231,8 @@ function parseIntent(raw: string): Intent | null {
             return {
                 kind: "adjust_level",
                 targetQuery: cleanTarget(explicitRelative[1]),
-                deltaDb,
+                unit: "db",
+                delta: deltaDb,
             };
         }
     }
@@ -160,7 +246,8 @@ function parseIntent(raw: string): Intent | null {
             return {
                 kind: "adjust_level",
                 targetQuery: cleanTarget(signedRelative[1]),
-                deltaDb,
+                unit: "db",
+                delta: deltaDb,
             };
         }
     }
@@ -181,22 +268,40 @@ function parseIntent(raw: string): Intent | null {
         return {
             kind: "adjust_level",
             targetQuery: cleanTarget(qualitativeRelative[3]),
-            deltaDb: down ? -magnitude : magnitude,
+            unit: "db",
+            delta: down ? -magnitude : magnitude,
         };
     }
 
     const setPatterns = [
-        /^\s*(?:mets|met|regle|règle|fixe|set)\s+(?:le\s+)?(?:niveau|volume|fader)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*d[bB]\s*$/iu,
-        /^\s*(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*d[bB]\s*$/iu,
+        /^\s*(?:mets|met|regle|règle|fixe|set)\s+(?:le\s+)?(?:niveau|volume|fader)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
+        /^\s*(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
     ];
     for (const re of setPatterns) {
         const match = text.match(re);
-        if (match?.[1] && match[2]) {
-            const db = parseDb(match[2]);
+        if (match?.[1] && match[2] && match[3]) {
+            const unit: LevelUnit = match[3] === "%" ? "percent" : "db";
+            const value = unit === "percent" ? parsePercent(match[2]) : parseDb(match[2]);
             const targetQuery = cleanTarget(match[1]);
-            if (db !== null && targetQuery) {
-                return { kind: "set_level", targetQuery, db };
+            if (value !== null && targetQuery) {
+                return { kind: "set_level", targetQuery, unit, value };
             }
+        }
+    }
+
+    const relativePercent = text.match(
+        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:niveau|volume|fader)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:de|by)\s+([+-]?\d+(?:[.,]\d+)?)\s*%\s*$/iu,
+    );
+    if (relativePercent?.[1] && relativePercent[2] && relativePercent[3]) {
+        const base = parsePercent(relativePercent[3]);
+        if (base !== null) {
+            const down = ["baisse", "diminue", "lower", "decrease"].includes(simplify(relativePercent[1]));
+            return {
+                kind: "adjust_level",
+                targetQuery: cleanTarget(relativePercent[2]),
+                unit: "percent",
+                delta: down ? -Math.abs(base) : Math.abs(base),
+            };
         }
     }
 
@@ -297,6 +402,10 @@ export class LocalMixerCommandGateway {
             };
         }
 
+        if (intent.kind === "send_set_level" || intent.kind === "send_adjust_level") {
+            return await this.planSendIntent(intent);
+        }
+
         return await this.planTargetIntent(intent);
     }
 
@@ -348,30 +457,48 @@ export class LocalMixerCommandGateway {
                 };
             }
 
+            if (plan.kind === "send_set_level" || plan.kind === "send_adjust_level") {
+                const source = await this.revalidateScopedTarget(plan.sourceQuery, plan.source, ["channel"]);
+                const destination = await this.revalidateScopedTarget(plan.destinationQuery, plan.destination, ["bus"]);
+                if (plan.kind === "send_set_level") {
+                    const converted = levelToNormalized(plan.unit, plan.value);
+                    await this.adapter.writeSendLevel(source, destination, converted.level);
+                    return {
+                        protocol: GATEWAY_PROTOCOL,
+                        ok: true,
+                        responseText: `${displayName(source)} → ${displayName(destination)} réglé à ${converted.label}.`,
+                    };
+                }
+                const current = await this.adapter.readSendLevel(source, destination);
+                const adjusted = adjustedLevel(current, plan.unit, plan.delta);
+                await this.adapter.writeSendLevel(source, destination, adjusted.level);
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    ok: true,
+                    responseText: `${displayName(source)} → ${displayName(destination)} : ${adjusted.beforeLabel} → ${adjusted.afterLabel}.`,
+                };
+            }
+
             const liveTarget = await this.revalidateTarget(plan.targetQuery, plan.target, true);
 
             if (plan.kind === "set_level") {
-                const converted = dbToFaderLevel(plan.db);
+                const converted = levelToNormalized(plan.unit, plan.value);
                 await this.adapter.writeLevel(liveTarget, converted.level);
                 return {
                     protocol: GATEWAY_PROTOCOL,
                     ok: true,
-                    responseText: `${displayName(liveTarget)} réglé à ${formatDb(converted.db)}${converted.clipped ? " (limité à la plage du fader)" : ""}.`,
+                    responseText: `${displayName(liveTarget)} réglé à ${converted.label}.`,
                 };
             }
 
             if (plan.kind === "adjust_level") {
-                const before = faderLevelToDb(await this.adapter.readLevel(liveTarget));
-                if (before.db === null) {
-                    throw new Error("Le niveau actuel est à -inf dB ; utilise une valeur absolue avant un ajustement relatif.");
-                }
-                const requested = before.db + plan.deltaDb;
-                const converted = dbToFaderLevel(requested);
-                await this.adapter.writeLevel(liveTarget, converted.level);
+                const current = await this.adapter.readLevel(liveTarget);
+                const adjusted = adjustedLevel(current, plan.unit, plan.delta);
+                await this.adapter.writeLevel(liveTarget, adjusted.level);
                 return {
                     protocol: GATEWAY_PROTOCOL,
                     ok: true,
-                    responseText: `${displayName(liveTarget)} : ${formatDb(before.db)} → ${formatDb(converted.db)}.`,
+                    responseText: `${displayName(liveTarget)} : ${adjusted.beforeLabel} → ${adjusted.afterLabel}.`,
                 };
             }
 
@@ -398,6 +525,49 @@ export class LocalMixerCommandGateway {
                 responseText: `La commande mixeur a échoué : ${message}`,
             };
         }
+    }
+
+    private async planSendIntent(
+        intent: Extract<Intent, { kind: "send_set_level" | "send_adjust_level" }>,
+    ): Promise<AnalyzeCommandResult> {
+        const sourceMatches = await this.adapter.resolve(intent.sourceQuery, ["channel"]);
+        const destinationMatches = await this.adapter.resolve(intent.destinationQuery, ["bus"]);
+        const source = safeUnique(sourceMatches);
+        const destination = safeUnique(destinationMatches);
+
+        if (!source || !destination) {
+            const sourceText = source
+                ? displayName(source)
+                : sourceMatches.length
+                  ? summarizeCandidates(sourceMatches)
+                  : `aucune source pour « ${intent.sourceQuery} »`;
+            const destinationText = destination
+                ? displayName(destination)
+                : destinationMatches.length
+                  ? summarizeCandidates(destinationMatches)
+                  : `aucun bus pour « ${intent.destinationQuery} »`;
+            const stored = this.store.createContinuation({ intent, candidates: [] });
+            return {
+                protocol: GATEWAY_PROTOCOL,
+                recognized: true,
+                status: "clarification",
+                effect: "none",
+                continuationToken: stored.token,
+                expiresInMs: stored.expiresInMs,
+                responseText: `Route ambiguë ou introuvable. Source: ${sourceText}. Destination: ${destinationText}. Reformule avec la source et le bus exacts.`,
+            };
+        }
+
+        const stored = this.store.createPlan({ ...intent, source, destination }, "write");
+        return {
+            protocol: GATEWAY_PROTOCOL,
+            recognized: true,
+            status: "ready",
+            effect: "write",
+            planToken: stored.token,
+            expiresInMs: stored.expiresInMs,
+            responseText: null,
+        };
     }
 
     private async planTargetIntent(
@@ -459,14 +629,10 @@ export class LocalMixerCommandGateway {
         }
 
         const effect = intent.kind === "read_level" ? "read" : "write";
-        const plan: LocalPlan =
-            intent.kind === "read_level"
-                ? { ...intent, target }
-                : intent.kind === "set_level"
-                  ? { ...intent, target }
-                  : intent.kind === "adjust_level"
-                    ? { ...intent, target }
-                    : { ...intent, target };
+        if (intent.kind === "send_set_level" || intent.kind === "send_adjust_level") {
+            throw new Error("Send intents must be planned through planSendIntent.");
+        }
+        const plan: LocalPlan = { ...intent, target } as LocalPlan;
 
         const stored = this.store.createPlan(plan, effect);
         return {
@@ -529,6 +695,19 @@ export class LocalMixerCommandGateway {
         }
 
         return this.readyTargetPlan(continuation.value.intent, resolved);
+    }
+
+    private async revalidateScopedTarget(
+        query: string,
+        expected: LocalMixerTarget,
+        families: LocalMixerTargetFamily[],
+    ): Promise<LocalMixerTarget> {
+        const matches = await this.adapter.resolve(query, families);
+        const live = safeUnique(matches);
+        if (!live || !sameIdentity(live, expected) || live.matchType === "fuzzy") {
+            throw new Error("STALE_TARGET: resolver identity changed");
+        }
+        return live;
     }
 
     private async revalidateTarget(
