@@ -13,6 +13,8 @@ const targets = [
     { family: "channel", index: 6, name: "Batterie", matchType: "exact" },
     { family: "bus", index: 7, name: "Anthony", matchType: "exact" },
     { family: "bus", index: 8, name: "Laurent", matchType: "exact" },
+    { family: "fxreturn", index: 2, name: "Hall FX", matchType: "exact" },
+    { family: "aux", index: 1, name: "Playback", matchType: "exact" },
 ];
 
 function targetKey(value) {
