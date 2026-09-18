@@ -1,48 +1,50 @@
 {
-    "name": "osc-mcp",
-    "version": "1.0.0",
-    "description": "MCP server for controlling digital mixers (Behringer X32, Midas M32, etc.) via OSC",
-    "type": "module",
-    "main": "dist/index.js",
-    "bin": {
-        "osc-mcp": "./dist/index.js"
-    },
-    "scripts": {
-        "build": "tsc",
-        "dev": "tsc --watch",
-        "start": "node dist/index.js",
-        "start:http": "node dist/http.js",
-        "prepare": "npm run build",
-        "test": "node test-connection.js",
-        "test:name-resolution": "npm run build && node test-name-resolution.mjs",
-        "test:llm-tools": "node test-llm-tools.js",
-        "start:openai": "node dist/openai-remote.js"
-    },
-    "keywords": [
-        "mcp",
-        "osc",
-        "behringer",
-        "x32",
-        "midas",
-        "m32",
-        "audio",
-        "mixer"
-    ],
-    "author": "",
-    "license": "MIT",
-    "dependencies": {
-        "@modelcontextprotocol/sdk": "^1.29.0",
-        "cors": "^2.8.6",
-        "express": "^5.2.1",
-        "osc-js": "^2.4.1"
-    },
-    "devDependencies": {
-        "@types/cors": "^2.8.19",
-        "@types/express": "^5.0.6",
-        "@types/node": "^20.10.0",
-        "typescript": "^5.3.3"
-    },
-    "engines": {
-        "node": ">=20.20.0"
-    }
+  "name": "osc-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for controlling digital mixers (Behringer X32, Midas M32, etc.) via OSC",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "osc-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "start:http": "node dist/http.js",
+    "prepare": "npm run build",
+    "test": "node test-connection.js",
+    "test:name-resolution": "npm run build && node test-name-resolution.mjs",
+    "test:llm-tools": "node test-llm-tools.js",
+    "start:openai": "node dist/openai-remote.js",
+    "test:ci": "npm run build && node test-name-resolution.mjs && node test-relative-level-safety.mjs && node test-automation-ramp-duration.mjs && node test-automation-ramp-schema.mjs && node test-lifecycle.mjs && node test-local-gateway.mjs"
+  },
+  "keywords": [
+    "mcp",
+    "osc",
+    "behringer",
+    "x32",
+    "midas",
+    "m32",
+    "audio",
+    "mixer"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "osc-js": "^2.4.1",
+    "@infrafast/stage-command-core": "git+https://github.com/infrafast/stage-command-core.git#fa9f8baef06a668efb18b1bfc50060335689f287"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=20.20.0"
+  }
 }
