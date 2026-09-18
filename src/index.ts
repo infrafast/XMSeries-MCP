@@ -628,11 +628,10 @@ const localCommandGateway = new LocalMixerCommandGateway({
                 direction,
                 amount,
             }),
-        ) as { beforeDb: number; targetDb: number; targetLevel: number };
+        ) as { beforeDb: number; targetDb: number };
         return {
             beforeDb: payload.beforeDb,
             targetDb: payload.targetDb,
-            targetLevel: payload.targetLevel,
         };
     },
 });
