@@ -33,7 +33,7 @@ Under this proposal, Laurent's default return is bus `Laurent`, while Thomas's d
 
 ## Deterministic Local Command Gateway — coordinated with LiveStageAssistant OR4
 
-Status: **shared core available; QLCPlus OR4B1 merged and CI-validated; XMSeries OR4B2 next**
+Status: **OR4B2 implementation in progress on `or4b2-deterministic-gateway` / PR #11; automated CI pending**
 
 Product boundary:
 
@@ -51,26 +51,26 @@ Shared dependency:
 
 ### XDG0 — Gateway adapter and safety skeleton
 
-- [ ] register reserved `lsa_local_analyze_command` / `lsa_local_execute_command` tools only when the Local gateway flag is enabled;
-- [ ] advertise/return protocol `lsa-command-gateway/v1`;
-- [ ] analysis is strictly side-effect-free;
-- [ ] use a short-lived opaque one-shot plan token for execution;
-- [ ] classify each plan as `read` or `write`;
-- [ ] return localized deterministic `responseText` for clarification, success and failure;
+- [~] register reserved `lsa_local_analyze_command` / `lsa_local_execute_command` tools only when the Local gateway flag is enabled;
+- [~] advertise/return protocol `lsa-command-gateway/v1`;
+- [~] analysis is strictly side-effect-free;
+- [~] use a short-lived opaque one-shot write plan token for execution;
+- [~] classify each plan as `read` or `write`;
+- [~] return localized deterministic `responseText` for clarification, success and failure;
 - [ ] reject unsupported protocol/core versions instead of degrading to a guessed write.
 
 ### XDG1 — Basic mixer grammar MVP
 
-- [ ] reuse existing live resolver and protocol-aware OSC helpers; do not create a parallel target database;
-- [ ] mixer status;
-- [ ] named-target level read;
-- [ ] absolute level write;
-- [ ] relative level up/down;
-- [ ] mute / unmute;
-- [ ] bare-name targets resolve globally across the existing families exactly as today;
-- [ ] ambiguous exact/contains and fuzzy-only matches require clarification and never create an executable write token;
-- [ ] Main LR default remains a mixer-domain decision here, never in LSA;
-- [ ] plan execution revalidates target/state as needed before dispatch.
+- [~] reuse existing live resolver and protocol-aware OSC helpers; no parallel target database;
+- [~] mixer status;
+- [~] named-target level read;
+- [~] absolute dB level write;
+- [~] relative level up/down, including qualitative little/normal/much steps;
+- [~] mute / unmute;
+- [~] bare-name targets resolve globally through the existing resolver exactly as today;
+- [~] ambiguous contains/structured and fuzzy-only matches require clarification and never create an executable write token;
+- [~] Main LR/façade aliases remain a mixer-domain decision here, never in LSA;
+- [~] plan execution re-resolves target identity before write dispatch and fails stale changes closed.
 
 ### XDG2 — Advanced semantic parity
 
@@ -90,7 +90,7 @@ Implement incrementally after XDG1 live acceptance:
 - [ ] include STT-like case/punctuation variants without introducing unconstrained fuzzy NLP;
 - [ ] every corpus item asserts recognition, clarification vs executable outcome, resolved target/effect and generated plan;
 - [ ] review `PROMPT.md` semantics against the same corpus whenever command semantics change so cloud-agent guidance and Local deterministic behavior do not silently diverge;
-- [ ] keep gateway-disabled tool inventory identical to the pre-OR4 cloud/ordinary MCP behavior.
+- [~] keep gateway-disabled tool inventory identical to the pre-OR4 cloud/ordinary MCP behavior.
 
 ### XDG4 — Pi acceptance
 
