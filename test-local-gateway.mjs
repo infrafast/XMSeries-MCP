@@ -633,6 +633,27 @@ async function ready(text) {
     assert.equal(analyzed.effect, "none");
 }
 
+// Speaker-context clarification is fail-closed: a follow-up target never inherits a fake operation.
+{
+    writes = [];
+    const analyzed = await gateway.analyze({
+        protocol: GATEWAY_PROTOCOL,
+        text: "monte mon retour de 3 dB",
+        context: {
+            speaker: { name: "unknown", confidence: 0, backend: "none" },
+        },
+    });
+    assert.equal(analyzed.status, "clarification");
+    const continued = await gateway.analyze({
+        protocol: GATEWAY_PROTOCOL,
+        text: "Anthony",
+        continuationToken: analyzed.continuationToken,
+    });
+    assert.equal(continued.status, "unrecognized");
+    assert.equal(continued.effect, "none");
+    assert.equal(writes.length, 0);
+}
+
 // Default/cloud inventory is unchanged; Local adds only two reserved tools.
 {
     const base = [
