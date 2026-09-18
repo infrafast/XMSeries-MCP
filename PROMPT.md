@@ -108,6 +108,8 @@ No explicit target or destination means main LR/façade context.
 Examples:
 
 * `monte le volume` -> main LR fader
+* `monte le volume de 10%` -> relative +10 percentage points on the main LR normalized fader
+* `monte le volume à 100%` -> absolute main LR target at 100%
 * `fais un fade out en 10 secondes` -> main LR fader automation
 * `mets à -5 dB dans 10 secondes` -> delayed main LR fader write
 * `monte anto` -> resolve `anto`; if bus, adjust bus fader; if channel, adjust channel fader
@@ -237,7 +239,7 @@ Use factorized fader tools with `unit:"db"` for faders:
 Use factorized send tools with `unit:"db"` for sends:
 `osc_channel_send_to_bus`, `osc_fx_send_to_bus`, `osc_aux_send_to_bus`. Never omit `unit` on `action:"set"`.
 
-For selected bus lists, use bulk tools:
+For selected bus lists, use bulk tools. Canonical examples include `mute les bus Anthony et Laurent`, `coupe tous les bus sauf Anthony`, `mets batterie à -20 dB sur les bus Anthony et Laurent`, and `mets batterie à -25 dB sur tous les bus et façade`:
 
 * `osc_send_to_buses_db`
 * `osc_send_to_all_buses_db`
