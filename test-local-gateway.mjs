@@ -192,6 +192,45 @@ async function ready(text) {
     assert.equal(writes.length, 1);
 }
 
+// Directional verb + "à" remains an absolute target, not a relative instruction.
+{
+    writes = [];
+    const analyzed = await ready("monte Batterie à -8 dB");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(writes.length, 1);
+    assert.equal(writes[0].target.name, "Batterie");
+}
+
+// Directional source -> bus with "à" is also absolute.
+{
+    sendWrites = [];
+    const analyzed = await ready("baisse Batterie sur Anthony à -20 dB");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(sendWrites.length, 1);
+    assert.equal(sendWrites[0].source.name, "Batterie");
+    assert.equal(sendWrites[0].destination.name, "Anthony");
+}
+
+// Direction words do not override the absolute marker.
+{
+    writes = [];
+    const analyzed = await ready("baisse le niveau de Batterie à -20 dB");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(writes[0].target.name, "Batterie");
+}
+
 // Explicit relative dB write
 {
     writes = [];
