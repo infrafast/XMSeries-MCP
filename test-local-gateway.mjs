@@ -114,6 +114,7 @@ const adapter = {
         return speakerContexts.get(String(speaker).toLowerCase()) || {
             speaker: String(speaker).toLowerCase(),
             known: false,
+            monitorDestination: null,
             busName: null,
             channelName: null,
             source: "test",
@@ -828,6 +829,7 @@ async function ready(text) {
         ["laurent", {
             speaker: "laurent",
             known: true,
+            monitorDestination: { kind: "bus", name: "Anthony" },
             busName: "Anthony",
             channelName: "Batterie",
             source: "XMS_SPEAKER_MAP",
@@ -889,6 +891,56 @@ async function ready(text) {
     assert.equal(result.ok, true);
     assert.equal(sendWrites[0].source.name, "Batterie");
     assert.equal(sendWrites[0].destination.name, "Anthony");
+}
+
+// Explicitly mapped speaker without a bus defaults monitor master to Main LR.
+{
+    speakerContexts = new Map([
+        ["thomas", {
+            speaker: "thomas",
+            known: true,
+            monitorDestination: { kind: "main" },
+            busName: null,
+            channelName: "Batterie",
+            source: "XMS_SPEAKER_MAP",
+        }],
+    ]);
+    writes = [];
+    const analyzed = await gateway.analyze({
+        protocol: GATEWAY_PROTOCOL,
+        text: "monte mon retour de 3 dB",
+        context: {
+            speaker: { name: "Thomas", confidence: 0.95, backend: "resemblyzer" },
+        },
+    });
+    assert.equal(analyzed.status, "ready", JSON.stringify(analyzed));
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(writes[0].target.family, "main");
+}
+
+// Source -> my return with a Main destination becomes the source Main LR fader path.
+{
+    writes = [];
+    const analyzed = await gateway.analyze({
+        protocol: GATEWAY_PROTOCOL,
+        text: "mets Batterie dans mon retour à -20 dB",
+        context: {
+            speaker: { name: "Thomas", confidence: 0.95, backend: "resemblyzer" },
+        },
+    });
+    assert.equal(analyzed.status, "ready", JSON.stringify(analyzed));
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(writes.length, 1);
+    assert.equal(writes[0].target.family, "channel");
+    assert.equal(writes[0].target.name, "Batterie");
 }
 
 // Unknown speaker never guesses a return.
