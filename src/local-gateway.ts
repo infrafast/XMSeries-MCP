@@ -861,14 +861,6 @@ export class LocalMixerCommandGateway {
         }
 
         const effect = intent.kind === "read_level" ? "read" : "write";
-        if (
-            intent.kind === "send_set_level" ||
-            intent.kind === "send_adjust_level" ||
-            intent.kind === "send_ramp_level" ||
-            intent.kind === "send_delay_level"
-        ) {
-            throw new Error("Send intents must be planned through planSendIntent.");
-        }
         const plan: LocalPlan = { ...intent, target } as LocalPlan;
 
         const stored = this.store.createPlan(plan, effect);
@@ -902,11 +894,17 @@ export class LocalMixerCommandGateway {
         }
 
         if ("sourceQuery" in continuation.value.intent) {
+            const stored = this.store.createContinuation({
+                intent: continuation.value.intent,
+                candidates: [],
+            });
             return {
                 protocol: GATEWAY_PROTOCOL,
                 recognized: true,
                 status: "clarification",
                 effect: "none",
+                continuationToken: stored.token,
+                expiresInMs: stored.expiresInMs,
                 responseText: "Reformule la commande complète avec la source et le bus de destination exacts.",
             };
         }
