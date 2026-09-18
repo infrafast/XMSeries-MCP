@@ -55,7 +55,8 @@ function makeHarness() {
         async setMute(target, mute) {
             operations.push({ kind: "mute", family: target.family, name: target.name, mute });
         },
-        async readSendLevel() {
+        async readSendLevel(source, destination) {
+            operations.push({ kind: "read_send", source: source.name, destination: destination.name });
             return sendLevel;
         },
         async writeSendLevel(source, destination, next) {
