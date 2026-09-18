@@ -14,6 +14,8 @@ const targets = {
     batterie: { family: "channel", index: 6, name: "Batterie", matchType: "exact" },
     anthony: { family: "bus", index: 7, name: "Anthony", matchType: "exact" },
     laurent: { family: "bus", index: 8, name: "Laurent", matchType: "exact" },
+    hallfx: { family: "fxreturn", index: 2, name: "Hall FX", matchType: "exact" },
+    playback: { family: "aux", index: 1, name: "Playback", matchType: "exact" },
 };
 
 let level = 0.75;
@@ -46,6 +48,8 @@ const adapter = {
         if (q === "batterie") return [targets.batterie];
         if (q === "anthony") return [targets.anthony];
         if (q === "laurent") return [targets.laurent];
+        if (q === "hall fx") return [targets.hallfx];
+        if (q === "playback") return [targets.playback];
         return [];
     },
     async status() {
@@ -65,7 +69,7 @@ const adapter = {
         muteWrites.push({ target, mute });
     },
     async readSendLevel(source, destination) {
-        assert.equal(source.family, "channel");
+        assert.ok(["channel", "fxreturn", "aux"].includes(source.family));
         assert.equal(destination.family, "bus");
         return sendLevel;
     },
@@ -515,6 +519,47 @@ async function ready(text) {
     assert.equal(sendWrites[0].source.name, "Batterie");
     assert.equal(sendWrites[0].destination.name, "Anthony");
     assert.match(result.responseText, /Batterie.*Anthony/);
+}
+
+// OR4B4 FX return -> bus uses the same route grammar.
+{
+    sendWrites = [];
+    const analyzed = await ready("mets Hall FX sur Anthony à -18 dB");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(sendWrites[0].source.family, "fxreturn");
+    assert.equal(sendWrites[0].source.name, "Hall FX");
+    assert.equal(sendWrites[0].destination.name, "Anthony");
+}
+
+// OR4B4 aux return -> bus qualitative route.
+{
+    qualitativeSendCalls = [];
+    const analyzed = await ready("baisse un peu Playback dans Anthony");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(qualitativeSendCalls[0].source.family, "aux");
+    assert.equal(qualitativeSendCalls[0].source.name, "Playback");
+    assert.equal(qualitativeSendCalls[0].destination.name, "Anthony");
+}
+
+// OR4B4 FX return -> bus progressive route.
+{
+    automationCalls = [];
+    const analyzed = await ready("baisse progressivement Hall FX sur Anthony à -30 dB en 2 secondes");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(automationCalls[0].kind, "send-ramp");
+    assert.equal(automationCalls[0].source.family, "fxreturn");
 }
 
 // OR4B4 source -> bus relative percent.

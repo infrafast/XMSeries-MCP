@@ -339,47 +339,34 @@ function namedTargetRange(family: NamedTargetFamily): number[] {
     return Array.from({ length: maxByFamily[family] }, (_, i) => i + 1);
 }
 
-async function findNamedTargets(
+export function rankNamedTargetCandidates(
     query: string,
-    families: NamedTargetFamily[] = NAMED_TARGET_FAMILIES
-): Promise<NamedTargetMatch[]> {
+    candidates: Array<{ family: NamedTargetFamily; index: number; name: string }>,
+): NamedTargetMatch[] {
     const normalizedQuery = normalizeMixerName(query);
     if (!normalizedQuery) return [];
 
-    const candidates: Array<Omit<NamedTargetMatch, "matchType"> & { normalizedName: string }> = [];
+    const normalizedCandidates = candidates.map((candidate) => ({
+        ...candidate,
+        normalizedName: normalizeMixerName(candidate.name),
+    }));
 
-    for (const family of families) {
-        for (const index of namedTargetRange(family)) {
-            const name = await readNamedTarget(family, index);
-            if (!name) continue;
-            const normalizedName = normalizeMixerName(name);
+    const exactMatches = normalizedCandidates
+        .filter((candidate) => candidate.normalizedName === normalizedQuery)
+        .map(({ normalizedName: _normalizedName, ...candidate }) => ({ ...candidate, matchType: "exact" as const }));
+    if (exactMatches.length > 0) return exactMatches;
 
-            if (normalizedName === normalizedQuery) {
-                return [{ family, index, name, matchType: "exact" }];
-            }
-
-            candidates.push({
-                family,
-                index,
-                name,
-                normalizedName,
-            });
-        }
-    }
-
-    const containsMatches = candidates
+    const containsMatches = normalizedCandidates
         .filter((candidate) => candidate.normalizedName.includes(normalizedQuery))
         .map(({ normalizedName: _normalizedName, ...candidate }) => ({ ...candidate, matchType: "contains" as const }));
-
     if (containsMatches.length > 0) return containsMatches;
 
-    const structuredMatches = candidates
+    const structuredMatches = normalizedCandidates
         .filter((candidate) => isStructuredOwnershipMatch(query, candidate.name))
         .map(({ normalizedName: _normalizedName, ...candidate }) => ({ ...candidate, matchType: "structured" as const }));
-
     if (structuredMatches.length > 0) return structuredMatches;
 
-    return candidates
+    return normalizedCandidates
         .map((candidate) => ({ ...candidate, fuzzyDistance: fuzzyNameDistance(normalizedQuery, candidate.normalizedName) }))
         .filter((candidate): candidate is typeof candidate & { fuzzyDistance: number } => candidate.fuzzyDistance !== null)
         .sort((a, b) => a.fuzzyDistance - b.fuzzyDistance)
@@ -387,6 +374,23 @@ async function findNamedTargets(
             ...candidate,
             matchType: "fuzzy" as const,
         }));
+}
+
+async function findNamedTargets(
+    query: string,
+    families: NamedTargetFamily[] = NAMED_TARGET_FAMILIES
+): Promise<NamedTargetMatch[]> {
+    const candidates: Array<{ family: NamedTargetFamily; index: number; name: string }> = [];
+
+    for (const family of families) {
+        for (const index of namedTargetRange(family)) {
+            const name = await readNamedTarget(family, index);
+            if (!name) continue;
+            candidates.push({ family, index, name });
+        }
+    }
+
+    return rankNamedTargetCandidates(query, candidates);
 }
 
 async function localGatewayReadLevel(target: LocalMixerTarget): Promise<number> {
@@ -483,10 +487,19 @@ function localGatewayAutomationTarget(target: LocalMixerTarget): AutomationTarge
 }
 
 function localGatewaySendAutomationTarget(source: LocalMixerTarget, destination: LocalMixerTarget): AutomationTargetSpec {
-    if (source.family !== "channel" || destination.family !== "bus") {
-        throw new Error("Local send automation requires a channel source and bus destination.");
+    if (destination.family !== "bus") {
+        throw new Error("Local send automation requires a bus destination.");
     }
-    return { kind: "channel_send", channel: source.index, bus: destination.index };
+    switch (source.family) {
+        case "channel":
+            return { kind: "channel_send", channel: source.index, bus: destination.index };
+        case "fxreturn":
+            return { kind: "fx_send", effect: source.index, bus: destination.index };
+        case "aux":
+            return { kind: "aux_send", aux: source.index, bus: destination.index };
+        default:
+            throw new Error("Local send automation source must be a channel, FX return or aux return.");
+    }
 }
 
 const localCommandGateway = new LocalMixerCommandGateway({
@@ -500,16 +513,37 @@ const localCommandGateway = new LocalMixerCommandGateway({
     writeLevel: localGatewayWriteLevel,
     setMute: localGatewaySetMute,
     readSendLevel: async (source, destination) => {
-        if (source.family !== "channel" || destination.family !== "bus") {
-            throw new Error("Local send level requires a channel source and bus destination.");
+        if (destination.family !== "bus") {
+            throw new Error("Local send level requires a bus destination.");
         }
-        return await osc.getSendToBus(source.index, destination.index);
+        switch (source.family) {
+            case "channel":
+                return await osc.getSendToBus(source.index, destination.index);
+            case "fxreturn":
+                return await osc.getFxToBus(source.index, destination.index);
+            case "aux":
+                return await osc.getAuxToBus(source.index, destination.index);
+            default:
+                throw new Error("Local send source must be a channel, FX return or aux return.");
+        }
     },
     writeSendLevel: async (source, destination, level) => {
-        if (source.family !== "channel" || destination.family !== "bus") {
-            throw new Error("Local send level requires a channel source and bus destination.");
+        if (destination.family !== "bus") {
+            throw new Error("Local send level requires a bus destination.");
         }
-        await osc.sendToBus(source.index, destination.index, level);
+        switch (source.family) {
+            case "channel":
+                await osc.sendToBus(source.index, destination.index, level);
+                return;
+            case "fxreturn":
+                await osc.sendFxToBus(source.index, destination.index, level);
+                return;
+            case "aux":
+                await osc.sendAuxToBus(source.index, destination.index, level);
+                return;
+            default:
+                throw new Error("Local send source must be a channel, FX return or aux return.");
+        }
     },
     startLevelRamp: async (target, toLevel, durationSeconds, fromLevel) => {
         const action = rampAction({
@@ -621,10 +655,11 @@ const localCommandGateway = new LocalMixerCommandGateway({
         };
     },
     previewQualitativeSend: async (source, destination, direction, amount) => {
-        if (source.family !== "channel" || destination.family !== "bus") {
-            throw new Error("Local qualitative send preview requires a channel source and bus destination.");
+        if (destination.family !== "bus") {
+            throw new Error("Local qualitative send preview requires a bus destination.");
         }
-        const beforeLevel = await osc.getSendToBus(source.index, destination.index);
+        const adapter = targetAdapter(localGatewaySendAutomationTarget(source, destination));
+        const beforeLevel = await adapter.read();
         const computed = computeRelativeLevelAdjustment(beforeLevel, { direction, amount });
         return {
             beforeDb: computed.beforeDb,
