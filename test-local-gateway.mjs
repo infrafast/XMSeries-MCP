@@ -13,6 +13,7 @@ const targets = {
     amb2: { family: "bus", index: 5, name: "Tom retour", matchType: "contains" },
     batterie: { family: "channel", index: 6, name: "Batterie", matchType: "exact" },
     anthony: { family: "bus", index: 7, name: "Anthony", matchType: "exact" },
+    laurent: { family: "bus", index: 8, name: "Laurent", matchType: "exact" },
 };
 
 let level = 0.75;
@@ -22,6 +23,8 @@ let sendLevel = 0.5;
 let sendWrites = [];
 let automationCalls = [];
 let automationJobs = [];
+let bulkMuteCalls = [];
+let bulkSendCalls = [];
 let stale = false;
 
 const adapter = {
@@ -38,6 +41,7 @@ const adapter = {
         if (q === "guitare") return [{ ...targets.fuzzy, matchType: "exact" }];
         if (q === "batterie") return [targets.batterie];
         if (q === "anthony") return [targets.anthony];
+        if (q === "laurent") return [targets.laurent];
         return [];
     },
     async status() {
@@ -89,6 +93,18 @@ const adapter = {
         if (!job) return null;
         job.status = "cancelled";
         return job;
+    },
+    async muteBusBatch(targets, mute) {
+        bulkMuteCalls.push({ kind: "selected", targets, mute });
+    },
+    async muteAllBuses(mute, except = []) {
+        bulkMuteCalls.push({ kind: "all", except, mute });
+    },
+    async writeSendBatchDb(source, destinations, db, includeMain) {
+        bulkSendCalls.push({ kind: "selected", source, destinations, db, includeMain });
+    },
+    async writeSendAllBusesDb(source, db, includeMain) {
+        bulkSendCalls.push({ kind: "all", source, db, includeMain });
     },
 };
 
@@ -434,6 +450,95 @@ async function ready(text) {
     assert.equal(result.ok, true);
     assert.equal(automationJobs.find((entry) => entry.id === "auto-6").status, "cancelled");
     assert.equal(automationJobs.find((entry) => entry.id === "auto-7").status, "running");
+}
+
+// OR4B4 targetless volume shorthand defaults to Main LR.
+{
+    writes = [];
+    level = 0.5;
+    const analyzed = await ready("monte le volume de 10%");
+    assert.equal(analyzed.effect, "write");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(writes.length, 1);
+    assert.equal(writes[0].target.family, "main");
+    assert.ok(Math.abs(writes[0].level - 0.6) < 1e-9);
+}
+
+// "à" remains an absolute Main LR target even with a directional verb.
+{
+    writes = [];
+    const analyzed = await ready("monte le volume à 100%");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(writes[0].target.family, "main");
+    assert.equal(writes[0].level, 1);
+}
+
+// OR4B4 selected bus bulk mute.
+{
+    bulkMuteCalls = [];
+    const analyzed = await ready("mute les bus Anthony et Laurent");
+    assert.equal(analyzed.effect, "write");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(bulkMuteCalls.length, 1);
+    assert.equal(bulkMuteCalls[0].kind, "selected");
+    assert.deepEqual(bulkMuteCalls[0].targets.map((target) => target.name), ["Anthony", "Laurent"]);
+    assert.equal(bulkMuteCalls[0].mute, true);
+}
+
+// OR4B4 all bus mute with named exception.
+{
+    bulkMuteCalls = [];
+    const analyzed = await ready("coupe tous les bus sauf Anthony");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(bulkMuteCalls[0].kind, "all");
+    assert.deepEqual(bulkMuteCalls[0].except.map((target) => target.name), ["Anthony"]);
+}
+
+// OR4B4 selected bus batch send shares the existing batch-tool semantics.
+{
+    bulkSendCalls = [];
+    const analyzed = await ready("mets batterie à -20 dB sur les bus Anthony et Laurent");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(bulkSendCalls[0].kind, "selected");
+    assert.equal(bulkSendCalls[0].source.name, "Batterie");
+    assert.deepEqual(bulkSendCalls[0].destinations.map((target) => target.name), ["Anthony", "Laurent"]);
+    assert.equal(bulkSendCalls[0].db, -20);
+    assert.equal(bulkSendCalls[0].includeMain, false);
+}
+
+// OR4B4 all-bus batch send can explicitly include Main LR.
+{
+    bulkSendCalls = [];
+    const analyzed = await ready("mets batterie à -25 dB sur tous les bus et façade");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(bulkSendCalls[0].kind, "all");
+    assert.equal(bulkSendCalls[0].source.name, "Batterie");
+    assert.equal(bulkSendCalls[0].db, -25);
+    assert.equal(bulkSendCalls[0].includeMain, true);
 }
 
 // Default/cloud inventory is unchanged; Local adds only two reserved tools.
