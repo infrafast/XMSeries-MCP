@@ -337,6 +337,7 @@ function parseFlexibleTemporalIntent(raw: string): Intent | null {
     remainder = remainder
         .replace(/\bfade[ -]?(?:in|out)\b/giu, " ")
         .replace(/\b(?:progressivement|progressively|gradually|rampe|ramp)\b/giu, " ")
+        .replace(/\b(?:un\s+peu|beaucoup|a\s+little|a\s+lot|slightly)\b/giu, " ")
         .replace(/\b(?:fais|faire)\b/giu, " ")
         .replace(
             /\b(?:monte|augmente|raise|increase|baisse|diminue|lower|decrease|mets|met|regle|règle|fixe|set)\b/giu,
