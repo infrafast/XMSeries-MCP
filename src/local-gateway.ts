@@ -50,6 +50,7 @@ export interface LocalMixerGatewayAdapter {
     startLevelRamp(target: LocalMixerTarget, toLevel: number, durationSeconds: number, fromLevel?: number): Promise<string>;
     startSendRamp(source: LocalMixerTarget, destination: LocalMixerTarget, toLevel: number, durationSeconds: number, fromLevel?: number): Promise<string>;
     scheduleLevel(target: LocalMixerTarget, toLevel: number, delaySeconds: number): Promise<string>;
+    scheduleMute(target: LocalMixerTarget, mute: boolean, delaySeconds: number): Promise<string>;
     scheduleSend(source: LocalMixerTarget, destination: LocalMixerTarget, toLevel: number, delaySeconds: number): Promise<string>;
     listAutomations(): Promise<Array<{ id: string; label?: string; status: string; currentAction?: string; error?: string }>>;
     cancelAutomation(id: string): Promise<{ id: string; label?: string; status: string } | null>;
@@ -101,6 +102,7 @@ type Intent =
     | { kind: "send_ramp_level"; sourceQuery: string; destinationQuery: string; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
     | { kind: "send_ramp_level_qualitative"; sourceQuery: string; destinationQuery: string; direction: LocalRelativeDirection; amount: LocalRelativeAmount; durationSeconds: number }
     | { kind: "delay_level"; targetQuery: string; value: LevelValue; delaySeconds: number }
+    | { kind: "delay_mute"; targetQuery: string; mute: boolean; delaySeconds: number }
     | { kind: "send_delay_level"; sourceQuery: string; destinationQuery: string; value: LevelValue; delaySeconds: number }
     | { kind: "automation_list" }
     | { kind: "automation_cancel"; id?: string; lastRunning: boolean }
@@ -128,6 +130,7 @@ type LocalPlan =
     | { kind: "send_ramp_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
     | { kind: "send_ramp_level_qualitative"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; direction: LocalRelativeDirection; amount: LocalRelativeAmount; durationSeconds: number }
     | { kind: "delay_level"; targetQuery: string; target: LocalMixerTarget; value: LevelValue; delaySeconds: number }
+    | { kind: "delay_mute"; targetQuery: string; target: LocalMixerTarget; mute: boolean; delaySeconds: number }
     | { kind: "send_delay_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; value: LevelValue; delaySeconds: number }
     | { kind: "automation_list" }
     | { kind: "automation_cancel"; id: string }
@@ -519,6 +522,26 @@ function parseIntent(raw: string): Intent | null {
 
     const flexibleTemporalIntent = parseFlexibleTemporalIntent(text);
     if (flexibleTemporalIntent) return flexibleTemporalIntent;
+
+    const delayedMuteMatch = text.match(
+        /^\s*(?:(?:dans\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*[,;:]?\s*)(mute|coupe|couper|desactive|désactive|eteins|éteins|unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\s+(.+?)|(mute|coupe|couper|desactive|désactive|eteins|éteins|unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\s+(.+?)\s+dans\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?))\s*$/iu,
+    );
+    if (delayedMuteMatch) {
+        const delayRaw = delayedMuteMatch[1] || delayedMuteMatch[6];
+        const verbRaw = delayedMuteMatch[2] || delayedMuteMatch[4];
+        const targetRaw = delayedMuteMatch[3] || delayedMuteMatch[5];
+        if (delayRaw && verbRaw && targetRaw) {
+            const delaySeconds = Number(delayRaw.replace(",", "."));
+            if (Number.isFinite(delaySeconds) && delaySeconds >= 0) {
+                const verb = simplify(verbRaw);
+                const mute = ["mute", "coupe", "couper", "desactive", "eteins"].includes(verb);
+                const targetQuery = cleanTarget(targetRaw);
+                if (targetQuery) {
+                    return { kind: "delay_mute", targetQuery, mute, delaySeconds };
+                }
+            }
+        }
+    }
 
     // Main LR shorthand: when volume/level/fader is named without another target,
     // the mixer domain owns the default and routes it to Main LR.
@@ -1527,6 +1550,19 @@ export class LocalMixerCommandGateway {
             }
 
             const liveTarget = await this.revalidateTarget(plan.targetQuery, plan.target, true);
+
+            if (plan.kind === "delay_mute") {
+                const jobId = await this.adapter.scheduleMute(
+                    liveTarget,
+                    plan.mute,
+                    plan.delaySeconds,
+                );
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    ok: true,
+                    responseText: `Action programmée ${jobId} : ${displayName(liveTarget)} ${plan.mute ? "sera coupé" : "sera réactivé"} dans ${plan.delaySeconds} s.`,
+                };
+            }
 
             if (plan.kind === "delay_level") {
                 const converted = levelToNormalized(plan.value.unit, plan.value.value);
