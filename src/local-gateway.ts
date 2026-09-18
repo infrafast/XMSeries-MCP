@@ -219,6 +219,181 @@ function adjustedLevel(currentLevel: number, unit: LevelUnit, delta: number): { 
     };
 }
 
+
+function parseTemporalLevelValue(rawValue: string, rawUnit: string): LevelValue | null {
+    const unit: LevelUnit = rawUnit === "%" ? "percent" : "db";
+    const value = unit === "percent" ? parsePercent(rawValue) : parseDb(rawValue);
+    return value === null ? null : { unit, value };
+}
+
+function cleanTemporalSubject(value: string): string {
+    return cleanTarget(
+        value
+            .replace(/[,;]+/gu, " ")
+            .replace(/\s+/gu, " ")
+            .trim()
+            .replace(
+                /^(?:le\s+|la\s+)?(?:niveau|volume|fader)\s+(?:(?:de|du|de la|de l['’]?|of)\s+)?/iu,
+                "",
+            ),
+    );
+}
+
+function parseFlexibleTemporalIntent(raw: string): Intent | null {
+    const text = raw.trim();
+    if (!text) return null;
+
+    const durationMatch = text.match(
+        /\ben\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\b/iu,
+    );
+    const delayMatch = text.match(
+        /\bdans\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\b/iu,
+    );
+
+    if (!durationMatch && !delayMatch) return null;
+    // A delay plus a ramp duration is a sequence/macro request. Do not silently collapse it.
+    if (durationMatch && delayMatch) return null;
+
+    const directionMatch = text.match(
+        /\b(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\b/iu,
+    );
+    const direction = directionMatch?.[1] ? simplify(directionMatch[1]) : "";
+    const isDown = ["baisse", "diminue", "lower", "decrease"].includes(direction);
+
+    const fadeMatch = text.match(/\bfade[ -]?(in|out)\b/iu);
+    const hasProgressiveMarker =
+        /\b(?:progressivement|progressively|gradually|rampe|ramp|fade(?:[ -]?(?:in|out))?)\b/iu.test(text);
+
+    const rangeMatch = text.match(
+        /\bde\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\b/iu,
+    );
+    let absoluteMatch: RegExpMatchArray | null = null;
+    let relativeMatch: RegExpMatchArray | null = null;
+    if (!rangeMatch) {
+        absoluteMatch = text.match(
+            /\b(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\b/iu,
+        );
+        relativeMatch = text.match(
+            /\b(?:de|by)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\b/iu,
+        );
+    }
+
+    let from: LevelValue | undefined;
+    let to: LevelValue | undefined;
+    let delta: LevelValue | undefined;
+    let value: LevelValue | undefined;
+
+    if (rangeMatch?.[1] && rangeMatch[2] && rangeMatch[3] && rangeMatch[4]) {
+        const parsedFrom = parseTemporalLevelValue(rangeMatch[1], rangeMatch[2]);
+        const parsedTo = parseTemporalLevelValue(rangeMatch[3], rangeMatch[4]);
+        if (!parsedFrom || !parsedTo) return null;
+        from = parsedFrom;
+        to = parsedTo;
+    } else if (absoluteMatch?.[1] && absoluteMatch[2]) {
+        const parsed = parseTemporalLevelValue(absoluteMatch[1], absoluteMatch[2]);
+        if (!parsed) return null;
+        value = parsed;
+        to = parsed;
+    } else if (relativeMatch?.[1] && relativeMatch[2]) {
+        const parsed = parseTemporalLevelValue(relativeMatch[1], relativeMatch[2]);
+        if (!parsed || !direction) return null;
+        delta = { ...parsed, value: isDown ? -Math.abs(parsed.value) : Math.abs(parsed.value) };
+    }
+
+    let remainder = text;
+    const remove = (match: RegExpMatchArray | null) => {
+        if (match?.[0]) remainder = remainder.replace(match[0], " ");
+    };
+    remove(durationMatch);
+    remove(delayMatch);
+    remove(rangeMatch);
+    remove(absoluteMatch);
+    remove(relativeMatch);
+
+    remainder = remainder
+        .replace(/\bfade[ -]?(?:in|out)\b/giu, " ")
+        .replace(/\b(?:progressivement|progressively|gradually|rampe|ramp)\b/giu, " ")
+        .replace(/\b(?:fais|faire)\b/giu, " ")
+        .replace(
+            /\b(?:monte|augmente|raise|increase|baisse|diminue|lower|decrease|mets|met|regle|règle|fixe|set)\b/giu,
+            " ",
+        )
+        .replace(/\s+/gu, " ")
+        .trim();
+
+    const routeMatch = remainder.match(
+        /^(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+)$/iu,
+    );
+
+    const sourceQuery = routeMatch?.[1] ? cleanTemporalSubject(routeMatch[1]) : "";
+    const destinationQuery = routeMatch?.[2] ? cleanTemporalSubject(routeMatch[2]) : "";
+    const targetQuery = routeMatch ? "" : cleanTemporalSubject(remainder || "main");
+
+    if (delayMatch?.[1]) {
+        const delaySeconds = Number(delayMatch[1].replace(",", "."));
+        if (!Number.isFinite(delaySeconds) || delaySeconds < 0 || !value) return null;
+        if (routeMatch) {
+            if (!sourceQuery || !destinationQuery) return null;
+            return {
+                kind: "send_delay_level",
+                sourceQuery,
+                destinationQuery,
+                value,
+                delaySeconds,
+            };
+        }
+        return {
+            kind: "delay_level",
+            targetQuery: targetQuery || "main",
+            value,
+            delaySeconds,
+        };
+    }
+
+    if (!durationMatch?.[1]) return null;
+    const durationSeconds = Number(durationMatch[1].replace(",", "."));
+    if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) return null;
+
+    // "en N secondes" is a ramp duration. A progressive marker is optional when
+    // the duration + strict level marker already makes the temporal intent unambiguous.
+    if (!hasProgressiveMarker && !from && !to && !delta) return null;
+
+    if (!to && !delta) {
+        if (fadeMatch?.[1]) {
+            to = {
+                unit: "db",
+                value: simplify(fadeMatch[1]) === "out" ? -120 : 0,
+            };
+        } else if (direction) {
+            delta = { unit: "db", value: isDown ? -3 : 3 };
+        } else {
+            return null;
+        }
+    }
+
+    if (routeMatch) {
+        if (!sourceQuery || !destinationQuery) return null;
+        return {
+            kind: "send_ramp_level",
+            sourceQuery,
+            destinationQuery,
+            ...(from ? { from } : {}),
+            ...(to ? { to } : {}),
+            ...(delta ? { delta } : {}),
+            durationSeconds,
+        };
+    }
+
+    return {
+        kind: "ramp_level",
+        targetQuery: targetQuery || "main",
+        ...(from ? { from } : {}),
+        ...(to ? { to } : {}),
+        ...(delta ? { delta } : {}),
+        durationSeconds,
+    };
+}
+
 function parseIntent(raw: string): Intent | null {
     const text = raw.trim();
     const normalized = simplify(text);
@@ -265,11 +440,11 @@ function parseIntent(raw: string): Intent | null {
         return { kind: "automation_cancel", id: cancelAutomation[1].toLowerCase(), lastRunning: false };
     }
 
-    const parseLevelValue = (rawValue: string, rawUnit: string): LevelValue | null => {
-        const unit: LevelUnit = rawUnit === "%" ? "percent" : "db";
-        const value = unit === "percent" ? parsePercent(rawValue) : parseDb(rawValue);
-        return value === null ? null : { unit, value };
-    };
+    const parseLevelValue = (rawValue: string, rawUnit: string): LevelValue | null =>
+        parseTemporalLevelValue(rawValue, rawUnit);
+
+    const flexibleTemporalIntent = parseFlexibleTemporalIntent(text);
+    if (flexibleTemporalIntent) return flexibleTemporalIntent;
 
     // Main LR shorthand: when volume/level/fader is named without another target,
     // the mixer domain owns the default and routes it to Main LR.
