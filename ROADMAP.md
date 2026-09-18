@@ -29,3 +29,74 @@ Example intended future configuration semantics:
 ```
 
 Under this proposal, Laurent's default return is bus `Laurent`, while Thomas's default return is Main LR / façade.
+
+
+## Deterministic Local Command Gateway — coordinated with LiveStageAssistant OR4
+
+Status: **planned; shared contract first**
+
+Product boundary:
+
+- the existing MCP low-level OSC tools and `PROMPT.md` remain the cloud/LLM interface and must not change behavior;
+- the deterministic gateway is an additional **Local-engine-only** capability;
+- the gateway is disabled by default and must be enabled explicitly for a Local LiveStageAssistant session/instance;
+- no LLM, embedding model or external inference service is added to XMSeries-MCP.
+
+Shared dependency:
+
+- consume the planned versioned `@infrafast/stage-command-core` package;
+- pin an exact compatible version/commit in `package-lock.json`;
+- shared code owns only tokenizer/matcher primitives, raw+normalized spans, generic value/duration extraction, gateway wire types, clarification/plan-token lifecycle and corpus helpers;
+- mixer actions, synonyms, target families, name resolution, dB semantics, routing and OSC remain XMSeries-MCP-owned.
+
+### XDG0 — Gateway adapter and safety skeleton
+
+- [ ] register reserved `lsa_local_analyze_command` / `lsa_local_execute_command` tools only when the Local gateway flag is enabled;
+- [ ] advertise/return protocol `lsa-command-gateway/v1`;
+- [ ] analysis is strictly side-effect-free;
+- [ ] use a short-lived opaque one-shot plan token for execution;
+- [ ] classify each plan as `read` or `write`;
+- [ ] return localized deterministic `responseText` for clarification, success and failure;
+- [ ] reject unsupported protocol/core versions instead of degrading to a guessed write.
+
+### XDG1 — Basic mixer grammar MVP
+
+- [ ] reuse existing live resolver and protocol-aware OSC helpers; do not create a parallel target database;
+- [ ] mixer status;
+- [ ] named-target level read;
+- [ ] absolute level write;
+- [ ] relative level up/down;
+- [ ] mute / unmute;
+- [ ] bare-name targets resolve globally across the existing families exactly as today;
+- [ ] ambiguous exact/contains and fuzzy-only matches require clarification and never create an executable write token;
+- [ ] Main LR default remains a mixer-domain decision here, never in LSA;
+- [ ] plan execution revalidates target/state as needed before dispatch.
+
+### XDG2 — Advanced semantic parity
+
+Implement incrementally after XDG1 live acceptance:
+
+- [ ] source -> destination sends and ownership phrases;
+- [ ] dB and percent, absolute and relative values;
+- [ ] grouped/bulk operations;
+- [ ] speaker-context defaults;
+- [ ] fades/ramps and delayed actions through the existing MCP-side automation engine;
+- [ ] automation status/cancel;
+- [ ] preserve level vs mute semantics and all protocol-specific unsupported-operation guards.
+
+### XDG3 — Regression corpus and cloud/local drift control
+
+- [ ] maintain a deterministic command corpus in-repo covering French first, then supported English equivalents;
+- [ ] include STT-like case/punctuation variants without introducing unconstrained fuzzy NLP;
+- [ ] every corpus item asserts recognition, clarification vs executable outcome, resolved target/effect and generated plan;
+- [ ] review `PROMPT.md` semantics against the same corpus whenever command semantics change so cloud-agent guidance and Local deterministic behavior do not silently diverge;
+- [ ] keep gateway-disabled tool inventory identical to the pre-OR4 cloud/ordinary MCP behavior.
+
+### XDG4 — Pi acceptance
+
+- [ ] LiveStageAssistant Local STDIO integration;
+- [ ] one controlled read + mute/unmute + absolute/relative level write;
+- [ ] ambiguity/confirmation and stale-plan tests;
+- [ ] fade/delay acceptance after XDG2;
+- [ ] target deterministic parser/plan overhead <100 ms typical on Pi5, excluding mixer network I/O;
+- [ ] verify no LLM process or inference dependency is started by the gateway.
