@@ -362,6 +362,9 @@ export class LocalMixerCommandGateway {
 
             if (plan.kind === "adjust_level") {
                 const before = faderLevelToDb(await this.adapter.readLevel(liveTarget));
+                if (before.db === null) {
+                    throw new Error("Le niveau actuel est à -inf dB ; utilise une valeur absolue avant un ajustement relatif.");
+                }
                 const requested = before.db + plan.deltaDb;
                 const converted = dbToFaderLevel(requested);
                 await this.adapter.writeLevel(liveTarget, converted.level);
