@@ -271,6 +271,48 @@
       }
     },
     {
+      "name": "send-fx-absolute",
+      "utterance": "mets Hall FX sur Anthony à -18 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "write_send",
+          "source": "Hall FX",
+          "destination": "Anthony"
+        }
+      }
+    },
+    {
+      "name": "send-aux-qualitative",
+      "utterance": "baisse un peu Playback dans Anthony",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "qualitative_send",
+          "source": "Playback",
+          "destination": "Anthony",
+          "direction": "down",
+          "amount": "little"
+        }
+      }
+    },
+    {
+      "name": "send-fx-ramp",
+      "utterance": "baisse progressivement Hall FX sur Anthony à -30 dB en 2 secondes",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "send_ramp",
+          "source": "Hall FX",
+          "destination": "Anthony",
+          "durationSeconds": 2
+        }
+      }
+    },
+    {
       "name": "send-qualitative",
       "utterance": "monte Batterie sur Anthony",
       "expected": {
