@@ -86,6 +86,10 @@ function makeHarness() {
             operations.push({ kind: "send_delay", source: source.name, destination: destination.name, delaySeconds });
             return "auto-4";
         },
+        async scheduleSendMute(source, destination, mute, delaySeconds) {
+            operations.push({ kind: "send_delay_mute", source: source.name, destination: destination.name, mute, delaySeconds });
+            return "auto-send-mute-delay";
+        },
         async listAutomations() {
             return [];
         },
