@@ -592,6 +592,17 @@ const localCommandGateway = new LocalMixerCommandGateway({
         });
         return automation.start(action.description || "Local delayed level", [action]).id;
     },
+    scheduleMute: async (target, mute, delaySeconds) => {
+        const action: AutomationAction = {
+            type: "delay",
+            description: `Local delayed ${mute ? "mute" : "unmute"} ${target.name}`,
+            delaySeconds,
+            run: async () => {
+                await localGatewaySetMute(target, mute);
+            },
+        };
+        return automation.start(action.description || "Local delayed mute", [action]).id;
+    },
     scheduleSend: async (source, destination, toLevel, delaySeconds) => {
         const action = delayedStructuredLevelAction({
             target: localGatewaySendAutomationTarget(source, destination),

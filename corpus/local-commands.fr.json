@@ -299,6 +299,59 @@
       }
     },
     {
+      "name": "delay-mute-channel",
+      "utterance": "mute Batterie dans 5 secondes",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "delay_mute",
+          "family": "channel",
+          "name": "Batterie",
+          "mute": true,
+          "delaySeconds": 5
+        }
+      }
+    },
+    {
+      "name": "delay-unmute-channel-prefix",
+      "utterance": "dans 3 secondes, rallume Batterie",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "delay_mute",
+          "family": "channel",
+          "name": "Batterie",
+          "mute": false,
+          "delaySeconds": 3
+        }
+      }
+    },
+    {
+      "name": "delay-mute-main",
+      "utterance": "dans 5 secondes mute le main LR",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "delay_mute",
+          "family": "main",
+          "name": "Main LR",
+          "mute": true,
+          "delaySeconds": 5
+        }
+      }
+    },
+    {
+      "name": "delay-route-mute-fail-closed",
+      "utterance": "mute Batterie sur Anthony dans 5 secondes",
+      "expected": {
+        "status": "clarification",
+        "effect": "none"
+      }
+    },
+    {
       "name": "mute-channel-eteins",
       "utterance": "éteins Batterie",
       "expected": {

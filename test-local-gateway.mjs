@@ -26,6 +26,7 @@ let sendReadCalls = [];
 let sendWrites = [];
 let sendMuteWrites = [];
 let automationCalls = [];
+let delayedMuteCalls = [];
 let automationJobs = [];
 let bulkMuteCalls = [];
 let bulkSendCalls = [];
@@ -94,6 +95,10 @@ const adapter = {
     async scheduleLevel(target, toLevel, delaySeconds) {
         automationCalls.push({ kind: "delay", target, toLevel, delaySeconds });
         return "auto-delay";
+    },
+    async scheduleMute(target, mute, delaySeconds) {
+        delayedMuteCalls.push({ kind: "delay-mute", target, mute, delaySeconds });
+        return "auto-mute-delay";
     },
     async scheduleSend(source, destination, toLevel, delaySeconds) {
         automationCalls.push({ kind: "send-delay", source, destination, toLevel, delaySeconds });
@@ -533,6 +538,66 @@ async function ready(text) {
     })).ok, true);
 
     assert.deepEqual(sendMuteWrites.map((entry) => entry.mute), [true, false]);
+}
+
+// Delayed mute supports verb-first ordering and remains a scheduled write.
+{
+    delayedMuteCalls = [];
+    muteWrites = [];
+    const analyzed = await ready("mute Batterie dans 5 secondes");
+    assert.equal(analyzed.effect, "write");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(delayedMuteCalls.length, 1);
+    assert.equal(delayedMuteCalls[0].target.name, "Batterie");
+    assert.equal(delayedMuteCalls[0].mute, true);
+    assert.equal(delayedMuteCalls[0].delaySeconds, 5);
+    assert.equal(muteWrites.length, 0);
+    assert.match(result.responseText, /auto-mute-delay/);
+}
+
+// Delayed unmute also accepts delay-first ordering.
+{
+    delayedMuteCalls = [];
+    const analyzed = await ready("dans 3 secondes, rallume Batterie");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(delayedMuteCalls[0].target.name, "Batterie");
+    assert.equal(delayedMuteCalls[0].mute, false);
+    assert.equal(delayedMuteCalls[0].delaySeconds, 3);
+}
+
+// Delayed Main LR mute is mixer-domain owned.
+{
+    delayedMuteCalls = [];
+    const analyzed = await ready("dans 5 secondes mute le main LR");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(delayedMuteCalls[0].target.family, "main");
+    assert.equal(delayedMuteCalls[0].mute, true);
+}
+
+// Delayed route mute is not guessed by the single-target delayed-mute slice.
+{
+    delayedMuteCalls = [];
+    sendMuteWrites = [];
+    const analyzed = await gateway.analyze({
+        protocol: GATEWAY_PROTOCOL,
+        text: "mute Batterie sur Anthony dans 5 secondes",
+    });
+    assert.notEqual(analyzed.status, "ready");
+    assert.equal(analyzed.effect, "none");
+    assert.equal(delayedMuteCalls.length, 0);
+    assert.equal(sendMuteWrites.length, 0);
 }
 
 // Mute/unmute
