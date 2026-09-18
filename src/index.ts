@@ -467,6 +467,29 @@ async function localGatewaySetMute(target: LocalMixerTarget, mute: boolean): Pro
     }
 }
 
+async function localGatewaySetSendMute(
+    source: LocalMixerTarget,
+    destination: LocalMixerTarget,
+    mute: boolean,
+): Promise<void> {
+    if (destination.family !== "bus") {
+        throw new Error("Local send mute requires a bus destination.");
+    }
+    switch (source.family) {
+        case "channel":
+            await osc.muteChannelToBus(source.index, destination.index, mute);
+            return;
+        case "fxreturn":
+            await osc.muteFxToBus(source.index, destination.index, mute);
+            return;
+        case "aux":
+            await osc.muteAuxToBus(source.index, destination.index, mute);
+            return;
+        default:
+            throw new Error("Local send mute source must be a channel, FX return or aux return.");
+    }
+}
+
 function localGatewayAutomationTarget(target: LocalMixerTarget): AutomationTargetSpec {
     switch (target.family) {
         case "main":
@@ -545,24 +568,7 @@ const localCommandGateway = new LocalMixerCommandGateway({
                 throw new Error("Local send source must be a channel, FX return or aux return.");
         }
     },
-    setSendMute: async (source, destination, mute) => {
-        if (destination.family !== "bus") {
-            throw new Error("Local send mute requires a bus destination.");
-        }
-        switch (source.family) {
-            case "channel":
-                await osc.muteChannelToBus(source.index, destination.index, mute);
-                return;
-            case "fxreturn":
-                await osc.muteFxToBus(source.index, destination.index, mute);
-                return;
-            case "aux":
-                await osc.muteAuxToBus(source.index, destination.index, mute);
-                return;
-            default:
-                throw new Error("Local send mute source must be a channel, FX return or aux return.");
-        }
-    },
+    setSendMute: localGatewaySetSendMute,
     startLevelRamp: async (target, toLevel, durationSeconds, fromLevel) => {
         const action = rampAction({
             target: localGatewayAutomationTarget(target),
@@ -611,6 +617,17 @@ const localCommandGateway = new LocalMixerCommandGateway({
             label: `Local delayed send ${source.name} -> ${destination.name}`,
         });
         return automation.start(action.description || "Local delayed send", [action]).id;
+    },
+    scheduleSendMute: async (source, destination, mute, delaySeconds) => {
+        const action: AutomationAction = {
+            type: "delay",
+            description: `Local delayed ${mute ? "mute" : "unmute"} ${source.name} -> ${destination.name}`,
+            delaySeconds,
+            run: async () => {
+                await localGatewaySetSendMute(source, destination, mute);
+            },
+        };
+        return automation.start(action.description || "Local delayed send mute", [action]).id;
     },
     listAutomations: async () => automation.list(),
     cancelAutomation: async (id) => automation.cancel(id),
