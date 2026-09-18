@@ -528,6 +528,9 @@ The parser is intentionally bounded and deterministic. Prefer the canonical form
 | Automation status | `statut des automations` · `liste les automations` |
 | Cancel by id | `annule l'automation auto-3` |
 | Cancel latest running job | `annule la dernière automation` |
+| Speaker monitor context | `monte mon retour de 3 dB` · `mute mon retour` |
+| Speaker input context | `mets mon micro à -12 dB` · `baisse ma voix de 2 dB` |
+| Source -> speaker monitor | `mets batterie dans mon retour à -20 dB` |
 
 Important syntax rules:
 
@@ -542,7 +545,8 @@ Important syntax rules:
 - If a name is ambiguous or only fuzzy-matches, the gateway asks for clarification rather than guessing.
 - DCA writes are not yet part of the deterministic Local write surface.
 - Group/bulk natural-language commands are supported for bus-master mute/unmute and channel-send dB writes to selected/all buses, including an explicit Main LR/façade inclusion.
-- Speaker-context defaults remain separate OR4B4 work and must not be assumed until documented here.
+- Speaker-context defaults are supported for first-person phrases when the host supplies recognized-speaker context. XMSeries-MCP remains responsible for mapping the speaker through `XMS_SPEAKER_MAP` / `osc_get_speaker_context`.
+- Canonical first-person examples: `monte mon retour de 3 dB`, `mets mon micro à -12 dB`, `mets batterie dans mon retour à -20 dB`. If the speaker is unknown or the required bus/channel mapping is unavailable, the Local parser asks for clarification instead of guessing.
 
 The deterministic grammar is not intended to accept arbitrary prose. If a phrase is not documented and is not covered by parser tests, treat it as unsupported rather than assuming the parser will infer the intent.
 
