@@ -15,6 +15,8 @@ Then check the environment file:
 sudo nano /etc/xmseriesmcp.env
 ```
 
+The bundled rack environment is already pinned for the validated XR16 setup: 16 channels, 4 buses, 4 FX returns and 4 DCA groups. These counts are resolver scan limits as well as bulk-operation limits; keep them aligned with the physical mixer when changing models.
+
 Start automatically at boot:
 
 ```bash

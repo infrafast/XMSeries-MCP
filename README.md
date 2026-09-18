@@ -57,6 +57,8 @@ Replace the IP with your mixer's (on the X32: `Setup` -> `Network`). Restart Cla
 
 The server starts with these environment values, then the active mixer can be changed at runtime with `osc_configure_mixer`. Omitted fields keep their current values. Changing `host`, `port`, or `protocol` closes the current OSC client and reconnects to the new mixer. For count-only updates, use `osc_set_mixer_counts`; it updates resolver and bulk-read limits without reconnecting. If counts are included in `osc_configure_mixer`, they are applied together with the connection change.
 
+For compact OSCXR mixers, set the scan limits to the actual console instead of leaving the X32/M32 defaults. The validated XR16 rack profile is `OSC_CHANNEL_COUNT=16`, `OSC_BUS_COUNT=4`, `OSC_FX_COUNT=4`, `OSC_DCA_COUNT=4`. This matters for the deterministic resolver: an oversized channel/bus range can make name resolution probe indexes that the XR mixer does not expose.
+
 Example runtime change:
 
 ```json
@@ -91,6 +93,10 @@ Both MCP transports read these values at startup:
 | `OSC_HOST` | `192.168.1.17` | Mixer IP address |
 | `OSC_PORT` | `10023` | Mixer OSC UDP port |
 | `OSC_PROTOCOL` | `OSCX32M32` | Address mapping mode: `OSCX32M32` or `OSCXR` |
+| `OSC_CHANNEL_COUNT` | `32` | Number of input channels scanned for deterministic name resolution and bulk reads |
+| `OSC_BUS_COUNT` | `16` | Number of mix buses scanned/used by deterministic resolution and bulk commands |
+| `OSC_FX_COUNT` | `8` | Number of FX returns/slots scanned |
+| `OSC_DCA_COUNT` | `8` | Number of DCA groups scanned |
 | `MCP_PROMPT_FILE` | repository `PROMPT.md` | Optional absolute path to the prompt exposed through MCP |
 | `XMS_SPEAKER_MAP` | empty | Optional JSON map used by `osc_get_speaker_context` to translate a recognized voice speaker into monitor bus/channel names |
 
