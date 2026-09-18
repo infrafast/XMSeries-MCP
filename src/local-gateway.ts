@@ -1428,6 +1428,15 @@ export class LocalMixerCommandGateway {
                         responseText: `${displayName(source)} → ${displayName(destination)} : ${formatDb(adjusted.beforeDb)} → ${formatDb(adjusted.targetDb)}.`,
                     };
                 }
+                if (plan.kind === "send_mute") {
+                    await this.adapter.setSendMute(source, destination, plan.mute);
+                    return {
+                        protocol: GATEWAY_PROTOCOL,
+                        ok: true,
+                        responseText: `${displayName(source)} → ${displayName(destination)} ${plan.mute ? "coupé" : "réactivé"}.`,
+                    };
+                }
+
                 if (plan.kind === "send_delay_level") {
                     const converted = levelToNormalized(plan.value.unit, plan.value.value);
                     const jobId = await this.adapter.scheduleSend(source, destination, converted.level, plan.delaySeconds);
