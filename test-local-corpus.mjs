@@ -62,6 +62,9 @@ function makeHarness() {
             operations.push({ kind: "write_send", source: source.name, destination: destination.name, level: next });
             sendLevel = next;
         },
+        async setSendMute(source, destination, mute) {
+            operations.push({ kind: "mute_send", source: source.name, destination: destination.name, mute });
+        },
         async startLevelRamp(target, _toLevel, durationSeconds) {
             operations.push({ kind: "ramp", family: target.family, name: target.name, durationSeconds });
             return "auto-1";
