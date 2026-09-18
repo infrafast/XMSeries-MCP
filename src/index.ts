@@ -17,6 +17,12 @@ import {
 import { AutomationAction, AutomationCurve, AutomationEngine, AutomationRampAction } from "./automation.js";
 import { coerceOscArg, MixerDisconnectedError, OSCClient, OSCProtocol, parseOscCountEnv } from "./osc-client.js";
 import { dbToFaderLevel, faderLevelToDb, formatDb } from "./level-table.js";
+import { isLocalGatewayEnabled } from "@infrafast/stage-command-core";
+import {
+    LocalMixerCommandGateway,
+    type LocalMixerTarget,
+    withLocalGatewayTools,
+} from "./local-gateway.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -413,6 +419,94 @@ async function findNamedTargets(
             ...candidate,
             matchType: "fuzzy" as const,
         }));
+}
+
+async function localGatewayReadLevel(target: LocalMixerTarget): Promise<number> {
+    switch (target.family) {
+        case "main":
+            return await osc.getMainFader();
+        case "channel":
+            return await osc.getFader(target.index);
+        case "bus":
+            return await osc.getBusFader(target.index);
+        case "fxreturn":
+            return await osc.getFxReturnFader(target.index);
+        case "aux":
+            return await osc.getAuxFader(target.index);
+        case "matrix":
+            return await osc.getMatrixFader(target.index);
+        case "dca": {
+            const dca = await osc.getDCA(target.index);
+            if (typeof dca?.fader !== "number") {
+                throw new Error(`Impossible de lire le niveau du DCA ${target.index}`);
+            }
+            return dca.fader;
+        }
+    }
+}
+
+async function localGatewayWriteLevel(target: LocalMixerTarget, level: number): Promise<void> {
+    switch (target.family) {
+        case "main":
+            await osc.setMainFader(level);
+            return;
+        case "channel":
+            await osc.setFader(target.index, level);
+            return;
+        case "bus":
+            await osc.setBusFader(target.index, level);
+            return;
+        case "fxreturn":
+            await osc.setFxReturnFader(target.index, level);
+            return;
+        case "aux":
+            await osc.setAuxFader(target.index, level);
+            return;
+        case "matrix":
+            await osc.setMatrixFader(target.index, level);
+            return;
+        case "dca":
+            throw new Error("Les écritures DCA ne font pas partie du MVP déterministe actuel.");
+    }
+}
+
+async function localGatewaySetMute(target: LocalMixerTarget, mute: boolean): Promise<void> {
+    switch (target.family) {
+        case "main":
+            await osc.muteMain(mute);
+            return;
+        case "channel":
+            await osc.muteChannel(target.index, mute);
+            return;
+        case "bus":
+            await osc.muteBus(target.index, mute);
+            return;
+        case "fxreturn":
+            await osc.setEffectOn(target.index, !mute);
+            return;
+        case "aux":
+            await osc.muteAux(target.index, mute);
+            return;
+        case "matrix":
+            await osc.muteMatrix(target.index, mute);
+            return;
+        case "dca":
+            throw new Error("Les écritures DCA ne font pas partie du MVP déterministe actuel.");
+    }
+}
+
+const localCommandGateway = new LocalMixerCommandGateway({
+    resolve: async (query) => await findNamedTargets(query),
+    status: async () => await osc.getMixerStatus(),
+    readLevel: localGatewayReadLevel,
+    writeLevel: localGatewayWriteLevel,
+    setMute: localGatewaySetMute,
+});
+
+export function getRuntimeTools(
+    env: Readonly<Record<string, string | undefined>> = process.env,
+): Tool[] {
+    return withLocalGatewayTools(TOOLS, env);
 }
 
 type AutomationTargetKind =
@@ -1908,7 +2002,7 @@ export const TOOLS: Tool[] = [
 ];
 
 export function getOscToolSummaries(): Array<{ name: string; description: string }> {
-    return TOOLS.map((tool) => ({
+    return getRuntimeTools().map((tool) => ({
         name: tool.name,
         description: tool.description || "",
     }));
@@ -2012,7 +2106,7 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
 
 // Handle tool listing
 server.setRequestHandler(ListToolsRequestSchema, async () => {
-    return { tools: TOOLS };
+    return { tools: getRuntimeTools() };
 });
 
 // Handle tool execution
@@ -2023,6 +2117,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         osc.clearOscCommandLog();
         const result = await (async () => {
         switch (name) {
+            case "lsa_local_analyze_command": {
+                if (!isLocalGatewayEnabled()) {
+                    throw new Error("Unknown tool: lsa_local_analyze_command");
+                }
+                const result = await localCommandGateway.analyze(args as {
+                    protocol: string;
+                    text: string;
+                    locale?: string;
+                    continuationToken?: string;
+                });
+                return {
+                    content: [{ type: "text", text: JSON.stringify(result) }],
+                };
+            }
+
+            case "lsa_local_execute_command": {
+                if (!isLocalGatewayEnabled()) {
+                    throw new Error("Unknown tool: lsa_local_execute_command");
+                }
+                const result = await localCommandGateway.execute(args as {
+                    protocol: string;
+                    planToken: string;
+                });
+                return {
+                    content: [{ type: "text", text: JSON.stringify(result) }],
+                };
+            }
+
             case "get_agent_prompt": {
                 const prompt = await readAgentPrompt();
                 return {

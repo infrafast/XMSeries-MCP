@@ -481,3 +481,35 @@ OSC_HOST=192.168.0.16 OSC_PORT=10024 OSC_PROTOCOL=OSCXR npm test
 ## License
 
 MIT (inherited from upstream).
+
+
+## Local deterministic gateway
+
+OR4B2 adds an optional deterministic command gateway for the LiveStageAssistant Local engine.
+
+It is disabled by default. Ordinary/cloud MCP clients keep the existing low-level OSC tool inventory and PROMPT behavior.
+
+Enable it only for a dedicated Local LSA process/instance:
+
+```text
+LSA_LOCAL_COMMAND_GATEWAY=1
+```
+
+When enabled, two reserved tools are added:
+
+- `lsa_local_analyze_command`: side-effect-free command analysis;
+- `lsa_local_execute_command`: execution of a previously accepted short-lived plan.
+
+Current OR4B2 MVP scope:
+
+- live mixer status;
+- named-target level read;
+- absolute dB level write;
+- relative level up/down in dB or qualitative steps;
+- mute/unmute;
+- Main LR/façade aliases handled inside XMSeries-MCP;
+- exact/contains/structured resolution reuses the existing authoritative resolver;
+- fuzzy-only or ambiguous matches never directly authorize a write;
+- every write re-resolves the target before dispatch and fails stale identity changes closed.
+
+Source-to-destination sends, percentage semantics, speaker-context defaults, grouped operations and fades remain later OR4 milestones.
