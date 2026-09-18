@@ -99,7 +99,18 @@ function makeHarness() {
                 return {
                     speaker: "laurent",
                     known: true,
+                    monitorDestination: { kind: "bus", name: "Anthony" },
                     busName: "Anthony",
+                    channelName: "Batterie",
+                    source: "XMS_SPEAKER_MAP",
+                };
+            }
+            if (String(speaker).toLowerCase() === "thomas") {
+                return {
+                    speaker: "thomas",
+                    known: true,
+                    monitorDestination: { kind: "main" },
+                    busName: null,
                     channelName: "Batterie",
                     source: "XMS_SPEAKER_MAP",
                 };
@@ -107,6 +118,7 @@ function makeHarness() {
             return {
                 speaker: String(speaker || "unknown").toLowerCase(),
                 known: false,
+                monitorDestination: null,
                 busName: null,
                 channelName: null,
                 source: "test",
