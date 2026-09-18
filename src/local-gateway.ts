@@ -1251,7 +1251,7 @@ export class LocalMixerCommandGateway {
             };
         }
 
-        if (input.continuationToken) {
+        if (input.continuationToken && !parseIntent(input.text)) {
             return await this.continueIntent(input.text, input.continuationToken);
         }
 
