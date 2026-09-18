@@ -61,6 +61,12 @@ export interface LocalMixerGatewayAdapter {
         direction: LocalRelativeDirection,
         amount: LocalRelativeAmount,
     ): Promise<{ beforeDb: number; targetDb: number }>;
+    adjustQualitativeSend(
+        source: LocalMixerTarget,
+        destination: LocalMixerTarget,
+        direction: LocalRelativeDirection,
+        amount: LocalRelativeAmount,
+    ): Promise<{ beforeDb: number; targetDb: number }>;
 }
 
 type LevelUnit = "db" | "percent";
@@ -74,6 +80,7 @@ type Intent =
     | { kind: "adjust_level_qualitative"; targetQuery: string; direction: LocalRelativeDirection; amount: LocalRelativeAmount }
     | { kind: "send_set_level"; sourceQuery: string; destinationQuery: string; unit: LevelUnit; value: number }
     | { kind: "send_adjust_level"; sourceQuery: string; destinationQuery: string; unit: LevelUnit; delta: number }
+    | { kind: "send_adjust_level_qualitative"; sourceQuery: string; destinationQuery: string; direction: LocalRelativeDirection; amount: LocalRelativeAmount }
     | { kind: "ramp_level"; targetQuery: string; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
     | { kind: "send_ramp_level"; sourceQuery: string; destinationQuery: string; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
     | { kind: "delay_level"; targetQuery: string; value: LevelValue; delaySeconds: number }
@@ -96,6 +103,7 @@ type LocalPlan =
     | { kind: "adjust_level_qualitative"; targetQuery: string; target: LocalMixerTarget; direction: LocalRelativeDirection; amount: LocalRelativeAmount }
     | { kind: "send_set_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; unit: LevelUnit; value: number }
     | { kind: "send_adjust_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; unit: LevelUnit; delta: number }
+    | { kind: "send_adjust_level_qualitative"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; direction: LocalRelativeDirection; amount: LocalRelativeAmount }
     | { kind: "ramp_level"; targetQuery: string; target: LocalMixerTarget; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
     | { kind: "send_ramp_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
     | { kind: "delay_level"; targetQuery: string; target: LocalMixerTarget; value: LevelValue; delaySeconds: number }
@@ -551,6 +559,29 @@ function parseIntent(raw: string): Intent | null {
         }
     }
 
+    const sendQualitative = text.match(
+        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:(un\s+peu|beaucoup|a\s+little|a\s+lot|slightly)\s+)?(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s*$/iu,
+    );
+    if (sendQualitative?.[1] && sendQualitative[3] && sendQualitative[4]) {
+        const verb = simplify(sendQualitative[1]);
+        const amountText = simplify(sendQualitative[2] || "");
+        const amount: LocalRelativeAmount =
+            amountText === "un peu" || amountText === "a little" || amountText === "slightly"
+                ? "little"
+                : amountText === "beaucoup" || amountText === "a lot"
+                  ? "much"
+                  : "normal";
+        const direction: LocalRelativeDirection =
+            ["baisse", "diminue", "lower", "decrease"].includes(verb) ? "down" : "up";
+        return {
+            kind: "send_adjust_level_qualitative",
+            sourceQuery: cleanTarget(sendQualitative[3]),
+            destinationQuery: cleanTarget(sendQualitative[4]),
+            direction,
+            amount,
+        };
+    }
+
     const mutePatterns: Array<{ re: RegExp; mute: boolean }> = [
         { re: /^\s*(?:mute|coupe|couper|desactive|désactive)\s+(?:le\s+son\s+de\s+)?(.+?)\s*$/iu, mute: true },
         { re: /^\s*(?:unmute|demute|démute|reactive|réactive|remets)\s+(?:le\s+son\s+de\s+)?(.+?)\s*$/iu, mute: false },
@@ -871,6 +902,7 @@ export class LocalMixerCommandGateway {
         if (
             intent.kind === "send_set_level" ||
             intent.kind === "send_adjust_level" ||
+            intent.kind === "send_adjust_level_qualitative" ||
             intent.kind === "send_ramp_level" ||
             intent.kind === "send_delay_level"
         ) {
@@ -1009,6 +1041,7 @@ export class LocalMixerCommandGateway {
             if (
                 plan.kind === "send_set_level" ||
                 plan.kind === "send_adjust_level" ||
+                plan.kind === "send_adjust_level_qualitative" ||
                 plan.kind === "send_ramp_level" ||
                 plan.kind === "send_delay_level"
             ) {
@@ -1031,6 +1064,19 @@ export class LocalMixerCommandGateway {
                         protocol: GATEWAY_PROTOCOL,
                         ok: true,
                         responseText: `${displayName(source)} → ${displayName(destination)} : ${adjusted.beforeLabel} → ${adjusted.afterLabel}.`,
+                    };
+                }
+                if (plan.kind === "send_adjust_level_qualitative") {
+                    const adjusted = await this.adapter.adjustQualitativeSend(
+                        source,
+                        destination,
+                        plan.direction,
+                        plan.amount,
+                    );
+                    return {
+                        protocol: GATEWAY_PROTOCOL,
+                        ok: true,
+                        responseText: `${displayName(source)} → ${displayName(destination)} : ${formatDb(adjusted.beforeDb)} → ${formatDb(adjusted.targetDb)}.`,
                     };
                 }
                 if (plan.kind === "send_delay_level") {
