@@ -6,6 +6,7 @@ import {
     type ExecuteCommandResult,
 } from "@infrafast/stage-command-core";
 import { dbToFaderLevel, faderLevelToDb, formatDb } from "./level-table.js";
+import { isLocalGatewayEnabled } from "@infrafast/stage-command-core";
 
 export type LocalMixerTargetFamily =
     | "channel"
@@ -582,3 +583,12 @@ export const LOCAL_GATEWAY_TOOLS: Tool[] = [
         },
     },
 ];
+
+export function withLocalGatewayTools(
+    baseTools: readonly Tool[],
+    env: Readonly<Record<string, string | undefined>> = process.env,
+): Tool[] {
+    return isLocalGatewayEnabled(env)
+        ? [...baseTools, ...LOCAL_GATEWAY_TOOLS]
+        : [...baseTools];
+}
