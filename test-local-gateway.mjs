@@ -25,6 +25,7 @@ let automationCalls = [];
 let automationJobs = [];
 let bulkMuteCalls = [];
 let bulkSendCalls = [];
+let speakerContexts = new Map();
 let stale = false;
 
 const adapter = {
@@ -105,6 +106,15 @@ const adapter = {
     },
     async writeSendAllBusesDb(source, db, includeMain) {
         bulkSendCalls.push({ kind: "all", source, db, includeMain });
+    },
+    async speakerContext(speaker) {
+        return speakerContexts.get(String(speaker).toLowerCase()) || {
+            speaker: String(speaker).toLowerCase(),
+            known: false,
+            busName: null,
+            channelName: null,
+            source: "test",
+        };
     },
 };
 
@@ -539,6 +549,109 @@ async function ready(text) {
     assert.equal(bulkSendCalls[0].source.name, "Batterie");
     assert.equal(bulkSendCalls[0].db, -25);
     assert.equal(bulkSendCalls[0].includeMain, true);
+}
+
+// OR4B4 speaker context resolves first-person monitor phrases inside XMSeries-MCP.
+{
+    speakerContexts = new Map([
+        ["laurent", {
+            speaker: "laurent",
+            known: true,
+            busName: "Anthony",
+            channelName: "Batterie",
+            source: "XMS_SPEAKER_MAP",
+        }],
+    ]);
+    writes = [];
+    const analyzed = await gateway.analyze({
+        protocol: GATEWAY_PROTOCOL,
+        text: "monte mon retour de 3 dB",
+        context: {
+            speaker: { name: "Laurent", confidence: 0.9, backend: "resemblyzer" },
+        },
+    });
+    assert.equal(analyzed.status, "ready", JSON.stringify(analyzed));
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(writes[0].target.family, "bus");
+    assert.equal(writes[0].target.name, "Anthony");
+}
+
+// First-person input phrases resolve to the configured channel.
+{
+    writes = [];
+    const analyzed = await gateway.analyze({
+        protocol: GATEWAY_PROTOCOL,
+        text: "mets mon micro à -12 dB",
+        context: {
+            speaker: { name: "Laurent", confidence: 0.9, backend: "resemblyzer" },
+        },
+    });
+    assert.equal(analyzed.status, "ready", JSON.stringify(analyzed));
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(writes[0].target.family, "channel");
+    assert.equal(writes[0].target.name, "Batterie");
+}
+
+// Source -> my return expands only the first-person destination, not the source.
+{
+    sendWrites = [];
+    const analyzed = await gateway.analyze({
+        protocol: GATEWAY_PROTOCOL,
+        text: "mets batterie dans mon retour à -20 dB",
+        context: {
+            speaker: { name: "Laurent", confidence: 0.9, backend: "resemblyzer" },
+        },
+    });
+    assert.equal(analyzed.status, "ready", JSON.stringify(analyzed));
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(sendWrites[0].source.name, "Batterie");
+    assert.equal(sendWrites[0].destination.name, "Anthony");
+}
+
+// Unknown speaker never guesses a return.
+{
+    const analyzed = await gateway.analyze({
+        protocol: GATEWAY_PROTOCOL,
+        text: "monte mon retour de 3 dB",
+        context: {
+            speaker: { name: "unknown", confidence: 0, backend: "none" },
+        },
+    });
+    assert.equal(analyzed.status, "clarification");
+    assert.equal(analyzed.effect, "none");
+}
+
+// Speaker-context clarification is fail-closed: a follow-up target never inherits a fake operation.
+{
+    writes = [];
+    const analyzed = await gateway.analyze({
+        protocol: GATEWAY_PROTOCOL,
+        text: "monte mon retour de 3 dB",
+        context: {
+            speaker: { name: "unknown", confidence: 0, backend: "none" },
+        },
+    });
+    assert.equal(analyzed.status, "clarification");
+    const continued = await gateway.analyze({
+        protocol: GATEWAY_PROTOCOL,
+        text: "Anthony",
+        continuationToken: analyzed.continuationToken,
+    });
+    assert.equal(continued.status, "unrecognized");
+    assert.equal(continued.effect, "none");
+    assert.equal(writes.length, 0);
 }
 
 // Default/cloud inventory is unchanged; Local adds only two reserved tools.

@@ -194,19 +194,23 @@ export function configureSpeakerMapConfig(input: unknown): {
     return { previous, current };
 }
 
-function speakerContextPayload(speaker: string): string {
+function speakerContextObject(speaker: string) {
     const normalized = String(speaker || "unknown").trim().toLowerCase();
     const mappings = speakerMapFromEnv();
     const mapping = mappings[normalized];
     const enabled = mapping?.enabled !== false;
     const known = Boolean(normalized && normalized !== "unknown" && enabled);
-    return JSON.stringify({
+    return {
         speaker: normalized || "unknown",
         known,
         busName: known ? (mapping?.bus || normalized) : null,
         channelName: known ? (mapping?.channel || null) : null,
         source: mapping ? "XMS_SPEAKER_MAP" : "default-speaker-name",
-    });
+    };
+}
+
+function speakerContextPayload(speaker: string): string {
+    return JSON.stringify(speakerContextObject(speaker));
 }
 
 function appendOscTrace(toolResult: any, commands: string[], toolName?: string): any {
@@ -616,6 +620,7 @@ const localCommandGateway = new LocalMixerCommandGateway({
         if (source.family !== "channel") throw new Error("Local bulk send source must be a channel.");
         await setChannelSendBatchDb(source.index, namedTargetRange("bus"), db, includeMain);
     },
+    speakerContext: async (speaker) => speakerContextObject(speaker),
 });
 
 export function getRuntimeTools(
@@ -2272,6 +2277,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     text: string;
                     locale?: string;
                     continuationToken?: string;
+                    context?: Record<string, unknown>;
                 });
                 return {
                     content: [{ type: "text", text: JSON.stringify(result) }],
