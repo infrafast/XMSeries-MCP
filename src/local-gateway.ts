@@ -705,7 +705,7 @@ function parseIntent(raw: string): Intent | null {
     }
 
     const sendAbsolutePatterns = [
-        /^\s*(?:mets|met|regle|règle|fixe|set)\s+(?:le\s+)?(?:niveau|volume|fader)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
+        /^\s*(?:mets|met|regle|règle|fixe|set|monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:niveau|volume|fader)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
         /^\s*(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
     ];
     for (const re of sendAbsolutePatterns) {
@@ -764,6 +764,20 @@ function parseIntent(raw: string): Intent | null {
             direction,
             amount,
         };
+    }
+
+    const directionalAbsoluteTarget = text.match(
+        /^\s*(?:monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:niveau|volume|fader)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
+    );
+    if (directionalAbsoluteTarget?.[1] && directionalAbsoluteTarget[2] && directionalAbsoluteTarget[3]) {
+        const unit: LevelUnit = directionalAbsoluteTarget[3] === "%" ? "percent" : "db";
+        const value = unit === "percent"
+            ? parsePercent(directionalAbsoluteTarget[2])
+            : parseDb(directionalAbsoluteTarget[2]);
+        const targetQuery = cleanTarget(directionalAbsoluteTarget[1]);
+        if (value !== null && targetQuery) {
+            return { kind: "set_level", targetQuery, unit, value };
+        }
     }
 
     const mutePatterns: Array<{ re: RegExp; mute: boolean }> = [
@@ -872,7 +886,7 @@ function parseIntent(raw: string): Intent | null {
     }
 
     const setPatterns = [
-        /^\s*(?:mets|met|regle|règle|fixe|set)\s+(?:le\s+)?(?:niveau|volume|fader)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
+        /^\s*(?:mets|met|regle|règle|fixe|set|monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:niveau|volume|fader)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
         /^\s*(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
     ];
     for (const re of setPatterns) {
