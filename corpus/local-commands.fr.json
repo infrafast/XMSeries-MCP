@@ -148,6 +148,89 @@
       }
     },
     {
+      "name": "stt-montre-channel",
+      "utterance": "montre Batterie",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "qualitative",
+          "family": "channel",
+          "name": "Batterie",
+          "direction": "up",
+          "amount": "normal"
+        }
+      }
+    },
+    {
+      "name": "stt-montre-main",
+      "utterance": "montre le volume",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "qualitative",
+          "family": "main",
+          "name": "Main LR",
+          "direction": "up",
+          "amount": "normal"
+        }
+      }
+    },
+    {
+      "name": "natural-plus-fort-channel",
+      "utterance": "un peu plus fort Batterie",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "qualitative",
+          "family": "channel",
+          "name": "Batterie",
+          "direction": "up",
+          "amount": "little"
+        }
+      }
+    },
+    {
+      "name": "natural-moins-fort-channel",
+      "utterance": "Batterie moins fort",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "qualitative",
+          "family": "channel",
+          "name": "Batterie",
+          "direction": "down",
+          "amount": "normal"
+        }
+      }
+    },
+    {
+      "name": "natural-plus-fort-send",
+      "utterance": "plus fort Batterie sur Anthony",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "qualitative_send",
+          "source": "Batterie",
+          "destination": "Anthony",
+          "direction": "up",
+          "amount": "normal"
+        }
+      }
+    },
+    {
+      "name": "stt-montre-moi-read-safe",
+      "utterance": "montre-moi le niveau de Batterie",
+      "expected": {
+        "status": "unrecognized",
+        "effect": "none"
+      }
+    },
+    {
       "name": "mute-channel",
       "utterance": "mute Batterie",
       "expected": {
