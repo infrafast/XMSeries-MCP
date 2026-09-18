@@ -191,6 +191,41 @@ async function ready(text) {
     assert.match(result.responseText, /Main LR/);
 }
 
+// Additional documented Main aliases remain mixer-domain owned.
+{
+    const front = await ready("niveau de front");
+    assert.equal((await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: front.planToken,
+    })).ok, true);
+
+    const principal = await ready("niveau de principal");
+    assert.equal((await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: principal.planToken,
+    })).ok, true);
+}
+
+// "son" is a safe explicit synonym for Main volume/level.
+{
+    qualitativeCalls = [];
+    const up = await ready("monte le son");
+    assert.equal((await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: up.planToken,
+    })).ok, true);
+    assert.equal(qualitativeCalls[0].target.family, "main");
+    assert.equal(qualitativeCalls[0].direction, "up");
+
+    writes = [];
+    const set = await ready("mets le son à -10 dB");
+    assert.equal((await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: set.planToken,
+    })).ok, true);
+    assert.equal(writes[0].target.family, "main");
+}
+
 // Absolute dB write
 {
     writes = [];
@@ -462,6 +497,42 @@ async function ready(text) {
     assert.equal(result.ok, true);
     assert.equal(sendMuteWrites[0].source.family, "aux");
     assert.equal(sendMuteWrites[0].mute, false);
+}
+
+// Safe cloud-documented mute synonyms map to the same deterministic mute intent.
+{
+    muteWrites = [];
+    const off = await ready("éteins Voix");
+    assert.equal((await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: off.planToken,
+    })).ok, true);
+
+    const on = await ready("rallume Voix");
+    assert.equal((await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: on.planToken,
+    })).ok, true);
+
+    assert.deepEqual(muteWrites.map((entry) => entry.mute), [true, false]);
+}
+
+// Safe route-mute aliases stay route-scoped.
+{
+    sendMuteWrites = [];
+    const off = await ready("éteins Batterie sur Anthony");
+    assert.equal((await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: off.planToken,
+    })).ok, true);
+
+    const on = await ready("ouvre Batterie sur Anthony");
+    assert.equal((await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: on.planToken,
+    })).ok, true);
+
+    assert.deepEqual(sendMuteWrites.map((entry) => entry.mute), [true, false]);
 }
 
 // Mute/unmute

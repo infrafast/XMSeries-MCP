@@ -154,6 +154,8 @@ const MAIN_ALIASES = new Set([
     "façade",
     "master",
     "master lr",
+    "front",
+    "principal",
     "mix principal",
 ]);
 
@@ -193,7 +195,7 @@ function parseDb(value: string): number | null {
 function cleanTarget(value: string): string {
     return value
         .replace(/^\s*(?:le|la|les|du|de la|de l|d|the)\s+/iu, "")
-        .replace(/\s*(?:fader|niveau|volume)\s*$/iu, "")
+        .replace(/\s*(?:fader|niveau|volume|son)\s*$/iu, "")
         .trim();
 }
 
@@ -257,7 +259,7 @@ function cleanTemporalSubject(value: string): string {
             .trim()
             .replace(/^(?:un|une)\s+/iu, "")
             .replace(
-                /^(?:le\s+|la\s+)?(?:niveau|volume|fader)\s+(?:(?:de|du|de la|de l['’]?|of)\s+)?/iu,
+                /^(?:le\s+|la\s+)?(?:niveau|volume|fader|son)\s+(?:(?:de|du|de la|de l['’]?|of)\s+)?/iu,
                 "",
             ),
     );
@@ -521,7 +523,7 @@ function parseIntent(raw: string): Intent | null {
     // Main LR shorthand: when volume/level/fader is named without another target,
     // the mixer domain owns the default and routes it to Main LR.
     const mainRelative = text.match(
-        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:volume|niveau|fader)\s+(?:de|by)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
+        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:volume|niveau|fader|son)\s+(?:de|by)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
     );
     if (mainRelative?.[1] && mainRelative[2] && mainRelative[3]) {
         const value = parseLevelValue(mainRelative[2], mainRelative[3]);
@@ -537,7 +539,7 @@ function parseIntent(raw: string): Intent | null {
     }
 
     const mainAbsolute = text.match(
-        /^\s*(?:mets|met|regle|règle|fixe|set|monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:volume|niveau|fader)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
+        /^\s*(?:mets|met|regle|règle|fixe|set|monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:volume|niveau|fader|son)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
     );
     if (mainAbsolute?.[1] && mainAbsolute[2]) {
         const value = parseLevelValue(mainAbsolute[1], mainAbsolute[2]);
@@ -547,7 +549,7 @@ function parseIntent(raw: string): Intent | null {
     }
 
     const bulkAllBusMute = text.match(
-        /^\s*(mute|coupe|couper|desactive|désactive|unmute|demute|démute|reactive|réactive|remets)\s+tous\s+les\s+bus(?:\s+sauf\s+(.+))?\s*$/iu,
+        /^\s*(mute|coupe|couper|desactive|désactive|eteins|éteins|unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\s+tous\s+les\s+bus(?:\s+sauf\s+(.+))?\s*$/iu,
     );
     if (bulkAllBusMute?.[1]) {
         const mute = !["unmute", "demute", "démute", "reactive", "réactive", "remets"].includes(bulkAllBusMute[1].toLocaleLowerCase("fr-FR"));
@@ -561,7 +563,7 @@ function parseIntent(raw: string): Intent | null {
     }
 
     const bulkSelectedBusMute = text.match(
-        /^\s*(mute|coupe|couper|desactive|désactive|unmute|demute|démute|reactive|réactive|remets)\s+(?:les\s+)?bus\s+(.+?)\s*$/iu,
+        /^\s*(mute|coupe|couper|desactive|désactive|eteins|éteins|unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\s+(?:les\s+)?bus\s+(.+?)\s*$/iu,
     );
     if (bulkSelectedBusMute?.[1] && bulkSelectedBusMute[2]) {
         const busQueries = splitTargetList(bulkSelectedBusMute[2]);
@@ -633,7 +635,7 @@ function parseIntent(raw: string): Intent | null {
     }
 
     const delayed = text.match(
-        /^\s*(?:mets|met|regle|règle|fixe|set)\s+(?:(?:le\s+)?(?:niveau|volume|fader)\s*(?:de\s+|du\s+|de la\s+|of\s+)?)?(.+?)?\s*(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s+dans\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
+        /^\s*(?:mets|met|regle|règle|fixe|set)\s+(?:(?:le\s+)?(?:niveau|volume|fader|son)\s*(?:de\s+|du\s+|de la\s+|of\s+)?)?(.+?)?\s*(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s+dans\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
     );
     if (delayed?.[2] && delayed[3] && delayed[4]) {
         const value = parseLevelValue(delayed[2], delayed[3]);
@@ -719,7 +721,7 @@ function parseIntent(raw: string): Intent | null {
     }
 
     const targetRampAbsolute = text.match(
-        /^\s*(?:monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+progressivement\s*(?:(?:le\s+)?(?:niveau|volume|fader)\s*(?:de\s+|du\s+|de la\s+|of\s+)?)?(.+?)?\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s+en\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
+        /^\s*(?:monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+progressivement\s*(?:(?:le\s+)?(?:niveau|volume|fader|son)\s*(?:de\s+|du\s+|de la\s+|of\s+)?)?(.+?)?\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s+en\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
     );
     if (targetRampAbsolute?.[2] && targetRampAbsolute[3] && targetRampAbsolute[4]) {
         const to = parseLevelValue(targetRampAbsolute[2], targetRampAbsolute[3]);
@@ -735,7 +737,7 @@ function parseIntent(raw: string): Intent | null {
     }
 
     const targetRampRelative = text.match(
-        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+progressivement\s*(?:(?:le\s+)?(?:niveau|volume|fader)\s*(?:de\s+|du\s+|de la\s+|of\s+)?)?(.+?)?\s+(?:de|by)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s+en\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
+        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+progressivement\s*(?:(?:le\s+)?(?:niveau|volume|fader|son)\s*(?:de\s+|du\s+|de la\s+|of\s+)?)?(.+?)?\s+(?:de|by)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s+en\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
     );
     if (targetRampRelative?.[1] && targetRampRelative[3] && targetRampRelative[4] && targetRampRelative[5]) {
         const delta = parseLevelValue(targetRampRelative[3], targetRampRelative[4]);
@@ -752,7 +754,7 @@ function parseIntent(raw: string): Intent | null {
     }
 
     const qualitativeRamp = text.match(
-        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+progressivement\s*(?:(?:le\s+)?(?:niveau|volume|fader)\s*(?:de\s+|du\s+|de la\s+|of\s+)?)?(.+?)?\s+en\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
+        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+progressivement\s*(?:(?:le\s+)?(?:niveau|volume|fader|son)\s*(?:de\s+|du\s+|de la\s+|of\s+)?)?(.+?)?\s+en\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
     );
     if (qualitativeRamp?.[1] && qualitativeRamp[3]) {
         const durationSeconds = Number(qualitativeRamp[3].replace(",", "."));
@@ -768,8 +770,8 @@ function parseIntent(raw: string): Intent | null {
     }
 
     const sendReadPatterns = [
-        /^\s*(?:quel(?:le)?\s+est\s+)?(?:le\s+)?(?:niveau|volume|fader)\s+(?:de\s+|du\s+|de la\s+|of\s+)(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s*\??\s*$/iu,
-        /^\s*(?:lis|donne|read|get)\s+(?:le\s+)?(?:niveau|volume|fader)\s+(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s*$/iu,
+        /^\s*(?:quel(?:le)?\s+est\s+)?(?:le\s+)?(?:niveau|volume|fader|son)\s+(?:de\s+|du\s+|de la\s+|of\s+)(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s*\??\s*$/iu,
+        /^\s*(?:lis|donne|read|get)\s+(?:le\s+)?(?:niveau|volume|fader|son)\s+(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s*$/iu,
     ];
     for (const re of sendReadPatterns) {
         const match = text.match(re);
@@ -783,7 +785,7 @@ function parseIntent(raw: string): Intent | null {
     }
 
     const sendAbsolutePatterns = [
-        /^\s*(?:mets|met|regle|règle|fixe|set|monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:niveau|volume|fader)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
+        /^\s*(?:mets|met|regle|règle|fixe|set|monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:niveau|volume|fader|son)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
         /^\s*(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
     ];
     for (const re of sendAbsolutePatterns) {
@@ -845,7 +847,7 @@ function parseIntent(raw: string): Intent | null {
     }
 
     const directionalAbsoluteTarget = text.match(
-        /^\s*(?:monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:niveau|volume|fader)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
+        /^\s*(?:monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:niveau|volume|fader|son)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
     );
     if (directionalAbsoluteTarget?.[1] && directionalAbsoluteTarget[2] && directionalAbsoluteTarget[3]) {
         const unit: LevelUnit = directionalAbsoluteTarget[3] === "%" ? "percent" : "db";
@@ -860,11 +862,11 @@ function parseIntent(raw: string): Intent | null {
 
     const sendMutePatterns: Array<{ re: RegExp; mute: boolean }> = [
         {
-            re: /^\s*(?:mute|coupe|couper|desactive|désactive)\s+(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s*$/iu,
+            re: /^\s*(?:mute|coupe|couper|desactive|désactive|eteins|éteins)\s+(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s*$/iu,
             mute: true,
         },
         {
-            re: /^\s*(?:unmute|demute|démute|reactive|réactive|remets)\s+(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s*$/iu,
+            re: /^\s*(?:unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\s+(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s*$/iu,
             mute: false,
         },
     ];
@@ -885,8 +887,8 @@ function parseIntent(raw: string): Intent | null {
     }
 
     const mutePatterns: Array<{ re: RegExp; mute: boolean }> = [
-        { re: /^\s*(?:mute|coupe|couper|desactive|désactive)\s+(?:le\s+son\s+de\s+)?(.+?)\s*$/iu, mute: true },
-        { re: /^\s*(?:unmute|demute|démute|reactive|réactive|remets)\s+(?:le\s+son\s+de\s+)?(.+?)\s*$/iu, mute: false },
+        { re: /^\s*(?:mute|coupe|couper|desactive|désactive|eteins|éteins)\s+(?:le\s+son\s+de\s+)?(.+?)\s*$/iu, mute: true },
+        { re: /^\s*(?:unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\s+(?:le\s+son\s+de\s+)?(.+?)\s*$/iu, mute: false },
     ];
     for (const pattern of mutePatterns) {
         const match = text.match(pattern.re);
@@ -897,7 +899,7 @@ function parseIntent(raw: string): Intent | null {
     }
 
     const explicitRelative = text.match(
-        /^\s*(?:monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:niveau|volume|fader)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:de|by)\s+([+-]?\d+(?:[.,]\d+)?)\s*d[bB]\s*$/iu,
+        /^\s*(?:monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:niveau|volume|fader|son)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:de|by)\s+([+-]?\d+(?:[.,]\d+)?)\s*d[bB]\s*$/iu,
     );
     if (explicitRelative?.[1] && explicitRelative[2]) {
         const base = parseDb(explicitRelative[2]);
@@ -915,7 +917,7 @@ function parseIntent(raw: string): Intent | null {
     }
 
     const signedRelative = text.match(
-        /^\s*(?:ajuste|adjust|change)\s+(?:le\s+)?(?:niveau|volume|fader)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:de|by)\s+([+-]\d+(?:[.,]\d+)?)\s*d[bB]\s*$/iu,
+        /^\s*(?:ajuste|adjust|change)\s+(?:le\s+)?(?:niveau|volume|fader|son)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:de|by)\s+([+-]\d+(?:[.,]\d+)?)\s*d[bB]\s*$/iu,
     );
     if (signedRelative?.[1] && signedRelative[2]) {
         const deltaDb = parseDb(signedRelative[2]);
@@ -930,7 +932,7 @@ function parseIntent(raw: string): Intent | null {
     }
 
     const relativePercent = text.match(
-        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:niveau|volume|fader)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:de|by)\s+([+-]?\d+(?:[.,]\d+)?)\s*%\s*$/iu,
+        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:niveau|volume|fader|son)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:de|by)\s+([+-]?\d+(?:[.,]\d+)?)\s*%\s*$/iu,
     );
     if (relativePercent?.[1] && relativePercent[2] && relativePercent[3]) {
         const base = parsePercent(relativePercent[3]);
@@ -962,7 +964,7 @@ function parseIntent(raw: string): Intent | null {
     }
 
     const naturalPrefixDirection = text.match(
-        /^\s*(?:(un\s+peu|beaucoup)\s+)?(plus|moins)\s+fort(?:\s+(?:le\s+)?(?:niveau|volume|fader)(?:\s+(?:de|du|de la))?)?\s*(.*?)\s*$/iu,
+        /^\s*(?:(un\s+peu|beaucoup)\s+)?(plus|moins)\s+fort(?:\s+(?:le\s+)?(?:niveau|volume|fader|son)(?:\s+(?:de|du|de la))?)?\s*(.*?)\s*$/iu,
     );
     if (naturalPrefixDirection?.[2]) {
         const amountText = simplify(naturalPrefixDirection[1] || "");
@@ -992,7 +994,7 @@ function parseIntent(raw: string): Intent | null {
     }
 
     const mainQualitativeRelative = text.match(
-        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:(un\s+peu|beaucoup|a\s+little|a\s+lot|slightly)\s+)?(?:le\s+)?(?:niveau|volume|fader)\s*$/iu,
+        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:(un\s+peu|beaucoup|a\s+little|a\s+lot|slightly)\s+)?(?:le\s+)?(?:niveau|volume|fader|son)\s*$/iu,
     );
     if (mainQualitativeRelative?.[1]) {
         const verb = simplify(mainQualitativeRelative[1]);
@@ -1014,7 +1016,7 @@ function parseIntent(raw: string): Intent | null {
     }
 
     const qualitativeRelative = text.match(
-        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:(un\s+peu|beaucoup|a\s+little|a\s+lot|slightly)\s+)?(?:le\s+)?(?:niveau|volume|fader)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s*$/iu,
+        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:(un\s+peu|beaucoup|a\s+little|a\s+lot|slightly)\s+)?(?:le\s+)?(?:niveau|volume|fader|son)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s*$/iu,
     );
     if (qualitativeRelative?.[1] && qualitativeRelative[3]) {
         const verb = simplify(qualitativeRelative[1]);
@@ -1036,7 +1038,7 @@ function parseIntent(raw: string): Intent | null {
     }
 
     const setPatterns = [
-        /^\s*(?:mets|met|regle|règle|fixe|set|monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:niveau|volume|fader)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
+        /^\s*(?:mets|met|regle|règle|fixe|set|monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:niveau|volume|fader|son)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
         /^\s*(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
     ];
     for (const re of setPatterns) {
@@ -1052,9 +1054,9 @@ function parseIntent(raw: string): Intent | null {
     }
 
     const readPatterns = [
-        /^\s*(?:quel(?:le)?\s+est\s+)?(?:le\s+)?(?:niveau|volume|fader)\s+(?:de\s+|du\s+|de la\s+|of\s+)(.+?)\s*\??\s*$/iu,
-        /^\s*(?:lis|donne|read|get)\s+(?:le\s+)?(?:niveau|volume|fader)\s+(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s*$/iu,
-        /^\s*(.+?)\s+(?:niveau|volume|fader)\s*\??\s*$/iu,
+        /^\s*(?:quel(?:le)?\s+est\s+)?(?:le\s+)?(?:niveau|volume|fader|son)\s+(?:de\s+|du\s+|de la\s+|of\s+)(.+?)\s*\??\s*$/iu,
+        /^\s*(?:lis|donne|read|get)\s+(?:le\s+)?(?:niveau|volume|fader|son)\s+(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s*$/iu,
+        /^\s*(.+?)\s+(?:niveau|volume|fader|son)\s*\??\s*$/iu,
     ];
     for (const re of readPatterns) {
         const match = text.match(re);
@@ -1134,7 +1136,7 @@ export class LocalMixerCommandGateway {
                 );
                 const isRouteMute =
                     sourceToMonitorPattern.test(expanded) &&
-                    /^\s*(?:mute|coupe|couper|desactive|désactive|unmute|demute|démute|reactive|réactive|remets)\b/iu.test(expanded);
+                    /^\s*(?:mute|coupe|couper|desactive|désactive|eteins|éteins|unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\b/iu.test(expanded);
                 if (isRouteMute) {
                     return {
                         text,

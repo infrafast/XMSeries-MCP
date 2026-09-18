@@ -158,6 +158,8 @@ The deterministic Local parser follows the same domain semantics when the host s
 French aliases:
 `façade`, `facade`, `front`, `main`, `LR`, `L R`, `master`, `principal`.
 
+The deterministic Local parser supports the same safe Main aliases. It also treats `son` as an explicit level noun equivalent to `volume`/`niveau`, e.g. `monte le son` or `mets le son à -10 dB`.
+
 Never resolve these as bus names.
 In source-to-destination phrases, they mean the source main LR path, not a bus send.
 
