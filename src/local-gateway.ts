@@ -1111,8 +1111,22 @@ export class LocalMixerCommandGateway {
             }
             const monitorPhrase = "(?:mon\\s+retour|mes\\s+retours|mon\\s+wedge|mes\\s+ears)";
             if (destination.kind === "main") {
-                // Source -> "my return" means source -> Main LR. XMSeries owns this
-                // semantic rewrite; LSA transports only neutral speaker metadata.
+                const sourceToMonitorPattern = new RegExp(
+                    `\\s+(?:sur|dans|vers|chez|to|in)\\s+${monitorPhrase}\\b`,
+                    "iu",
+                );
+                const isRouteMute =
+                    sourceToMonitorPattern.test(expanded) &&
+                    /^\s*(?:mute|coupe|couper|desactive|désactive|unmute|demute|démute|reactive|réactive|remets)\b/iu.test(expanded);
+                if (isRouteMute) {
+                    return {
+                        text,
+                        clarification:
+                            "Le mute d'une source vers Main LR/façade n'est pas exposé comme un mute de send dédié. Précise si tu veux couper la source entière ou le Main LR.",
+                    };
+                }
+                // Source -> "my return" means source -> Main LR for level operations.
+                // XMSeries owns this semantic rewrite; LSA transports only neutral speaker metadata.
                 expanded = expanded.replace(
                     new RegExp(`\\s+(?:sur|dans|vers|chez|to|in)\\s+${monitorPhrase}\\b`, "giu"),
                     " ",
