@@ -139,6 +139,8 @@ type LocalContinuation =
           kind: "speaker_context";
       };
 
+const SEND_SOURCE_FAMILIES: LocalMixerTargetFamily[] = ["channel", "fxreturn", "aux"];
+
 const MAIN_ALIASES = new Set([
     "main",
     "main lr",
@@ -1362,7 +1364,7 @@ export class LocalMixerCommandGateway {
                 plan.kind === "send_ramp_level_qualitative" ||
                 plan.kind === "send_delay_level"
             ) {
-                const source = await this.revalidateScopedTarget(plan.sourceQuery, plan.source, ["channel"]);
+                const source = await this.revalidateScopedTarget(plan.sourceQuery, plan.source, SEND_SOURCE_FAMILIES);
                 const destination = await this.revalidateScopedTarget(plan.destinationQuery, plan.destination, ["bus"]);
                 if (plan.kind === "send_set_level") {
                     const converted = levelToNormalized(plan.unit, plan.value);
@@ -1545,7 +1547,7 @@ export class LocalMixerCommandGateway {
     private async planSendIntent(
         intent: SendIntent,
     ): Promise<AnalyzeCommandResult> {
-        const sourceMatches = await this.adapter.resolve(intent.sourceQuery, ["channel"]);
+        const sourceMatches = await this.adapter.resolve(intent.sourceQuery, SEND_SOURCE_FAMILIES);
         const destinationMatches = await this.adapter.resolve(intent.destinationQuery, ["bus"]);
         const source = safeUnique(sourceMatches);
         const destination = safeUnique(destinationMatches);
