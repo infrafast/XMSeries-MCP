@@ -52,6 +52,7 @@ export interface LocalMixerGatewayAdapter {
     scheduleLevel(target: LocalMixerTarget, toLevel: number, delaySeconds: number): Promise<string>;
     scheduleMute(target: LocalMixerTarget, mute: boolean, delaySeconds: number): Promise<string>;
     scheduleSend(source: LocalMixerTarget, destination: LocalMixerTarget, toLevel: number, delaySeconds: number): Promise<string>;
+    scheduleSendMute(source: LocalMixerTarget, destination: LocalMixerTarget, mute: boolean, delaySeconds: number): Promise<string>;
     listAutomations(): Promise<Array<{ id: string; label?: string; status: string; currentAction?: string; error?: string }>>;
     cancelAutomation(id: string): Promise<{ id: string; label?: string; status: string } | null>;
     muteBusBatch(targets: LocalMixerTarget[], mute: boolean): Promise<void>;
@@ -104,6 +105,7 @@ type Intent =
     | { kind: "delay_level"; targetQuery: string; value: LevelValue; delaySeconds: number }
     | { kind: "delay_mute"; targetQuery: string; mute: boolean; delaySeconds: number }
     | { kind: "send_delay_level"; sourceQuery: string; destinationQuery: string; value: LevelValue; delaySeconds: number }
+    | { kind: "send_delay_mute"; sourceQuery: string; destinationQuery: string; mute: boolean; delaySeconds: number }
     | { kind: "automation_list" }
     | { kind: "automation_cancel"; id?: string; lastRunning: boolean }
     | { kind: "bulk_bus_mute"; mode: "selected" | "all" | "all_except"; busQueries: string[]; mute: boolean }
@@ -132,6 +134,7 @@ type LocalPlan =
     | { kind: "delay_level"; targetQuery: string; target: LocalMixerTarget; value: LevelValue; delaySeconds: number }
     | { kind: "delay_mute"; targetQuery: string; target: LocalMixerTarget; mute: boolean; delaySeconds: number }
     | { kind: "send_delay_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; value: LevelValue; delaySeconds: number }
+    | { kind: "send_delay_mute"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; mute: boolean; delaySeconds: number }
     | { kind: "automation_list" }
     | { kind: "automation_cancel"; id: string }
     | { kind: "bulk_bus_mute"; mode: "selected" | "all" | "all_except"; busQueries: string[]; buses: LocalMixerTarget[]; mute: boolean }
@@ -522,6 +525,28 @@ function parseIntent(raw: string): Intent | null {
 
     const flexibleTemporalIntent = parseFlexibleTemporalIntent(text);
     if (flexibleTemporalIntent) return flexibleTemporalIntent;
+
+    const delayedSendMuteMatch = text.match(
+        /^\s*(?:(?:dans\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*[,;:]?\s*)(mute|coupe|couper|desactive|désactive|eteins|éteins|unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\s+(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)|(mute|coupe|couper|desactive|désactive|eteins|éteins|unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\s+(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+dans\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?))\s*$/iu,
+    );
+    if (delayedSendMuteMatch) {
+        const delayRaw = delayedSendMuteMatch[1] || delayedSendMuteMatch[8];
+        const verbRaw = delayedSendMuteMatch[2] || delayedSendMuteMatch[5];
+        const sourceRaw = delayedSendMuteMatch[3] || delayedSendMuteMatch[6];
+        const destinationRaw = delayedSendMuteMatch[4] || delayedSendMuteMatch[7];
+        if (delayRaw && verbRaw && sourceRaw && destinationRaw) {
+            const delaySeconds = Number(delayRaw.replace(",", "."));
+            if (Number.isFinite(delaySeconds) && delaySeconds >= 0) {
+                const verb = simplify(verbRaw);
+                const mute = ["mute", "coupe", "couper", "desactive", "eteins"].includes(verb);
+                const sourceQuery = cleanTarget(sourceRaw);
+                const destinationQuery = cleanTarget(destinationRaw);
+                if (sourceQuery && destinationQuery) {
+                    return { kind: "send_delay_mute", sourceQuery, destinationQuery, mute, delaySeconds };
+                }
+            }
+        }
+    }
 
     const delayedMuteMatch = text.match(
         /^\s*(?:(?:dans\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*[,;:]?\s*)(mute|coupe|couper|desactive|désactive|eteins|éteins|unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\s+(.+?)|(mute|coupe|couper|desactive|désactive|eteins|éteins|unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\s+(.+?)\s+dans\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?))\s*$/iu,
@@ -1309,7 +1334,8 @@ export class LocalMixerCommandGateway {
             intent.kind === "send_mute" ||
             intent.kind === "send_ramp_level" ||
             intent.kind === "send_ramp_level_qualitative" ||
-            intent.kind === "send_delay_level"
+            intent.kind === "send_delay_level" ||
+            intent.kind === "send_delay_mute"
         ) {
             return await this.planSendIntent(intent);
         }
@@ -1451,7 +1477,8 @@ export class LocalMixerCommandGateway {
                 plan.kind === "send_mute" ||
                 plan.kind === "send_ramp_level" ||
                 plan.kind === "send_ramp_level_qualitative" ||
-                plan.kind === "send_delay_level"
+                plan.kind === "send_delay_level" ||
+                plan.kind === "send_delay_mute"
             ) {
                 const source = await this.revalidateScopedTarget(plan.sourceQuery, plan.source, SEND_SOURCE_FAMILIES);
                 const destination = await this.revalidateScopedTarget(plan.destinationQuery, plan.destination, ["bus"]);
@@ -1503,6 +1530,20 @@ export class LocalMixerCommandGateway {
                         protocol: GATEWAY_PROTOCOL,
                         ok: true,
                         responseText: `${displayName(source)} → ${displayName(destination)} ${plan.mute ? "coupé" : "réactivé"}.`,
+                    };
+                }
+
+                if (plan.kind === "send_delay_mute") {
+                    const jobId = await this.adapter.scheduleSendMute(
+                        source,
+                        destination,
+                        plan.mute,
+                        plan.delaySeconds,
+                    );
+                    return {
+                        protocol: GATEWAY_PROTOCOL,
+                        ok: true,
+                        responseText: `Action programmée ${jobId} : ${displayName(source)} → ${displayName(destination)} ${plan.mute ? "sera coupé" : "sera réactivé"} dans ${plan.delaySeconds} s.`,
                     };
                 }
 
