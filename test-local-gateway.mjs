@@ -629,6 +629,34 @@ async function ready(text) {
     assert.equal(delayedSendMuteCalls[0].delaySeconds, 3);
 }
 
+// A fresh complete command supersedes a pending route clarification.
+{
+    muteWrites = [];
+    const routeClarification = await gateway.analyze({
+        protocol: GATEWAY_PROTOCOL,
+        text: "mute Batterie sur Inconnu",
+    });
+    assert.equal(routeClarification.status, "clarification");
+
+    const fresh = await gateway.analyze({
+        protocol: GATEWAY_PROTOCOL,
+        text: "mute Batterie",
+        continuationToken: routeClarification.continuationToken,
+    });
+    assert.equal(fresh.status, "ready");
+    assert.equal(fresh.effect, "write");
+
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: fresh.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(muteWrites.length, 1);
+    assert.equal(muteWrites[0].target.name, "Batterie");
+    assert.equal(muteWrites[0].target.family, "channel");
+    assert.equal(muteWrites[0].mute, true);
+}
+
 // Mute/unmute
 {
     muteWrites = [];
