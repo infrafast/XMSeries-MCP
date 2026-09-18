@@ -100,3 +100,8 @@ Implement incrementally after XDG1 live acceptance:
 - [ ] fade/delay acceptance after XDG2;
 - [ ] target deterministic parser/plan overhead <100 ms typical on Pi5, excluding mixer network I/O;
 - [ ] verify no LLM process or inference dependency is started by the gateway.
+
+
+## Cross-repository OR4B3 status
+
+LiveStageAssistant OR4B3 is now in implementation on `or4b3-deterministic-local-engine`: a dedicated non-LLM Local engine and generic `lsa-command-gateway/v1` orchestrator are present with automated tests added. CI and Pi end-to-end acceptance remain pending.
