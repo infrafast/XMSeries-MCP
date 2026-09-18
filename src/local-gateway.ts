@@ -60,7 +60,7 @@ export interface LocalMixerGatewayAdapter {
         target: LocalMixerTarget,
         direction: LocalRelativeDirection,
         amount: LocalRelativeAmount,
-    ): Promise<{ beforeDb: number; targetDb: number; targetLevel: number }>;
+    ): Promise<{ beforeDb: number; targetDb: number }>;
 }
 
 type LevelUnit = "db" | "percent";
