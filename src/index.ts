@@ -1315,7 +1315,7 @@ async function setChannelSendBatchDb(
     buses: number[],
     db: number,
     includeMain = false,
-): Promise<{ buses: number[]; level: number; db: number; index: number; clipped: boolean }> {
+): Promise<{ buses: number[]; level: number; db: number | null; index: number; clipped: boolean }> {
     const uniqueBuses = Array.from(new Set(buses));
     const invalidBuses = uniqueBuses.filter((bus) => !Number.isInteger(bus) || bus < 1 || bus > oscRuntimeConfig.busCount);
     if (invalidBuses.length > 0) {
