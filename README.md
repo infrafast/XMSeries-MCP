@@ -485,11 +485,11 @@ MIT (inherited from upstream).
 
 ## Local deterministic gateway
 
-OR4B2 adds an optional deterministic command gateway for the LiveStageAssistant Local engine.
+XMSeries-MCP can expose an optional deterministic natural-language command gateway for clients such as the LiveStageAssistant Local engine. This mode does **not** use an LLM to choose mixer tools. XMSeries-MCP parses the user text locally, resolves mixer targets, creates a short-lived plan, then executes that plan through the same resolver, OSC and automation code used by the normal MCP tools.
 
-It is disabled by default. Ordinary/cloud MCP clients keep the existing low-level OSC tool inventory and PROMPT behavior.
+It is disabled by default. Ordinary/cloud MCP clients keep the existing low-level OSC tool inventory and `PROMPT.md` behavior.
 
-Enable it only for a dedicated Local LSA process/instance:
+Enable it only for a dedicated deterministic client/LSA process:
 
 ```text
 LSA_LOCAL_COMMAND_GATEWAY=1
@@ -497,19 +497,55 @@ LSA_LOCAL_COMMAND_GATEWAY=1
 
 When enabled, two reserved tools are added:
 
-- `lsa_local_analyze_command`: side-effect-free command analysis;
-- `lsa_local_execute_command`: execution of a previously accepted short-lived plan.
+- `lsa_local_analyze_command`: side-effect-free command parsing and planning;
+- `lsa_local_execute_command`: execution of a previously accepted short-lived plan token.
 
-Current OR4B2 MVP scope:
+The gateway uses `lsa-command-gateway/v1`. Write plans are short-lived and one-shot. Named targets are re-resolved before execution, and fuzzy-only or ambiguous matches never directly authorize a write.
 
-- live mixer status;
-- named-target level read;
-- absolute dB level write;
-- relative level up/down in dB or qualitative steps;
-- mute/unmute;
-- Main LR/façade aliases handled inside XMSeries-MCP;
-- exact/contains/structured resolution reuses the existing authoritative resolver;
-- fuzzy-only or ambiguous matches never directly authorize a write;
-- every write re-resolves the target before dispatch and fails stale identity changes closed.
+### How to speak or type deterministic mixer commands
 
-Source-to-destination sends, percentage semantics, speaker-context defaults, grouped operations and fades remain later OR4 milestones.
+The parser is intentionally bounded and deterministic. Prefer the canonical formulations below when using speech recognition or typing directly into a deterministic client. Mixer names such as `batterie`, `Anthony`, or `Laurent` are examples: replace them with the actual labels configured on your mixer.
+
+| Intent | Canonical examples |
+|---|---|
+| Mixer status | `statut mixeur` |
+| Read a level | `niveau de batterie` · `donne le niveau de batterie` |
+| Mute / unmute | `mute batterie` · `unmute batterie` |
+| Absolute dB | `mets batterie à -30 dB` · `mets le niveau de batterie à -30 dB` |
+| Relative dB | `monte batterie de 3 dB` · `baisse batterie de 3 dB` |
+| Qualitative relative | `monte un peu le niveau de batterie` · `baisse beaucoup batterie` |
+| Absolute percent | `mets batterie à 50%` |
+| Relative percent | `monte batterie de 10%` · `baisse batterie de 1%` |
+| Channel -> bus absolute | `mets batterie sur Anthony à -20 dB` |
+| Channel -> bus relative | `monte batterie sur Anthony de 3 dB` |
+| Progressive/ramp | `baisse progressivement batterie à -30 dB en 2 secondes` |
+| Relative progressive | `monte progressivement batterie de 3 dB en 5 secondes` |
+| Fade | `fade out batterie en 10 secondes` · `fade in batterie en 10 secondes` |
+| Explicit fade range | `fade batterie de -40 dB à -10 dB en 5 secondes` |
+| Delayed level | `mets batterie à -27 dB dans 2 secondes` |
+| Automation status | `statut des automations` · `liste les automations` |
+| Cancel by id | `annule l'automation auto-3` |
+| Cancel latest running job | `annule la dernière automation` |
+
+Important syntax rules:
+
+- **`à` means an absolute target**: `mets batterie à -30 dB`.
+- **`de` means a relative change**: `monte batterie de 3 dB`.
+- **`en N secondes` means ramp duration**: the level moves progressively for that duration.
+- **`dans N secondes` means delayed execution**: the level stays unchanged until the delay expires, then the target is applied.
+- Percent values use the normalized fader range. An absolute `100%` means the top of the normalized fader range; a relative `+10%` means ten percentage points on that normalized range.
+- `fade in` / `fade out` without an explicit target defaults to **Main LR / façade**.
+- Main aliases currently include `main`, `main lr`, `lr`, `façade`, `master`, `master lr`, and `mix principal`.
+- Source-to-destination syntax currently means a **channel source -> bus destination**. The source and destination are resolved independently and must each be safe and unique.
+- If a name is ambiguous or only fuzzy-matches, the gateway asks for clarification rather than guessing.
+- DCA writes are not yet part of the deterministic Local write surface.
+- Group/bulk natural-language commands and speaker-context defaults are separate OR4B4 work and must not be assumed until documented here.
+
+The deterministic grammar is not intended to accept arbitrary prose. If a phrase is not documented and is not covered by parser tests, treat it as unsupported rather than assuming the parser will infer the intent.
+
+### Cloud/LLM mode versus deterministic parsing
+
+In normal MCP/LLM mode, the model selects typed tools such as `osc_channel_fader`, `osc_channel_send_to_bus`, or `osc_automation_ramp`.
+
+In deterministic Local mode, the client only calls `lsa_local_analyze_command` and `lsa_local_execute_command`. The parser in XMSeries-MCP converts the phrase into a typed internal intent and directly reuses the existing resolver/OSC/automation implementation. No LLM chooses the underlying mixer operation.
+
