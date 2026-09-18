@@ -15,6 +15,7 @@ A capability is not complete and must not be merged as finished unless all appli
 - expose the equivalent deterministic Local natural-language intent/parser path;
 - route both surfaces into the same shared resolver/business/OSC/automation implementation instead of duplicating mixer logic;
 - add/update tool-level tests and deterministic-parser tests for the same semantic cases;
+- add or update the corresponding canonical case in `corpus/local-commands.fr.json` whenever user-facing deterministic syntax or semantics changes, and keep `test-local-corpus.mjs` green;
 - document the normal MCP capability where appropriate and update the **Local deterministic gateway** section of `README.md` with canonical phrases users can speak/type;
 - update `PROMPT.md` when the LLM/cloud agent needs new behavioral guidance for the capability;
 - preserve `lsa-command-gateway/v1`, one-shot write plans, stale-target checks and ambiguity/fuzzy-write safety.

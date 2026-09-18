@@ -1,0 +1,298 @@
+{
+  "version": 1,
+  "locale": "fr",
+  "cases": [
+    {
+      "name": "mixer-status",
+      "utterance": "statut mixeur",
+      "expected": {
+        "status": "ready",
+        "effect": "read",
+        "operation": {
+          "kind": "status"
+        }
+      }
+    },
+    {
+      "name": "read-channel",
+      "utterance": "niveau de Batterie",
+      "expected": {
+        "status": "ready",
+        "effect": "read",
+        "operation": {
+          "kind": "read_level",
+          "family": "channel",
+          "name": "Batterie"
+        }
+      }
+    },
+    {
+      "name": "absolute-channel-db",
+      "utterance": "mets Batterie à -30 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "family": "channel",
+          "name": "Batterie"
+        }
+      }
+    },
+    {
+      "name": "relative-channel-db",
+      "utterance": "monte Batterie de 3 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "family": "channel",
+          "name": "Batterie"
+        }
+      }
+    },
+    {
+      "name": "absolute-main-percent",
+      "utterance": "monte le volume à 100%",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "family": "main",
+          "name": "Main LR"
+        }
+      }
+    },
+    {
+      "name": "relative-main-percent",
+      "utterance": "monte le volume de 10%",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "family": "main",
+          "name": "Main LR"
+        }
+      }
+    },
+    {
+      "name": "qualitative-main",
+      "utterance": "baisse un peu le volume",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "qualitative",
+          "family": "main",
+          "name": "Main LR",
+          "direction": "down",
+          "amount": "little"
+        }
+      }
+    },
+    {
+      "name": "qualitative-channel",
+      "utterance": "monte beaucoup Batterie",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "qualitative",
+          "family": "channel",
+          "name": "Batterie",
+          "direction": "up",
+          "amount": "much"
+        }
+      }
+    },
+    {
+      "name": "mute-channel",
+      "utterance": "mute Batterie",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "mute",
+          "family": "channel",
+          "name": "Batterie",
+          "mute": true
+        }
+      }
+    },
+    {
+      "name": "send-absolute",
+      "utterance": "mets Batterie sur Anthony à -20 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "write_send",
+          "source": "Batterie",
+          "destination": "Anthony"
+        }
+      }
+    },
+    {
+      "name": "send-relative",
+      "utterance": "monte Batterie sur Anthony de 3 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "write_send",
+          "source": "Batterie",
+          "destination": "Anthony"
+        }
+      }
+    },
+    {
+      "name": "ramp-channel",
+      "utterance": "baisse progressivement Batterie à -30 dB en 2 secondes",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "ramp",
+          "family": "channel",
+          "name": "Batterie",
+          "durationSeconds": 2
+        }
+      }
+    },
+    {
+      "name": "delay-channel",
+      "utterance": "mets Batterie à -27 dB dans 2 secondes",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "delay",
+          "family": "channel",
+          "name": "Batterie",
+          "delaySeconds": 2
+        }
+      }
+    },
+    {
+      "name": "fade-default-main",
+      "utterance": "fade out en 5 secondes",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "ramp",
+          "family": "main",
+          "name": "Main LR",
+          "durationSeconds": 5
+        }
+      }
+    },
+    {
+      "name": "bulk-mute-selected",
+      "utterance": "mute les bus Anthony et Laurent",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "bulk_mute",
+          "mode": "selected",
+          "names": [
+            "Anthony",
+            "Laurent"
+          ]
+        }
+      }
+    },
+    {
+      "name": "bulk-send-selected",
+      "utterance": "mets Batterie à -20 dB sur les bus Anthony et Laurent",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "bulk_send",
+          "mode": "selected",
+          "source": "Batterie",
+          "names": [
+            "Anthony",
+            "Laurent"
+          ]
+        }
+      }
+    },
+    {
+      "name": "speaker-monitor",
+      "utterance": "monte mon retour de 3 dB",
+      "context": {
+        "speaker": {
+          "name": "Laurent",
+          "confidence": 0.92,
+          "backend": "resemblyzer"
+        }
+      },
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "family": "bus",
+          "name": "Anthony"
+        }
+      }
+    },
+    {
+      "name": "speaker-input",
+      "utterance": "mets mon micro à -12 dB",
+      "context": {
+        "speaker": {
+          "name": "Laurent",
+          "confidence": 0.92,
+          "backend": "resemblyzer"
+        }
+      },
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "family": "channel",
+          "name": "Batterie"
+        }
+      }
+    },
+    {
+      "name": "speaker-unknown",
+      "utterance": "monte mon retour de 3 dB",
+      "context": {
+        "speaker": {
+          "name": "unknown",
+          "confidence": 0,
+          "backend": "none"
+        }
+      },
+      "expected": {
+        "status": "clarification",
+        "effect": "none"
+      }
+    },
+    {
+      "name": "unknown-target",
+      "utterance": "mute Introuvable",
+      "expected": {
+        "status": "clarification",
+        "effect": "none"
+      }
+    },
+    {
+      "name": "ambiguous-target",
+      "utterance": "mute tom",
+      "expected": {
+        "status": "clarification",
+        "effect": "none"
+      }
+    }
+  ]
+}
