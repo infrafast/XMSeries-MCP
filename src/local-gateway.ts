@@ -96,10 +96,14 @@ type LocalPlan =
     | { kind: "bulk_send_db"; mode: "selected" | "all"; sourceQuery: string; source: LocalMixerTarget; busQueries: string[]; buses: LocalMixerTarget[]; db: number; includeMain: boolean }
     | { kind: "mute"; targetQuery: string; target: LocalMixerTarget; mute: boolean };
 
-interface LocalContinuation {
-    intent: TargetIntent | SendIntent | BulkIntent;
-    candidates: LocalMixerTarget[];
-}
+type LocalContinuation =
+    | {
+          intent: TargetIntent | SendIntent | BulkIntent;
+          candidates: LocalMixerTarget[];
+      }
+    | {
+          kind: "speaker_context";
+      };
 
 const MAIN_ALIASES = new Set([
     "main",
@@ -763,8 +767,7 @@ export class LocalMixerCommandGateway {
         const expanded = await this.expandSpeakerContext(input.text, input.context);
         if (expanded.clarification) {
             const stored = this.store.createContinuation({
-                intent: { kind: "read_level", targetQuery: "main" },
-                candidates: [],
+                kind: "speaker_context",
             });
             return {
                 protocol: GATEWAY_PROTOCOL,
@@ -1335,6 +1338,16 @@ export class LocalMixerCommandGateway {
                     continuation.error === "expired_token"
                         ? "Cette clarification a expiré."
                         : "Cette clarification n'est plus valide.",
+            };
+        }
+
+        if ("kind" in continuation.value && continuation.value.kind === "speaker_context") {
+            return {
+                protocol: GATEWAY_PROTOCOL,
+                recognized: false,
+                status: "unrecognized",
+                effect: "none",
+                responseText: "Reformule la commande complète en précisant le retour, le bus ou la voie.",
             };
         }
 
