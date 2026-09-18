@@ -199,13 +199,27 @@ function speakerContextObject(speaker: string) {
     const mappings = speakerMapFromEnv();
     const mapping = mappings[normalized];
     const enabled = mapping?.enabled !== false;
-    const known = Boolean(normalized && normalized !== "unknown" && enabled);
+    const known = Boolean(
+        normalized &&
+        normalized !== "unknown" &&
+        mapping &&
+        enabled
+    );
+    const explicitBus = known ? String(mapping?.bus || "").trim() : "";
+    const monitorDestination = !known
+        ? null
+        : explicitBus
+          ? { kind: "bus" as const, name: explicitBus }
+          : { kind: "main" as const };
     return {
         speaker: normalized || "unknown",
         known,
-        busName: known ? (mapping?.bus || normalized) : null,
+        monitorDestination,
+        // Kept for compatibility with existing callers; null means Main or unresolved,
+        // which is disambiguated by monitorDestination.
+        busName: monitorDestination?.kind === "bus" ? monitorDestination.name : null,
         channelName: known ? (mapping?.channel || null) : null,
-        source: mapping ? "XMS_SPEAKER_MAP" : "default-speaker-name",
+        source: mapping ? "XMS_SPEAKER_MAP" : "unmapped-speaker",
     };
 }
 
