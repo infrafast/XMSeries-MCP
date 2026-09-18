@@ -424,6 +424,22 @@ function parseIntent(raw: string): Intent | null {
         }
     }
 
+    const relativePercent = text.match(
+        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:niveau|volume|fader)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:de|by)\s+([+-]?\d+(?:[.,]\d+)?)\s*%\s*$/iu,
+    );
+    if (relativePercent?.[1] && relativePercent[2] && relativePercent[3]) {
+        const base = parsePercent(relativePercent[3]);
+        if (base !== null) {
+            const down = ["baisse", "diminue", "lower", "decrease"].includes(simplify(relativePercent[1]));
+            return {
+                kind: "adjust_level",
+                targetQuery: cleanTarget(relativePercent[2]),
+                unit: "percent",
+                delta: down ? -Math.abs(base) : Math.abs(base),
+            };
+        }
+    }
+
     const qualitativeRelative = text.match(
         /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:(un\s+peu|beaucoup|a\s+little|a\s+lot|slightly)\s+)?(?:le\s+)?(?:niveau|volume|fader)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s*$/iu,
     );
@@ -458,22 +474,6 @@ function parseIntent(raw: string): Intent | null {
             if (value !== null && targetQuery) {
                 return { kind: "set_level", targetQuery, unit, value };
             }
-        }
-    }
-
-    const relativePercent = text.match(
-        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:niveau|volume|fader)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:de|by)\s+([+-]?\d+(?:[.,]\d+)?)\s*%\s*$/iu,
-    );
-    if (relativePercent?.[1] && relativePercent[2] && relativePercent[3]) {
-        const base = parsePercent(relativePercent[3]);
-        if (base !== null) {
-            const down = ["baisse", "diminue", "lower", "decrease"].includes(simplify(relativePercent[1]));
-            return {
-                kind: "adjust_level",
-                targetQuery: cleanTarget(relativePercent[2]),
-                unit: "percent",
-                delta: down ? -Math.abs(base) : Math.abs(base),
-            };
         }
     }
 
