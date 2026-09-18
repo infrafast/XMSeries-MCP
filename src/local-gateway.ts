@@ -34,9 +34,14 @@ export interface LocalMixerGatewayAdapter {
     setMute(target: LocalMixerTarget, mute: boolean): Promise<void>;
     readSendLevel(source: LocalMixerTarget, destination: LocalMixerTarget): Promise<number>;
     writeSendLevel(source: LocalMixerTarget, destination: LocalMixerTarget, level: number): Promise<void>;
+    startLevelRamp(target: LocalMixerTarget, toLevel: number, durationSeconds: number, fromLevel?: number): Promise<string>;
+    startSendRamp(source: LocalMixerTarget, destination: LocalMixerTarget, toLevel: number, durationSeconds: number, fromLevel?: number): Promise<string>;
+    scheduleLevel(target: LocalMixerTarget, toLevel: number, delaySeconds: number): Promise<string>;
+    scheduleSend(source: LocalMixerTarget, destination: LocalMixerTarget, toLevel: number, delaySeconds: number): Promise<string>;
 }
 
 type LevelUnit = "db" | "percent";
+type LevelValue = { unit: LevelUnit; value: number };
 
 type Intent =
     | { kind: "status" }
@@ -45,6 +50,10 @@ type Intent =
     | { kind: "adjust_level"; targetQuery: string; unit: LevelUnit; delta: number }
     | { kind: "send_set_level"; sourceQuery: string; destinationQuery: string; unit: LevelUnit; value: number }
     | { kind: "send_adjust_level"; sourceQuery: string; destinationQuery: string; unit: LevelUnit; delta: number }
+    | { kind: "ramp_level"; targetQuery: string; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
+    | { kind: "send_ramp_level"; sourceQuery: string; destinationQuery: string; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
+    | { kind: "delay_level"; targetQuery: string; value: LevelValue; delaySeconds: number }
+    | { kind: "send_delay_level"; sourceQuery: string; destinationQuery: string; value: LevelValue; delaySeconds: number }
     | { kind: "mute"; targetQuery: string; mute: boolean };
 
 type LocalPlan =
@@ -54,6 +63,10 @@ type LocalPlan =
     | { kind: "adjust_level"; targetQuery: string; target: LocalMixerTarget; unit: LevelUnit; delta: number }
     | { kind: "send_set_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; unit: LevelUnit; value: number }
     | { kind: "send_adjust_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; unit: LevelUnit; delta: number }
+    | { kind: "ramp_level"; targetQuery: string; target: LocalMixerTarget; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
+    | { kind: "send_ramp_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
+    | { kind: "delay_level"; targetQuery: string; target: LocalMixerTarget; value: LevelValue; delaySeconds: number }
+    | { kind: "send_delay_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; value: LevelValue; delaySeconds: number }
     | { kind: "mute"; targetQuery: string; target: LocalMixerTarget; mute: boolean };
 
 interface LocalContinuation {
@@ -166,6 +179,165 @@ function parseIntent(raw: string): Intent | null {
         ].includes(normalized)
     ) {
         return { kind: "status" };
+    }
+
+    const parseLevelValue = (rawValue: string, rawUnit: string): LevelValue | null => {
+        const unit: LevelUnit = rawUnit === "%" ? "percent" : "db";
+        const value = unit === "percent" ? parsePercent(rawValue) : parseDb(rawValue);
+        return value === null ? null : { unit, value };
+    };
+
+    // "dans N secondes" means delay before the write, never ramp duration.
+    const sendDelayed = text.match(
+        /^\s*(?:mets|met|regle|règle|fixe|set)\s+(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s+dans\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
+    );
+    if (sendDelayed?.[1] && sendDelayed[2] && sendDelayed[3] && sendDelayed[4] && sendDelayed[5]) {
+        const value = parseLevelValue(sendDelayed[3], sendDelayed[4]);
+        const delaySeconds = Number(sendDelayed[5].replace(",", "."));
+        if (value && Number.isFinite(delaySeconds) && delaySeconds >= 0) {
+            return {
+                kind: "send_delay_level",
+                sourceQuery: cleanTarget(sendDelayed[1]),
+                destinationQuery: cleanTarget(sendDelayed[2]),
+                value,
+                delaySeconds,
+            };
+        }
+    }
+
+    const delayed = text.match(
+        /^\s*(?:mets|met|regle|règle|fixe|set)\s+(?:(?:le\s+)?(?:niveau|volume|fader)\s*(?:de\s+|du\s+|de la\s+|of\s+)?)?(.+?)?\s*(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s+dans\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
+    );
+    if (delayed?.[2] && delayed[3] && delayed[4]) {
+        const value = parseLevelValue(delayed[2], delayed[3]);
+        const delaySeconds = Number(delayed[4].replace(",", "."));
+        if (value && Number.isFinite(delaySeconds) && delaySeconds >= 0) {
+            return {
+                kind: "delay_level",
+                targetQuery: cleanTarget(delayed[1] || "main"),
+                value,
+                delaySeconds,
+            };
+        }
+    }
+
+    // Explicit source -> bus ramp, e.g. "monte progressivement batterie sur Anthony à -10 dB en 5 secondes".
+    const sendRampAbsolute = text.match(
+        /^\s*(?:monte|augmente|raise|increase|baisse|diminue|lower|decrease|fade)\s+(?:progressivement\s+)?(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s+en\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
+    );
+    if (sendRampAbsolute?.[1] && sendRampAbsolute[2] && sendRampAbsolute[3] && sendRampAbsolute[4] && sendRampAbsolute[5]) {
+        const to = parseLevelValue(sendRampAbsolute[3], sendRampAbsolute[4]);
+        const durationSeconds = Number(sendRampAbsolute[5].replace(",", "."));
+        if (to && Number.isFinite(durationSeconds) && durationSeconds > 0) {
+            return {
+                kind: "send_ramp_level",
+                sourceQuery: cleanTarget(sendRampAbsolute[1]),
+                destinationQuery: cleanTarget(sendRampAbsolute[2]),
+                to,
+                durationSeconds,
+            };
+        }
+    }
+
+    const sendRampRelative = text.match(
+        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:progressivement\s+)?(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:de|by)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s+en\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
+    );
+    if (sendRampRelative?.[1] && sendRampRelative[2] && sendRampRelative[3] && sendRampRelative[4] && sendRampRelative[5] && sendRampRelative[6]) {
+        const delta = parseLevelValue(sendRampRelative[4], sendRampRelative[5]);
+        const durationSeconds = Number(sendRampRelative[6].replace(",", "."));
+        if (delta && Number.isFinite(durationSeconds) && durationSeconds > 0) {
+            const down = ["baisse", "diminue", "lower", "decrease"].includes(simplify(sendRampRelative[1]));
+            return {
+                kind: "send_ramp_level",
+                sourceQuery: cleanTarget(sendRampRelative[2]),
+                destinationQuery: cleanTarget(sendRampRelative[3]),
+                delta: { ...delta, value: down ? -Math.abs(delta.value) : Math.abs(delta.value) },
+                durationSeconds,
+            };
+        }
+    }
+
+    // Fade-in/out defaults to Main LR when the target is omitted.
+    const fade = text.match(
+        /^\s*(?:fais\s+(?:un\s+)?)?fade[ -]?(in|out)(?:\s+(?:de\s+|du\s+|sur\s+)?(.+?))?\s+en\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
+    );
+    if (fade?.[1] && fade[3]) {
+        const durationSeconds = Number(fade[3].replace(",", "."));
+        if (Number.isFinite(durationSeconds) && durationSeconds > 0) {
+            return {
+                kind: "ramp_level",
+                targetQuery: cleanTarget(fade[2] || "main"),
+                to: { unit: "db", value: simplify(fade[1]) === "out" ? -120 : 0 },
+                durationSeconds,
+            };
+        }
+    }
+
+    const explicitRangeRamp = text.match(
+        /^\s*(?:fais\s+(?:un\s+)?)?(?:fade|rampe|ramp)\s+(?:(?:de|du|sur)\s+)?(.+?)\s+de\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s+en\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
+    );
+    if (explicitRangeRamp?.[1] && explicitRangeRamp[2] && explicitRangeRamp[3] && explicitRangeRamp[4] && explicitRangeRamp[5] && explicitRangeRamp[6]) {
+        const from = parseLevelValue(explicitRangeRamp[2], explicitRangeRamp[3]);
+        const to = parseLevelValue(explicitRangeRamp[4], explicitRangeRamp[5]);
+        const durationSeconds = Number(explicitRangeRamp[6].replace(",", "."));
+        if (from && to && Number.isFinite(durationSeconds) && durationSeconds > 0) {
+            return {
+                kind: "ramp_level",
+                targetQuery: cleanTarget(explicitRangeRamp[1]),
+                from,
+                to,
+                durationSeconds,
+            };
+        }
+    }
+
+    const targetRampAbsolute = text.match(
+        /^\s*(?:monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+progressivement\s*(?:(?:le\s+)?(?:niveau|volume|fader)\s*(?:de\s+|du\s+|de la\s+|of\s+)?)?(.+?)?\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s+en\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
+    );
+    if (targetRampAbsolute?.[2] && targetRampAbsolute[3] && targetRampAbsolute[4]) {
+        const to = parseLevelValue(targetRampAbsolute[2], targetRampAbsolute[3]);
+        const durationSeconds = Number(targetRampAbsolute[4].replace(",", "."));
+        if (to && Number.isFinite(durationSeconds) && durationSeconds > 0) {
+            return {
+                kind: "ramp_level",
+                targetQuery: cleanTarget(targetRampAbsolute[1] || "main"),
+                to,
+                durationSeconds,
+            };
+        }
+    }
+
+    const targetRampRelative = text.match(
+        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+progressivement\s*(?:(?:le\s+)?(?:niveau|volume|fader)\s*(?:de\s+|du\s+|de la\s+|of\s+)?)?(.+?)?\s+(?:de|by)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s+en\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
+    );
+    if (targetRampRelative?.[1] && targetRampRelative[3] && targetRampRelative[4] && targetRampRelative[5]) {
+        const delta = parseLevelValue(targetRampRelative[3], targetRampRelative[4]);
+        const durationSeconds = Number(targetRampRelative[5].replace(",", "."));
+        if (delta && Number.isFinite(durationSeconds) && durationSeconds > 0) {
+            const down = ["baisse", "diminue", "lower", "decrease"].includes(simplify(targetRampRelative[1]));
+            return {
+                kind: "ramp_level",
+                targetQuery: cleanTarget(targetRampRelative[2] || "main"),
+                delta: { ...delta, value: down ? -Math.abs(delta.value) : Math.abs(delta.value) },
+                durationSeconds,
+            };
+        }
+    }
+
+    const qualitativeRamp = text.match(
+        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+progressivement\s*(?:(?:le\s+)?(?:niveau|volume|fader)\s*(?:de\s+|du\s+|de la\s+|of\s+)?)?(.+?)?\s+en\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
+    );
+    if (qualitativeRamp?.[1] && qualitativeRamp[3]) {
+        const durationSeconds = Number(qualitativeRamp[3].replace(",", "."));
+        if (Number.isFinite(durationSeconds) && durationSeconds > 0) {
+            const down = ["baisse", "diminue", "lower", "decrease"].includes(simplify(qualitativeRamp[1]));
+            return {
+                kind: "ramp_level",
+                targetQuery: cleanTarget(qualitativeRamp[2] || "main"),
+                delta: { unit: "db", value: down ? -3 : 3 },
+                durationSeconds,
+            };
+        }
     }
 
     const sendAbsolutePatterns = [
@@ -402,7 +574,12 @@ export class LocalMixerCommandGateway {
             };
         }
 
-        if (intent.kind === "send_set_level" || intent.kind === "send_adjust_level") {
+        if (
+            intent.kind === "send_set_level" ||
+            intent.kind === "send_adjust_level" ||
+            intent.kind === "send_ramp_level" ||
+            intent.kind === "send_delay_level"
+        ) {
             return await this.planSendIntent(intent);
         }
 
@@ -457,7 +634,12 @@ export class LocalMixerCommandGateway {
                 };
             }
 
-            if (plan.kind === "send_set_level" || plan.kind === "send_adjust_level") {
+            if (
+                plan.kind === "send_set_level" ||
+                plan.kind === "send_adjust_level" ||
+                plan.kind === "send_ramp_level" ||
+                plan.kind === "send_delay_level"
+            ) {
                 const source = await this.revalidateScopedTarget(plan.sourceQuery, plan.source, ["channel"]);
                 const destination = await this.revalidateScopedTarget(plan.destinationQuery, plan.destination, ["bus"]);
                 if (plan.kind === "send_set_level") {
@@ -469,17 +651,64 @@ export class LocalMixerCommandGateway {
                         responseText: `${displayName(source)} → ${displayName(destination)} réglé à ${converted.label}.`,
                     };
                 }
+                if (plan.kind === "send_adjust_level") {
+                    const current = await this.adapter.readSendLevel(source, destination);
+                    const adjusted = adjustedLevel(current, plan.unit, plan.delta);
+                    await this.adapter.writeSendLevel(source, destination, adjusted.level);
+                    return {
+                        protocol: GATEWAY_PROTOCOL,
+                        ok: true,
+                        responseText: `${displayName(source)} → ${displayName(destination)} : ${adjusted.beforeLabel} → ${adjusted.afterLabel}.`,
+                    };
+                }
+                if (plan.kind === "send_delay_level") {
+                    const converted = levelToNormalized(plan.value.unit, plan.value.value);
+                    const jobId = await this.adapter.scheduleSend(source, destination, converted.level, plan.delaySeconds);
+                    return {
+                        protocol: GATEWAY_PROTOCOL,
+                        ok: true,
+                        responseText: `Action programmée ${jobId} : ${displayName(source)} → ${displayName(destination)} à ${converted.label} dans ${plan.delaySeconds} s.`,
+                    };
+                }
+
                 const current = await this.adapter.readSendLevel(source, destination);
-                const adjusted = adjustedLevel(current, plan.unit, plan.delta);
-                await this.adapter.writeSendLevel(source, destination, adjusted.level);
+                const toLevel = plan.delta
+                    ? adjustedLevel(current, plan.delta.unit, plan.delta.value).level
+                    : levelToNormalized(plan.to!.unit, plan.to!.value).level;
+                const fromLevel = plan.from ? levelToNormalized(plan.from.unit, plan.from.value).level : undefined;
+                const jobId = await this.adapter.startSendRamp(source, destination, toLevel, plan.durationSeconds, fromLevel);
                 return {
                     protocol: GATEWAY_PROTOCOL,
                     ok: true,
-                    responseText: `${displayName(source)} → ${displayName(destination)} : ${adjusted.beforeLabel} → ${adjusted.afterLabel}.`,
+                    responseText: `Automation ${jobId} démarrée : ${displayName(source)} → ${displayName(destination)} sur ${plan.durationSeconds} s.`,
                 };
             }
 
             const liveTarget = await this.revalidateTarget(plan.targetQuery, plan.target, true);
+
+            if (plan.kind === "delay_level") {
+                const converted = levelToNormalized(plan.value.unit, plan.value.value);
+                const jobId = await this.adapter.scheduleLevel(liveTarget, converted.level, plan.delaySeconds);
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    ok: true,
+                    responseText: `Action programmée ${jobId} : ${displayName(liveTarget)} à ${converted.label} dans ${plan.delaySeconds} s.`,
+                };
+            }
+
+            if (plan.kind === "ramp_level") {
+                const current = await this.adapter.readLevel(liveTarget);
+                const toLevel = plan.delta
+                    ? adjustedLevel(current, plan.delta.unit, plan.delta.value).level
+                    : levelToNormalized(plan.to!.unit, plan.to!.value).level;
+                const fromLevel = plan.from ? levelToNormalized(plan.from.unit, plan.from.value).level : undefined;
+                const jobId = await this.adapter.startLevelRamp(liveTarget, toLevel, plan.durationSeconds, fromLevel);
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    ok: true,
+                    responseText: `Automation ${jobId} démarrée : ${displayName(liveTarget)} sur ${plan.durationSeconds} s.`,
+                };
+            }
 
             if (plan.kind === "set_level") {
                 const converted = levelToNormalized(plan.unit, plan.value);
@@ -528,7 +757,7 @@ export class LocalMixerCommandGateway {
     }
 
     private async planSendIntent(
-        intent: Extract<Intent, { kind: "send_set_level" | "send_adjust_level" }>,
+        intent: Extract<Intent, { kind: "send_set_level" | "send_adjust_level" | "send_ramp_level" | "send_delay_level" }>,
     ): Promise<AnalyzeCommandResult> {
         const sourceMatches = await this.adapter.resolve(intent.sourceQuery, ["channel"]);
         const destinationMatches = await this.adapter.resolve(intent.destinationQuery, ["bus"]);
@@ -629,7 +858,12 @@ export class LocalMixerCommandGateway {
         }
 
         const effect = intent.kind === "read_level" ? "read" : "write";
-        if (intent.kind === "send_set_level" || intent.kind === "send_adjust_level") {
+        if (
+            intent.kind === "send_set_level" ||
+            intent.kind === "send_adjust_level" ||
+            intent.kind === "send_ramp_level" ||
+            intent.kind === "send_delay_level"
+        ) {
             throw new Error("Send intents must be planned through planSendIntent.");
         }
         const plan: LocalPlan = { ...intent, target } as LocalPlan;
