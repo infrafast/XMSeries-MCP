@@ -581,6 +581,8 @@ const localCommandGateway = new LocalMixerCommandGateway({
         });
         return automation.start(action.description || "Local delayed send", [action]).id;
     },
+    listAutomations: async () => automation.list(),
+    cancelAutomation: async (id) => automation.cancel(id),
 });
 
 export function getRuntimeTools(
