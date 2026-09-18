@@ -753,6 +753,42 @@
       }
     },
     {
+      "name": "speaker-main-monitor-mute",
+      "utterance": "mute mon retour",
+      "context": {
+        "speaker": {
+          "name": "Thomas",
+          "confidence": 0.95,
+          "backend": "resemblyzer"
+        }
+      },
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "mute",
+          "family": "main",
+          "name": "Main LR",
+          "mute": true
+        }
+      }
+    },
+    {
+      "name": "speaker-main-source-mute-fail-closed",
+      "utterance": "mute Batterie dans mon retour",
+      "context": {
+        "speaker": {
+          "name": "Thomas",
+          "confidence": 0.95,
+          "backend": "resemblyzer"
+        }
+      },
+      "expected": {
+        "status": "clarification",
+        "effect": "none"
+      }
+    },
+    {
       "name": "speaker-unknown",
       "utterance": "monte mon retour de 3 dB",
       "context": {

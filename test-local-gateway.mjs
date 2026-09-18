@@ -1027,6 +1027,44 @@ async function ready(text) {
     assert.equal(writes[0].target.family, "main");
 }
 
+// Speaker Main monitor master mute remains a Main LR mute.
+{
+    muteWrites = [];
+    const analyzed = await gateway.analyze({
+        protocol: GATEWAY_PROTOCOL,
+        text: "mute mon retour",
+        context: {
+            speaker: { name: "Thomas", confidence: 0.95, backend: "resemblyzer" },
+        },
+    });
+    assert.equal(analyzed.status, "ready", JSON.stringify(analyzed));
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(muteWrites[0].target.family, "main");
+    assert.equal(muteWrites[0].mute, true);
+}
+
+// Source -> Main monitor mute must never broaden into whole-source mute.
+{
+    muteWrites = [];
+    sendMuteWrites = [];
+    const analyzed = await gateway.analyze({
+        protocol: GATEWAY_PROTOCOL,
+        text: "mute Batterie dans mon retour",
+        context: {
+            speaker: { name: "Thomas", confidence: 0.95, backend: "resemblyzer" },
+        },
+    });
+    assert.equal(analyzed.status, "clarification", JSON.stringify(analyzed));
+    assert.equal(analyzed.effect, "none");
+    assert.match(analyzed.responseText, /Main LR/);
+    assert.equal(muteWrites.length, 0);
+    assert.equal(sendMuteWrites.length, 0);
+}
+
 // Source -> my return with a Main destination becomes the source Main LR fader path.
 {
     writes = [];
