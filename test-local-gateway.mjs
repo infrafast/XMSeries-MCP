@@ -27,6 +27,7 @@ let bulkMuteCalls = [];
 let bulkSendCalls = [];
 let speakerContexts = new Map();
 let qualitativeCalls = [];
+let qualitativeSendCalls = [];
 let stale = false;
 
 const adapter = {
@@ -119,7 +120,11 @@ const adapter = {
     },
     async adjustQualitativeLevel(target, direction, amount) {
         qualitativeCalls.push({ target, direction, amount });
-        return { beforeDb: -20, targetDb: direction === "up" ? -17 : -23, targetLevel: 0.5 };
+        return { beforeDb: -20, targetDb: direction === "up" ? -17 : -23 };
+    },
+    async adjustQualitativeSend(source, destination, direction, amount) {
+        qualitativeSendCalls.push({ source, destination, direction, amount });
+        return { beforeDb: -20, targetDb: direction === "up" ? -17 : -23 };
     },
 };
 
@@ -242,6 +247,35 @@ async function ready(text) {
     assert.equal(qualitativeCalls[0].target.family, "main");
     assert.equal(qualitativeCalls[0].direction, "up");
     assert.equal(qualitativeCalls[0].amount, "normal");
+}
+
+// Qualitative source -> bus adjustment reuses shared osc_adjust_level semantics.
+{
+    qualitativeSendCalls = [];
+    const analyzed = await ready("monte Batterie sur Anthony");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(qualitativeSendCalls.length, 1);
+    assert.equal(qualitativeSendCalls[0].source.name, "Batterie");
+    assert.equal(qualitativeSendCalls[0].destination.name, "Anthony");
+    assert.equal(qualitativeSendCalls[0].direction, "up");
+    assert.equal(qualitativeSendCalls[0].amount, "normal");
+}
+
+// Qualitative source -> bus amount words are preserved.
+{
+    qualitativeSendCalls = [];
+    const analyzed = await ready("baisse un peu Batterie dans Anthony");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(qualitativeSendCalls[0].direction, "down");
+    assert.equal(qualitativeSendCalls[0].amount, "little");
 }
 
 // Mute/unmute
