@@ -208,6 +208,104 @@
       }
     },
     {
+      "name": "ramp-channel-duration-before-target",
+      "utterance": "baisse progressivement en 2 secondes Batterie à -30 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "ramp",
+          "family": "channel",
+          "name": "Batterie",
+          "durationSeconds": 2
+        }
+      }
+    },
+    {
+      "name": "ramp-channel-duration-first",
+      "utterance": "en 2 secondes baisse progressivement Batterie à -30 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "ramp",
+          "family": "channel",
+          "name": "Batterie",
+          "durationSeconds": 2
+        }
+      }
+    },
+    {
+      "name": "ramp-channel-progressive-after-target",
+      "utterance": "baisse Batterie progressivement à -30 dB en 2 secondes",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "ramp",
+          "family": "channel",
+          "name": "Batterie",
+          "durationSeconds": 2
+        }
+      }
+    },
+    {
+      "name": "ramp-channel-value-before-progressive",
+      "utterance": "baisse Batterie à -30 dB progressivement en 2 secondes",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "ramp",
+          "family": "channel",
+          "name": "Batterie",
+          "durationSeconds": 2
+        }
+      }
+    },
+    {
+      "name": "ramp-channel-duration-middle",
+      "utterance": "baisse en 2 secondes progressivement Batterie à -30 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "ramp",
+          "family": "channel",
+          "name": "Batterie",
+          "durationSeconds": 2
+        }
+      }
+    },
+    {
+      "name": "ramp-send-duration-first",
+      "utterance": "en 3 secondes monte progressivement Batterie sur Anthony à -10 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "send_ramp",
+          "source": "Batterie",
+          "destination": "Anthony",
+          "durationSeconds": 3
+        }
+      }
+    },
+    {
+      "name": "ramp-range-duration-first",
+      "utterance": "en 4 secondes fais une rampe Batterie de -40 dB à -10 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "ramp",
+          "family": "channel",
+          "name": "Batterie",
+          "durationSeconds": 4
+        }
+      }
+    },
+    {
       "name": "delay-channel",
       "utterance": "mets Batterie à -27 dB dans 2 secondes",
       "expected": {
@@ -222,6 +320,48 @@
       }
     },
     {
+      "name": "delay-channel-delay-first",
+      "utterance": "dans 2 secondes mets Batterie à -27 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "delay",
+          "family": "channel",
+          "name": "Batterie",
+          "delaySeconds": 2
+        }
+      }
+    },
+    {
+      "name": "delay-channel-delay-middle",
+      "utterance": "mets dans 2 secondes Batterie à -27 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "delay",
+          "family": "channel",
+          "name": "Batterie",
+          "delaySeconds": 2
+        }
+      }
+    },
+    {
+      "name": "delay-send-delay-first",
+      "utterance": "dans 2 secondes mets Batterie sur Anthony à -20 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "send_delay",
+          "source": "Batterie",
+          "destination": "Anthony",
+          "delaySeconds": 2
+        }
+      }
+    },
+    {
       "name": "fade-default-main",
       "utterance": "fade out en 5 secondes",
       "expected": {
@@ -231,6 +371,20 @@
           "kind": "ramp",
           "family": "main",
           "name": "Main LR",
+          "durationSeconds": 5
+        }
+      }
+    },
+    {
+      "name": "fade-target-after-duration",
+      "utterance": "fade out en 5 secondes Batterie",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "ramp",
+          "family": "channel",
+          "name": "Batterie",
           "durationSeconds": 5
         }
       }

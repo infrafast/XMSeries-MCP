@@ -86,7 +86,7 @@ OR4B4 PR #12 merged on `main` as `968c94f69d4bd007191fff1762101707a94c70b5`. PR 
 - [x] automation status/cancel through Local natural commands: PR #13 merged as `43aa59c79b8424993d20339610c40309cdd2117f` with Node 20.20/22 CI green; live Pi acceptance confirmed that a long fade could be listed as running, cancelled via `annule la dernière automation`, and the channel then restored to -27 dB;
 - [x] preserve level vs mute semantics and all protocol-specific unsupported-operation guards by delegating execution to existing resolver/OSC/automation adapters.
 
-Temporal grammar in this slice is explicit: `en N secondes` is ramp duration; `dans N secondes` is delay before an action. Fade-in/out without an explicit target defaults to Main LR/façade.
+Temporal grammar in this slice is explicit: `en N secondes` is ramp duration; `dans N secondes` is delay before an action. The flexible-slot parser accepts equivalent constituent reorderings while preserving those markers strictly; unbound level literals are rejected rather than guessed. Fade-in/out without an explicit target defaults to Main LR/façade.
 
 ### XDG3 — Regression corpus and cloud/local drift control
 

@@ -538,8 +538,8 @@ Important syntax rules:
 - **`à` means an absolute target**: `mets batterie à -30 dB`. With no named target, `mets/monte/baisse le volume à 100%` targets Main LR.
 - **`de` means a relative change**: `monte batterie de 3 dB`. With no named target, `monte le volume de 10%` adjusts Main LR relatively.
 - Qualitative commands (`monte`, `baisse`, `un peu`, `beaucoup`) use the same adaptive relative-level calculation as the cloud `osc_adjust_level` tool. They are not separate hard-coded Local dB steps.
-- **`en N secondes` means ramp duration**: the level moves progressively for that duration.
-- **`dans N secondes` means delayed execution**: the level stays unchanged until the delay expires, then the target is applied.
+- **`en N secondes` means ramp duration**: the level moves progressively for that duration. Temporal constituents may appear in different grammatical positions as long as the semantic markers remain explicit.
+- **`dans N secondes` means delayed execution**: the level stays unchanged until the delay expires, then the target is applied. `dans` is never reinterpreted as a ramp duration.
 - Percent values use the normalized fader range. An absolute `100%` means the top of the normalized fader range; a relative `+10%` means ten percentage points on that normalized range.
 - `fade in` / `fade out` without an explicit target defaults to **Main LR / façade**.
 - Main aliases currently include `main`, `main lr`, `lr`, `façade`, `master`, `master lr`, and `mix principal`.
@@ -550,7 +550,7 @@ Important syntax rules:
 - Speaker-context defaults are supported for first-person phrases when the host supplies recognized-speaker context. XMSeries-MCP remains responsible for mapping the speaker through `XMS_SPEAKER_MAP` / `osc_get_speaker_context`.
 - Canonical first-person examples: `monte mon retour de 3 dB`, `mets mon micro à -12 dB`, `mets batterie dans mon retour à -20 dB`. If the speaker is unknown or the required bus/channel mapping is unavailable, the Local parser asks for clarification instead of guessing.
 
-The deterministic grammar is not intended to accept arbitrary prose. If a phrase is not documented and is not covered by parser tests, treat it as unsupported rather than assuming the parser will infer the intent.
+The deterministic grammar is not intended to accept arbitrary prose. For temporal commands it is deliberately **flexible on constituent order but strict on semantic markers**. For example, `baisse progressivement batterie à -30 dB en 2 secondes`, `baisse progressivement en 2 secondes batterie à -30 dB`, and `en 2 secondes baisse progressivement batterie à -30 dB` resolve to the same ramp plan. A bare `-30 dB` without `à`/`de` remains unsupported rather than guessed. If a phrase is not documented and is not covered by parser tests, treat it as unsupported rather than assuming the parser will infer the intent.
 
 The canonical regression source is `corpus/local-commands.fr.json`. CI executes every corpus phrase through the real deterministic gateway with a fake mixer adapter via `test-local-corpus.mjs`. When adding or changing Local syntax, update this corpus together with the parser, tool-side semantics, tests and this README.
 

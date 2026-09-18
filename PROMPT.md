@@ -310,6 +310,7 @@ Examples:
 
 Rules:
 
+* Temporal phrasing is flexible in word order but strict in meaning: `à`/`to` marks an absolute level, `de`/`by` marks a relative delta, `en N secondes` marks ramp duration, and `dans N secondes` marks delay before execution. Equivalent constituent reorderings must preserve the same semantic plan; never infer an omitted marker from a bare number.
 * Use `osc_automation_ramp` for smooth level changes over time.
 * A request containing `fade`, `fade-in`, `fade-out`, or `progressivement` MUST result in an automation tool call after any required name-resolution call. Do not use a direct fader set as a fallback.
 * For explicit ramp bounds such as `de -90 dB à -10 dB` or `from -90 dB to -10 dB`, call `osc_automation_ramp` with `fromDb:-90` and `toDb:-10`. Do not convert dB bounds to `fromLevel` yourself.

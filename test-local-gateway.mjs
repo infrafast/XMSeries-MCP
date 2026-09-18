@@ -456,6 +456,50 @@ async function ready(text) {
     assert.equal(automationCalls[0].durationSeconds, 4);
 }
 
+// OR4B4 temporal slots accept constituent reordering without changing semantics.
+{
+    const variants = [
+        "baisse progressivement en 2 secondes Batterie à -30 dB",
+        "en 2 secondes baisse progressivement Batterie à -30 dB",
+        "baisse Batterie progressivement à -30 dB en 2 secondes",
+        "baisse Batterie à -30 dB progressivement en 2 secondes",
+        "baisse en 2 secondes progressivement Batterie à -30 dB",
+    ];
+    for (const utterance of variants) {
+        automationCalls = [];
+        const analyzed = await ready(utterance);
+        const result = await gateway.execute({
+            protocol: GATEWAY_PROTOCOL,
+            planToken: analyzed.planToken,
+        });
+        assert.equal(result.ok, true, utterance);
+        assert.equal(automationCalls.length, 1, utterance);
+        assert.equal(automationCalls[0].kind, "ramp", utterance);
+        assert.equal(automationCalls[0].target.name, "Batterie", utterance);
+        assert.equal(automationCalls[0].durationSeconds, 2, utterance);
+    }
+}
+
+// Strict markers remain mandatory: an unbound level literal never becomes an implicit target.
+{
+    const analyzed = await gateway.analyze({
+        protocol: GATEWAY_PROTOCOL,
+        text: "baisse progressivement Batterie -30 dB en 2 secondes",
+    });
+    assert.notEqual(analyzed.status, "ready");
+    assert.equal(analyzed.effect, "none");
+}
+
+// "progressivement" plus only a delay is incomplete; do not degrade it to a delayed direct set.
+{
+    const analyzed = await gateway.analyze({
+        protocol: GATEWAY_PROTOCOL,
+        text: "baisse progressivement Batterie à -30 dB dans 2 secondes",
+    });
+    assert.notEqual(analyzed.status, "ready");
+    assert.equal(analyzed.effect, "none");
+}
+
 // OR4B4 delayed level uses "dans" as a delay, not a ramp.
 {
     automationCalls = [];
