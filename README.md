@@ -513,7 +513,7 @@ The parser is intentionally bounded and deterministic. Prefer the canonical form
 | Mute / unmute | `mute batterie` · `unmute batterie` |
 | Absolute dB | `mets batterie à -30 dB` · `mets le niveau de batterie à -30 dB` |
 | Relative dB | `monte batterie de 3 dB` · `baisse batterie de 3 dB` |
-| Qualitative relative | `monte un peu le niveau de batterie` · `baisse beaucoup batterie` · `monte le volume` · `baisse un peu le volume` (Main LR) |
+| Qualitative relative | `monte un peu le niveau de batterie` · `baisse beaucoup batterie` · `monte le volume` · `baisse un peu le volume` (Main LR) · `un peu plus fort batterie` · `batterie moins fort` |
 | Absolute percent | `mets batterie à 50%` |
 | Relative percent | `monte batterie de 10%` · `baisse batterie de 1%` · `monte le volume de 100%` (Main LR) |
 | Channel -> bus absolute | `mets batterie sur Anthony à -20 dB` |
@@ -545,6 +545,7 @@ Important syntax rules:
 - Main aliases currently include `main`, `main lr`, `lr`, `façade`, `master`, `master lr`, and `mix principal`.
 - Source-to-destination syntax currently means a **channel source -> bus destination**. The source and destination are resolved independently and must each be safe and unique. Qualitative route commands such as `monte batterie sur Anthony` use the same adaptive `osc_adjust_level` semantics as cloud tools; a source name such as `Basse` remains a source candidate in `monte Basse sur Anthony`, not a contradictory direction.
 - If a name is ambiguous or only fuzzy-matches, the gateway asks for clarification rather than guessing.
+- French STT robustness: `montre Batterie` and `montre le volume` are accepted as likely `monte` transcriptions in mixer-level command shapes. Explicit display/read forms such as `montre-moi le niveau de Batterie` are **not** rewritten into writes.
 - DCA writes are not yet part of the deterministic Local write surface.
 - Group/bulk natural-language commands are supported for bus-master mute/unmute and channel-send dB writes to selected/all buses, including an explicit Main LR/façade inclusion.
 - Speaker-context defaults are supported for first-person phrases when the host supplies recognized-speaker context. XMSeries-MCP remains responsible for mapping the speaker through `XMS_SPEAKER_MAP` / `osc_get_speaker_context`.

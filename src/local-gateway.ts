@@ -445,8 +445,21 @@ function parseFlexibleTemporalIntent(raw: string): Intent | null {
     };
 }
 
-function parseIntent(raw: string): Intent | null {
+function normalizeLikelyFrenchSttDirection(raw: string): string {
     const text = raw.trim();
+    if (/^montre(?:-|\s)+moi\b/iu.test(text)) return text;
+    if (/^montre\s+(?:le\s+)?(?:niveau|fader)\s+(?:de|du|de la)\b/iu.test(text)) return text;
+    if (/^montre\s+(?:le\s+)?(?:volume|son)\b/iu.test(text)) {
+        return text.replace(/^montre\b/iu, "monte");
+    }
+    if (/^montre\s+(?!(?:le|la|les)\s+(?:statut|etat|état|liste)\b)/iu.test(text)) {
+        return text.replace(/^montre\b/iu, "monte");
+    }
+    return text;
+}
+
+function parseIntent(raw: string): Intent | null {
+    const text = normalizeLikelyFrenchSttDirection(raw);
     const normalized = simplify(text);
 
     if (
@@ -881,6 +894,52 @@ function parseIntent(raw: string): Intent | null {
                 delta: down ? -Math.abs(base) : Math.abs(base),
             };
         }
+    }
+
+    const naturalRouteDirection = text.match(
+        /^\s*(?:(un\s+peu|beaucoup)\s+)?(plus|moins)\s+fort\s+(.+?)\s+(?:sur|dans|vers|chez)\s+(.+?)\s*$/iu,
+    );
+    if (naturalRouteDirection?.[2] && naturalRouteDirection[3] && naturalRouteDirection[4]) {
+        const amountText = simplify(naturalRouteDirection[1] || "");
+        const amount: LocalRelativeAmount =
+            amountText === "un peu" ? "little" : amountText === "beaucoup" ? "much" : "normal";
+        return {
+            kind: "send_adjust_level_qualitative",
+            sourceQuery: cleanTarget(naturalRouteDirection[3]),
+            destinationQuery: cleanTarget(naturalRouteDirection[4]),
+            direction: simplify(naturalRouteDirection[2]) === "moins" ? "down" : "up",
+            amount,
+        };
+    }
+
+    const naturalPrefixDirection = text.match(
+        /^\s*(?:(un\s+peu|beaucoup)\s+)?(plus|moins)\s+fort(?:\s+(?:le\s+)?(?:niveau|volume|fader)(?:\s+(?:de|du|de la))?)?\s*(.*?)\s*$/iu,
+    );
+    if (naturalPrefixDirection?.[2]) {
+        const amountText = simplify(naturalPrefixDirection[1] || "");
+        const amount: LocalRelativeAmount =
+            amountText === "un peu" ? "little" : amountText === "beaucoup" ? "much" : "normal";
+        return {
+            kind: "adjust_level_qualitative",
+            targetQuery: cleanTarget(naturalPrefixDirection[3] || "main") || "main",
+            direction: simplify(naturalPrefixDirection[2]) === "moins" ? "down" : "up",
+            amount,
+        };
+    }
+
+    const naturalSuffixDirection = text.match(
+        /^\s*(.+?)\s+(?:(un\s+peu|beaucoup)\s+)?(plus|moins)\s+fort\s*$/iu,
+    );
+    if (naturalSuffixDirection?.[1] && naturalSuffixDirection[3]) {
+        const amountText = simplify(naturalSuffixDirection[2] || "");
+        const amount: LocalRelativeAmount =
+            amountText === "un peu" ? "little" : amountText === "beaucoup" ? "much" : "normal";
+        return {
+            kind: "adjust_level_qualitative",
+            targetQuery: cleanTarget(naturalSuffixDirection[1]),
+            direction: simplify(naturalSuffixDirection[3]) === "moins" ? "down" : "up",
+            amount,
+        };
     }
 
     const mainQualitativeRelative = text.match(

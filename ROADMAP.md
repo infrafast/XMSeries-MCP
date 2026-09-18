@@ -91,7 +91,7 @@ Temporal grammar in this slice is explicit: `en N secondes` is ramp duration; `d
 ### XDG3 — Regression corpus and cloud/local drift control
 
 - [x] maintain a deterministic command corpus in-repo covering French first: `corpus/local-commands.fr.json` is executed in CI by `test-local-corpus.mjs`; English expansion remains incremental;
-- [~] include STT-like case/punctuation variants without introducing unconstrained fuzzy NLP: canonical French cases are established; broader STT variants remain incremental;
+- [~] include STT-like case/punctuation variants without introducing unconstrained fuzzy NLP: canonical French cases now include safe `montre`→`monte` correction plus `plus fort` / `moins fort` qualitative aliases, with explicit display/read forms kept fail-closed; broader variants remain incremental;
 - [x] every current corpus item asserts status/effect and, for executable plans, the concrete fake-adapter operation/target produced by execution;
 - [x] review `PROMPT.md` semantics against the same corpus whenever command semantics change: this is now part of the repository capability-symmetry rule in `AGENTS.md`;
 - [x] keep gateway-disabled tool inventory identical to the pre-OR4 cloud/ordinary MCP behavior.
