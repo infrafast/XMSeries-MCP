@@ -551,6 +551,8 @@ Important syntax rules:
 
 The deterministic grammar is not intended to accept arbitrary prose. If a phrase is not documented and is not covered by parser tests, treat it as unsupported rather than assuming the parser will infer the intent.
 
+The canonical regression source is `corpus/local-commands.fr.json`. CI executes every corpus phrase through the real deterministic gateway with a fake mixer adapter via `test-local-corpus.mjs`. When adding or changing Local syntax, update this corpus together with the parser, tool-side semantics, tests and this README.
+
 ### Cloud/LLM mode versus deterministic parsing
 
 In normal MCP/LLM mode, the model selects typed tools such as `osc_channel_fader`, `osc_channel_send_to_bus`, or `osc_automation_ramp`.
