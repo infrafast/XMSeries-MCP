@@ -46,6 +46,7 @@ export interface LocalMixerGatewayAdapter {
     setMute(target: LocalMixerTarget, mute: boolean): Promise<void>;
     readSendLevel(source: LocalMixerTarget, destination: LocalMixerTarget): Promise<number>;
     writeSendLevel(source: LocalMixerTarget, destination: LocalMixerTarget, level: number): Promise<void>;
+    setSendMute(source: LocalMixerTarget, destination: LocalMixerTarget, mute: boolean): Promise<void>;
     startLevelRamp(target: LocalMixerTarget, toLevel: number, durationSeconds: number, fromLevel?: number): Promise<string>;
     startSendRamp(source: LocalMixerTarget, destination: LocalMixerTarget, toLevel: number, durationSeconds: number, fromLevel?: number): Promise<string>;
     scheduleLevel(target: LocalMixerTarget, toLevel: number, delaySeconds: number): Promise<string>;
@@ -93,6 +94,7 @@ type Intent =
     | { kind: "send_set_level"; sourceQuery: string; destinationQuery: string; unit: LevelUnit; value: number }
     | { kind: "send_adjust_level"; sourceQuery: string; destinationQuery: string; unit: LevelUnit; delta: number }
     | { kind: "send_adjust_level_qualitative"; sourceQuery: string; destinationQuery: string; direction: LocalRelativeDirection; amount: LocalRelativeAmount }
+    | { kind: "send_mute"; sourceQuery: string; destinationQuery: string; mute: boolean }
     | { kind: "ramp_level"; targetQuery: string; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
     | { kind: "ramp_level_qualitative"; targetQuery: string; direction: LocalRelativeDirection; amount: LocalRelativeAmount; durationSeconds: number }
     | { kind: "send_ramp_level"; sourceQuery: string; destinationQuery: string; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
@@ -118,6 +120,7 @@ type LocalPlan =
     | { kind: "send_set_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; unit: LevelUnit; value: number }
     | { kind: "send_adjust_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; unit: LevelUnit; delta: number }
     | { kind: "send_adjust_level_qualitative"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; direction: LocalRelativeDirection; amount: LocalRelativeAmount }
+    | { kind: "send_mute"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; mute: boolean }
     | { kind: "ramp_level"; targetQuery: string; target: LocalMixerTarget; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
     | { kind: "ramp_level_qualitative"; targetQuery: string; target: LocalMixerTarget; direction: LocalRelativeDirection; amount: LocalRelativeAmount; durationSeconds: number }
     | { kind: "send_ramp_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
@@ -838,6 +841,32 @@ function parseIntent(raw: string): Intent | null {
         }
     }
 
+    const sendMutePatterns: Array<{ re: RegExp; mute: boolean }> = [
+        {
+            re: /^\s*(?:mute|coupe|couper|desactive|désactive)\s+(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s*$/iu,
+            mute: true,
+        },
+        {
+            re: /^\s*(?:unmute|demute|démute|reactive|réactive|remets)\s+(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s*$/iu,
+            mute: false,
+        },
+    ];
+    for (const pattern of sendMutePatterns) {
+        const match = text.match(pattern.re);
+        if (match?.[1] && match[2]) {
+            const sourceQuery = cleanTarget(match[1]);
+            const destinationQuery = cleanTarget(match[2]);
+            if (sourceQuery && destinationQuery) {
+                return {
+                    kind: "send_mute",
+                    sourceQuery,
+                    destinationQuery,
+                    mute: pattern.mute,
+                };
+            }
+        }
+    }
+
     const mutePatterns: Array<{ re: RegExp; mute: boolean }> = [
         { re: /^\s*(?:mute|coupe|couper|desactive|désactive)\s+(?:le\s+son\s+de\s+)?(.+?)\s*$/iu, mute: true },
         { re: /^\s*(?:unmute|demute|démute|reactive|réactive|remets)\s+(?:le\s+son\s+de\s+)?(.+?)\s*$/iu, mute: false },
@@ -1360,6 +1389,7 @@ export class LocalMixerCommandGateway {
                 plan.kind === "send_set_level" ||
                 plan.kind === "send_adjust_level" ||
                 plan.kind === "send_adjust_level_qualitative" ||
+                plan.kind === "send_mute" ||
                 plan.kind === "send_ramp_level" ||
                 plan.kind === "send_ramp_level_qualitative" ||
                 plan.kind === "send_delay_level"
