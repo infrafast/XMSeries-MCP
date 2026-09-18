@@ -9,6 +9,7 @@ const corpus = JSON.parse(
 
 const targets = [
     { family: "channel", index: 1, name: "Voix", matchType: "exact" },
+    { family: "channel", index: 2, name: "Basse", matchType: "exact" },
     { family: "channel", index: 6, name: "Batterie", matchType: "exact" },
     { family: "bus", index: 7, name: "Anthony", matchType: "exact" },
     { family: "bus", index: 8, name: "Laurent", matchType: "exact" },
@@ -113,7 +114,11 @@ function makeHarness() {
         },
         async adjustQualitativeLevel(target, direction, amount) {
             operations.push({ kind: "qualitative", family: target.family, name: target.name, direction, amount });
-            return { beforeDb: -20, targetDb: direction === "up" ? -17 : -23, targetLevel: 0.5 };
+            return { beforeDb: -20, targetDb: direction === "up" ? -17 : -23 };
+        },
+        async adjustQualitativeSend(source, destination, direction, amount) {
+            operations.push({ kind: "qualitative_send", source: source.name, destination: destination.name, direction, amount });
+            return { beforeDb: -20, targetDb: direction === "up" ? -17 : -23 };
         },
     };
 
