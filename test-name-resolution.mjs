@@ -6,6 +6,7 @@ import {
     hasSafeUniqueTarget,
     isStructuredOwnershipMatch,
     normalizeOwnershipMixerName,
+    rankNamedTargetCandidates,
 } from "./dist/index.js";
 
 const routeResolver = TOOLS.find((tool) => tool.name === "osc_resolve_channel_to_bus");
@@ -17,6 +18,15 @@ assert.equal(hasSafeUniqueTarget([{ matchType: "structured" }]), true);
 assert.equal(hasSafeUniqueTarget([{ matchType: "fuzzy" }]), false);
 assert.equal(hasSafeUniqueTarget([]), false);
 assert.equal(hasSafeUniqueTarget([{ matchType: "exact" }, { matchType: "exact" }]), false);
+
+const duplicateExact = rankNamedTargetCandidates("Lead", [
+    { family: "channel", index: 1, name: "Lead" },
+    { family: "fxreturn", index: 2, name: "Lead" },
+]);
+assert.equal(duplicateExact.length, 2);
+assert.deepEqual(duplicateExact.map((entry) => entry.matchType), ["exact", "exact"]);
+assert.equal(hasSafeUniqueTarget(duplicateExact), false);
+
 
 const normalizationCases = [
     ["la guitare de Claude", "guitare claude"],
