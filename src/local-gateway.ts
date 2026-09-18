@@ -40,6 +40,10 @@ export interface LocalMixerGatewayAdapter {
     scheduleSend(source: LocalMixerTarget, destination: LocalMixerTarget, toLevel: number, delaySeconds: number): Promise<string>;
     listAutomations(): Promise<Array<{ id: string; label?: string; status: string; currentAction?: string; error?: string }>>;
     cancelAutomation(id: string): Promise<{ id: string; label?: string; status: string } | null>;
+    muteBusBatch(targets: LocalMixerTarget[], mute: boolean): Promise<void>;
+    muteAllBuses(mute: boolean, except?: LocalMixerTarget[]): Promise<void>;
+    writeSendBatchDb(source: LocalMixerTarget, destinations: LocalMixerTarget[], db: number, includeMain: boolean): Promise<void>;
+    writeSendAllBusesDb(source: LocalMixerTarget, db: number, includeMain: boolean): Promise<void>;
 }
 
 type LevelUnit = "db" | "percent";
@@ -58,10 +62,13 @@ type Intent =
     | { kind: "send_delay_level"; sourceQuery: string; destinationQuery: string; value: LevelValue; delaySeconds: number }
     | { kind: "automation_list" }
     | { kind: "automation_cancel"; id?: string; lastRunning: boolean }
+    | { kind: "bulk_bus_mute"; mode: "selected" | "all" | "all_except"; busQueries: string[]; mute: boolean }
+    | { kind: "bulk_send_db"; mode: "selected" | "all"; sourceQuery: string; busQueries: string[]; db: number; includeMain: boolean }
     | { kind: "mute"; targetQuery: string; mute: boolean };
 
 type TargetIntent = Extract<Intent, { targetQuery: string }>;
 type SendIntent = Extract<Intent, { sourceQuery: string; destinationQuery: string }>;
+type BulkIntent = Extract<Intent, { kind: "bulk_bus_mute" | "bulk_send_db" }>;
 
 type LocalPlan =
     | { kind: "status" }
@@ -76,10 +83,12 @@ type LocalPlan =
     | { kind: "send_delay_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; value: LevelValue; delaySeconds: number }
     | { kind: "automation_list" }
     | { kind: "automation_cancel"; id: string }
+    | { kind: "bulk_bus_mute"; mode: "selected" | "all" | "all_except"; busQueries: string[]; buses: LocalMixerTarget[]; mute: boolean }
+    | { kind: "bulk_send_db"; mode: "selected" | "all"; sourceQuery: string; source: LocalMixerTarget; busQueries: string[]; buses: LocalMixerTarget[]; db: number; includeMain: boolean }
     | { kind: "mute"; targetQuery: string; target: LocalMixerTarget; mute: boolean };
 
 interface LocalContinuation {
-    intent: TargetIntent | SendIntent;
+    intent: TargetIntent | SendIntent | BulkIntent;
     candidates: LocalMixerTarget[];
 }
 
@@ -132,6 +141,13 @@ function cleanTarget(value: string): string {
         .replace(/^\s*(?:le|la|les|du|de la|de l|d|the)\s+/iu, "")
         .replace(/\s*(?:fader|niveau|volume)\s*$/iu, "")
         .trim();
+}
+
+function splitTargetList(value: string): string[] {
+    return value
+        .split(/\s*(?:,|;|\bet\b|\band\b)\s*/iu)
+        .map((item) => cleanTarget(item))
+        .filter(Boolean);
 }
 
 function parsePercent(value: string): number | null {
@@ -223,6 +239,102 @@ function parseIntent(raw: string): Intent | null {
         const value = unit === "percent" ? parsePercent(rawValue) : parseDb(rawValue);
         return value === null ? null : { unit, value };
     };
+
+    // Main LR shorthand: when volume/level/fader is named without another target,
+    // the mixer domain owns the default and routes it to Main LR.
+    const mainRelative = text.match(
+        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:volume|niveau|fader)\s+(?:de|by)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
+    );
+    if (mainRelative?.[1] && mainRelative[2] && mainRelative[3]) {
+        const value = parseLevelValue(mainRelative[2], mainRelative[3]);
+        if (value) {
+            const down = ["baisse", "diminue", "lower", "decrease"].includes(simplify(mainRelative[1]));
+            return {
+                kind: "adjust_level",
+                targetQuery: "main",
+                unit: value.unit,
+                delta: down ? -Math.abs(value.value) : Math.abs(value.value),
+            };
+        }
+    }
+
+    const mainAbsolute = text.match(
+        /^\s*(?:mets|met|regle|règle|fixe|set|monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:volume|niveau|fader)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
+    );
+    if (mainAbsolute?.[1] && mainAbsolute[2]) {
+        const value = parseLevelValue(mainAbsolute[1], mainAbsolute[2]);
+        if (value) {
+            return { kind: "set_level", targetQuery: "main", unit: value.unit, value: value.value };
+        }
+    }
+
+    const bulkAllBusMute = text.match(
+        /^\s*(mute|coupe|couper|desactive|désactive|unmute|demute|démute|reactive|réactive|remets)\s+tous\s+les\s+bus(?:\s+sauf\s+(.+))?\s*$/iu,
+    );
+    if (bulkAllBusMute?.[1]) {
+        const mute = !["unmute", "demute", "démute", "reactive", "réactive", "remets"].includes(bulkAllBusMute[1].toLocaleLowerCase("fr-FR"));
+        const busQueries = bulkAllBusMute[2] ? splitTargetList(bulkAllBusMute[2]) : [];
+        return {
+            kind: "bulk_bus_mute",
+            mode: busQueries.length > 0 ? "all_except" : "all",
+            busQueries,
+            mute,
+        };
+    }
+
+    const bulkSelectedBusMute = text.match(
+        /^\s*(mute|coupe|couper|desactive|désactive|unmute|demute|démute|reactive|réactive|remets)\s+(?:les\s+)?bus\s+(.+?)\s*$/iu,
+    );
+    if (bulkSelectedBusMute?.[1] && bulkSelectedBusMute[2]) {
+        const busQueries = splitTargetList(bulkSelectedBusMute[2]);
+        if (busQueries.length > 0) {
+            const mute = !["unmute", "demute", "démute", "reactive", "réactive", "remets"].includes(bulkSelectedBusMute[1].toLocaleLowerCase("fr-FR"));
+            return { kind: "bulk_bus_mute", mode: "selected", busQueries, mute };
+        }
+    }
+
+    const bulkSendAll = text.match(
+        /^\s*(?:mets|met|regle|règle|fixe|set)\s+(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*d[bB]\s+sur\s+tous\s+les\s+bus(?:\s+et\s+(?:la\s+)?(?:facade|façade|main(?:\s+lr)?|lr))?\s*$/iu,
+    );
+    if (bulkSendAll?.[1] && bulkSendAll[2]) {
+        const db = parseDb(bulkSendAll[2]);
+        if (db !== null) {
+            const includeMain = /\s+et\s+(?:la\s+)?(?:facade|façade|main(?:\s+lr)?|lr)\s*$/iu.test(text);
+            return {
+                kind: "bulk_send_db",
+                mode: "all",
+                sourceQuery: cleanTarget(bulkSendAll[1]),
+                busQueries: [],
+                db,
+                includeMain,
+            };
+        }
+    }
+
+    const bulkSendSelected = text.match(
+        /^\s*(?:mets|met|regle|règle|fixe|set)\s+(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*d[bB]\s+sur\s+(?:les\s+)?bus\s+(.+?)\s*$/iu,
+    );
+    if (bulkSendSelected?.[1] && bulkSendSelected[2] && bulkSendSelected[3]) {
+        const db = parseDb(bulkSendSelected[2]);
+        let destinationText = bulkSendSelected[3].trim();
+        let includeMain = false;
+        const mainSuffix = destinationText.match(/^(.*?)(?:\s+et\s+(?:la\s+)?(?:facade|façade|main(?:\s+lr)?|lr))\s*$/iu);
+        if (mainSuffix?.[1]) {
+            destinationText = mainSuffix[1].trim();
+            includeMain = true;
+        }
+        const busQueries = splitTargetList(destinationText);
+        if (db !== null && busQueries.length > 0) {
+            return {
+                kind: "bulk_send_db",
+                mode: "selected",
+                sourceQuery: cleanTarget(bulkSendSelected[1]),
+                busQueries,
+                db,
+                includeMain,
+            };
+        }
+    }
 
     // "dans N secondes" means delay before the write, never ramp duration.
     const sendDelayed = text.match(
@@ -639,6 +751,10 @@ export class LocalMixerCommandGateway {
             };
         }
 
+        if (intent.kind === "bulk_bus_mute" || intent.kind === "bulk_send_db") {
+            return await this.planBulkIntent(intent);
+        }
+
         if (
             intent.kind === "send_set_level" ||
             intent.kind === "send_adjust_level" ||
@@ -718,6 +834,51 @@ export class LocalMixerCommandGateway {
                     protocol: GATEWAY_PROTOCOL,
                     ok: true,
                     responseText: `Automation ${job.id} : ${job.status}.`,
+                };
+            }
+
+            if (plan.kind === "bulk_bus_mute") {
+                if (plan.mode === "all") {
+                    await this.adapter.muteAllBuses(plan.mute);
+                    return {
+                        protocol: GATEWAY_PROTOCOL,
+                        ok: true,
+                        responseText: `Tous les bus ont été ${plan.mute ? "coupés" : "réactivés"}.`,
+                    };
+                }
+                const buses = await this.revalidateBusTargets(plan.busQueries, plan.buses);
+                if (plan.mode === "all_except") {
+                    await this.adapter.muteAllBuses(plan.mute, buses);
+                    return {
+                        protocol: GATEWAY_PROTOCOL,
+                        ok: true,
+                        responseText: `Tous les bus sauf ${buses.map(displayName).join(", ")} ont été ${plan.mute ? "coupés" : "réactivés"}.`,
+                    };
+                }
+                await this.adapter.muteBusBatch(buses, plan.mute);
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    ok: true,
+                    responseText: `${buses.map(displayName).join(", ")} : ${plan.mute ? "coupés" : "réactivés"}.`,
+                };
+            }
+
+            if (plan.kind === "bulk_send_db") {
+                const source = await this.revalidateScopedTarget(plan.sourceQuery, plan.source, ["channel"]);
+                if (plan.mode === "all") {
+                    await this.adapter.writeSendAllBusesDb(source, plan.db, plan.includeMain);
+                    return {
+                        protocol: GATEWAY_PROTOCOL,
+                        ok: true,
+                        responseText: `${displayName(source)} réglé à ${formatDb(dbToFaderLevel(plan.db).db)} sur tous les bus${plan.includeMain ? " et Main LR" : ""}.`,
+                    };
+                }
+                const buses = await this.revalidateBusTargets(plan.busQueries, plan.buses);
+                await this.adapter.writeSendBatchDb(source, buses, plan.db, plan.includeMain);
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    ok: true,
+                    responseText: `${displayName(source)} réglé à ${formatDb(dbToFaderLevel(plan.db).db)} sur ${buses.map(displayName).join(", ")}${plan.includeMain ? " et Main LR" : ""}.`,
                 };
             }
 
@@ -897,6 +1058,118 @@ export class LocalMixerCommandGateway {
         };
     }
 
+    private async resolveExactBusQueries(
+        queries: string[],
+    ): Promise<{ targets: LocalMixerTarget[]; errorText?: string }> {
+        const targets: LocalMixerTarget[] = [];
+        for (const query of queries) {
+            const matches = await this.adapter.resolve(query, ["bus"]);
+            const resolved = safeUnique(matches);
+            if (!resolved || resolved.matchType === "fuzzy") {
+                const candidates = matches.length > 0 ? summarizeCandidates(matches) : "aucun";
+                return {
+                    targets: [],
+                    errorText: `Bus « ${query} » ambigu ou introuvable. Correspondances: ${candidates}. Reformule avec les noms exacts.`,
+                };
+            }
+            targets.push(resolved);
+        }
+        return { targets };
+    }
+
+    private async planBulkIntent(intent: BulkIntent): Promise<AnalyzeCommandResult> {
+        if (intent.kind === "bulk_bus_mute") {
+            if (intent.mode === "all") {
+                const stored = this.store.createPlan({ ...intent, buses: [] }, "write");
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    recognized: true,
+                    status: "ready",
+                    effect: "write",
+                    planToken: stored.token,
+                    expiresInMs: stored.expiresInMs,
+                    responseText: null,
+                };
+            }
+            const resolved = await this.resolveExactBusQueries(intent.busQueries);
+            if (resolved.errorText) {
+                const stored = this.store.createContinuation({ intent, candidates: [] });
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    recognized: true,
+                    status: "clarification",
+                    effect: "none",
+                    continuationToken: stored.token,
+                    expiresInMs: stored.expiresInMs,
+                    responseText: resolved.errorText,
+                };
+            }
+            const stored = this.store.createPlan({ ...intent, buses: resolved.targets }, "write");
+            return {
+                protocol: GATEWAY_PROTOCOL,
+                recognized: true,
+                status: "ready",
+                effect: "write",
+                planToken: stored.token,
+                expiresInMs: stored.expiresInMs,
+                responseText: null,
+            };
+        }
+
+        const sourceMatches = await this.adapter.resolve(intent.sourceQuery, ["channel"]);
+        const source = safeUnique(sourceMatches);
+        if (!source || source.matchType === "fuzzy") {
+            const stored = this.store.createContinuation({ intent, candidates: [] });
+            return {
+                protocol: GATEWAY_PROTOCOL,
+                recognized: true,
+                status: "clarification",
+                effect: "none",
+                continuationToken: stored.token,
+                expiresInMs: stored.expiresInMs,
+                responseText: `Source « ${intent.sourceQuery} » ambiguë ou introuvable. Reformule avec le nom exact de la voie.`,
+            };
+        }
+
+        if (intent.mode === "all") {
+            const stored = this.store.createPlan({ ...intent, source, buses: [] }, "write");
+            return {
+                protocol: GATEWAY_PROTOCOL,
+                recognized: true,
+                status: "ready",
+                effect: "write",
+                planToken: stored.token,
+                expiresInMs: stored.expiresInMs,
+                responseText: null,
+            };
+        }
+
+        const resolved = await this.resolveExactBusQueries(intent.busQueries);
+        if (resolved.errorText) {
+            const stored = this.store.createContinuation({ intent, candidates: [] });
+            return {
+                protocol: GATEWAY_PROTOCOL,
+                recognized: true,
+                status: "clarification",
+                effect: "none",
+                continuationToken: stored.token,
+                expiresInMs: stored.expiresInMs,
+                responseText: resolved.errorText,
+            };
+        }
+
+        const stored = this.store.createPlan({ ...intent, source, buses: resolved.targets }, "write");
+        return {
+            protocol: GATEWAY_PROTOCOL,
+            recognized: true,
+            status: "ready",
+            effect: "write",
+            planToken: stored.token,
+            expiresInMs: stored.expiresInMs,
+            responseText: null,
+        };
+    }
+
     private async planTargetIntent(
         intent: TargetIntent,
     ): Promise<AnalyzeCommandResult> {
@@ -988,7 +1261,7 @@ export class LocalMixerCommandGateway {
             };
         }
 
-        if ("sourceQuery" in continuation.value.intent) {
+        if ("busQueries" in continuation.value.intent || "sourceQuery" in continuation.value.intent) {
             const stored = this.store.createContinuation({
                 intent: continuation.value.intent,
                 candidates: [],
@@ -1035,6 +1308,18 @@ export class LocalMixerCommandGateway {
         }
 
         return this.readyTargetPlan(continuation.value.intent, resolved);
+    }
+
+    private async revalidateBusTargets(
+        queries: string[],
+        expected: LocalMixerTarget[],
+    ): Promise<LocalMixerTarget[]> {
+        const live: LocalMixerTarget[] = [];
+        for (let index = 0; index < queries.length; index += 1) {
+            const target = await this.revalidateScopedTarget(queries[index], expected[index], ["bus"]);
+            live.push(target);
+        }
+        return live;
     }
 
     private async revalidateScopedTarget(
