@@ -22,6 +22,7 @@ let level = 0.75;
 let writes = [];
 let muteWrites = [];
 let sendLevel = 0.5;
+let sendReadCalls = [];
 let sendWrites = [];
 let sendMuteWrites = [];
 let automationCalls = [];
@@ -72,6 +73,7 @@ const adapter = {
     async readSendLevel(source, destination) {
         assert.ok(["channel", "fxreturn", "aux"].includes(source.family));
         assert.equal(destination.family, "bus");
+        sendReadCalls.push({ source, destination });
         return sendLevel;
     },
     async writeSendLevel(source, destination, next) {
@@ -579,6 +581,50 @@ async function ready(text) {
     assert.equal(sendWrites[0].source.name, "Batterie");
     assert.equal(sendWrites[0].destination.name, "Anthony");
     assert.match(result.responseText, /Batterie.*Anthony/);
+}
+
+// OR4B4 route level reads are read-only and use source + bus resolution.
+{
+    sendReadCalls = [];
+    sendWrites = [];
+    const analyzed = await ready("niveau de Batterie sur Anthony");
+    assert.equal(analyzed.effect, "read");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(sendReadCalls.length, 1);
+    assert.equal(sendReadCalls[0].source.name, "Batterie");
+    assert.equal(sendReadCalls[0].destination.name, "Anthony");
+    assert.equal(sendWrites.length, 0);
+    assert.match(result.responseText, /Batterie.*Anthony/);
+}
+
+// FX return -> bus read uses the same read path.
+{
+    sendReadCalls = [];
+    const analyzed = await ready("quel est le niveau de Hall FX sur Anthony");
+    assert.equal(analyzed.effect, "read");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(sendReadCalls[0].source.family, "fxreturn");
+}
+
+// Aux return -> bus read uses the same read path.
+{
+    sendReadCalls = [];
+    const analyzed = await ready("donne le niveau de Playback dans Anthony");
+    assert.equal(analyzed.effect, "read");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(sendReadCalls[0].source.family, "aux");
 }
 
 // OR4B4 FX return -> bus uses the same route grammar.
