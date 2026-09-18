@@ -348,6 +348,7 @@ async function findNamedTargets(
 
     const candidates: Array<Omit<NamedTargetMatch, "matchType"> & { normalizedName: string }> = [];
 
+    const exactMatches: NamedTargetMatch[] = [];
     for (const family of families) {
         for (const index of namedTargetRange(family)) {
             const name = await readNamedTarget(family, index);
@@ -355,7 +356,8 @@ async function findNamedTargets(
             const normalizedName = normalizeMixerName(name);
 
             if (normalizedName === normalizedQuery) {
-                return [{ family, index, name, matchType: "exact" }];
+                exactMatches.push({ family, index, name, matchType: "exact" });
+                continue;
             }
 
             candidates.push({
@@ -366,6 +368,8 @@ async function findNamedTargets(
             });
         }
     }
+
+    if (exactMatches.length > 0) return exactMatches;
 
     const containsMatches = candidates
         .filter((candidate) => candidate.normalizedName.includes(normalizedQuery))
