@@ -33,7 +33,7 @@ Under this proposal, Laurent's default return is bus `Laurent`, while Thomas's d
 
 ## Deterministic Local Command Gateway — coordinated with LiveStageAssistant OR4
 
-Status: **OR4B2 merged on `main` as `0256b3d66dcdf6594f25e8aa0b6fe7ecec07bfed`; PR and post-merge Node 20.20/22 CI validated; Pi/LSA live read acceptance passed; controlled mixer writes pending**
+Status: **OR4B2 merged on `main` as `0256b3d66dcdf6594f25e8aa0b6fe7ecec07bfed`; PR and post-merge Node 20.20/22 CI validated; Pi/LSA live read/write acceptance passed**
 
 Product boundary:
 
@@ -95,10 +95,10 @@ Implement incrementally after XDG1 live acceptance:
 ### XDG4 — Pi acceptance
 
 - [x] LiveStageAssistant Local STDIO integration;
-- [ ] one controlled read + mute/unmute + absolute/relative level write;
+- [x] one controlled read + mute/unmute + absolute/relative level write;
 - [ ] ambiguity/confirmation and stale-plan tests;
 - [ ] fade/delay acceptance after XDG2;
-- [ ] target deterministic parser/plan overhead <100 ms typical on Pi5, excluding mixer network I/O;
+- [x] target deterministic parser/plan overhead <100 ms typical on Pi5, excluding mixer network I/O;
 - [ ] verify no LLM process or inference dependency is started by the gateway.
 
 
@@ -114,4 +114,4 @@ QLCPlus-MCP PR #8 merged as `b46f0c5d9aa859281976bec48090dd9a8f0bfffe`. QLCPlus-
 
 ## OR4C live acceptance readiness
 
-LiveStageAssistant now includes the domain-neutral Raspberry Pi/rack acceptance harness, merged into `realtime-voice-architecture` as `63019ba4089b7b9c6d06ac5b307914fca8645a5e`. PR and post-merge Python 3.11/3.12 CI are green. The harness exercises `lsa-command-gateway/v1`, records per-command latency evidence, blocks live writes unless explicitly enabled, and checks for newly spawned known local-LLM processes. Real Raspberry Pi/rack read-path acceptance was completed on 18 September 2026. LiveStageAssistant discovered the XMSeries `mixer` gateway under `lsa-command-gateway/v1`; `statut mixeur` analyzed and executed successfully as a read. The complete 4-case cross-repo corpus passed with analysis p50 3.0 ms / p95 6.4 ms and total p50 5.9 ms / p95 11.7 ms. Controlled mixer writes (mute/unmute and absolute/relative level) remain pending and are still the gate before XDG2/OR4B4 advanced semantics are unlocked.
+LiveStageAssistant now includes the domain-neutral Raspberry Pi/rack acceptance harness, merged into `realtime-voice-architecture` as `63019ba4089b7b9c6d06ac5b307914fca8645a5e`. PR and post-merge Python 3.11/3.12 CI are green. The harness exercises `lsa-command-gateway/v1`, records per-command latency evidence, blocks live writes unless explicitly enabled, and checks for newly spawned known local-LLM processes. Real Raspberry Pi/rack read-path acceptance was completed on 18 September 2026. LiveStageAssistant discovered the XMSeries `mixer` gateway under `lsa-command-gateway/v1`; `statut mixeur` analyzed and executed successfully as a read. The complete 4-case cross-repo corpus passed with analysis p50 3.0 ms / p95 6.4 ms and total p50 5.9 ms / p95 11.7 ms. Controlled mixer writes were live-validated on 18 September 2026 using channel `batterie`: `mute batterie`, `unmute batterie`, `mets le niveau de batterie à -30 dB`, and `monte batterie de 3 dB` all executed successfully. The operator confirmed the visible mixer state, including final level `-27 dB`. The run measured analysis p50 10.0 ms / p95 12.8 ms and total p50 78.8 ms / p95 84.1 ms. XDG1 is therefore live-accepted and XDG2/OR4B4 advanced semantics are unlocked.
