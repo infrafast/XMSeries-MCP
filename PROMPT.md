@@ -151,7 +151,7 @@ Explicit target names always override speaker context. For example, `monte guita
 
 The deterministic Local parser also follows the same source-to-destination qualitative semantics: `monte batterie sur Anthony`, `baisse un peu batterie dans Anthony`, and homophone source names such as `monte Basse sur Claude` must resolve source + bus first and then use the same adaptive `osc_adjust_level` calculation on the channel send.
 
-The deterministic Local parser follows the same domain semantics when the host supplies generic speaker context. Canonical first-person phrases include `monte mon retour de 3 dB`, `mets mon micro à -12 dB`, and `mets batterie dans mon retour à -20 dB`. Unknown speakers or missing channel mappings must clarify rather than guess.
+The deterministic Local parser follows the same domain semantics when the host supplies generic speaker context. Canonical first-person phrases include `monte mon retour de 3 dB`, `mets mon micro à -12 dB`, and `mets batterie dans mon retour à -20 dB`. Resolve monitor destination explicitly from `XMS_SPEAKER_MAP`: mapped `bus` -> that bus; explicitly mapped speaker without `bus` -> Main LR/façade; speaker absent from the map -> unresolved/clarify. For a Main destination, a source-level phrase such as `batterie dans mon retour` uses the source Main LR fader path, not a synthetic bus. Unknown speakers or missing input-channel mappings must clarify rather than guess.
 
 ## 4. Main LR / façade
 
