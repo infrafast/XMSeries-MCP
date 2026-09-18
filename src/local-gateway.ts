@@ -1341,7 +1341,7 @@ export class LocalMixerCommandGateway {
             };
         }
 
-        if ("kind" in continuation.value && continuation.value.kind === "speaker_context") {
+        if (!("intent" in continuation.value)) {
             return {
                 protocol: GATEWAY_PROTOCOL,
                 recognized: false,
@@ -1351,9 +1351,10 @@ export class LocalMixerCommandGateway {
             };
         }
 
-        if ("busQueries" in continuation.value.intent || "sourceQuery" in continuation.value.intent) {
+        const active = continuation.value;
+        if ("busQueries" in active.intent || "sourceQuery" in active.intent) {
             const stored = this.store.createContinuation({
-                intent: continuation.value.intent,
+                intent: active.intent,
                 candidates: [],
             });
             return {
@@ -1368,7 +1369,7 @@ export class LocalMixerCommandGateway {
         }
 
         const main = mainTarget(reply);
-        if (main) return this.readyTargetPlan(continuation.value.intent, main);
+        if (main) return this.readyTargetPlan(active.intent, main);
 
         const matches = await this.adapter.resolve(reply);
         const resolved = safeUnique(matches);
@@ -1382,11 +1383,11 @@ export class LocalMixerCommandGateway {
             };
         }
 
-        if (continuation.value.candidates.length > 0) {
-            const wasSuggested = continuation.value.candidates.some((candidate) =>
+        if (active.candidates.length > 0) {
+            const wasSuggested = active.candidates.some((candidate) =>
                 sameIdentity(candidate, resolved),
             );
-            if (!wasSuggested && continuation.value.candidates.some((candidate) => candidate.matchType !== "fuzzy")) {
+            if (!wasSuggested && active.candidates.some((candidate) => candidate.matchType !== "fuzzy")) {
                 return {
                     protocol: GATEWAY_PROTOCOL,
                     recognized: false,
@@ -1397,7 +1398,7 @@ export class LocalMixerCommandGateway {
             }
         }
 
-        return this.readyTargetPlan(continuation.value.intent, resolved);
+        return this.readyTargetPlan(active.intent, resolved);
     }
 
     private async revalidateBusTargets(
