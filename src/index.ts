@@ -583,6 +583,39 @@ const localCommandGateway = new LocalMixerCommandGateway({
     },
     listAutomations: async () => automation.list(),
     cancelAutomation: async (id) => automation.cancel(id),
+    muteBusBatch: async (targets, mute) => {
+        const buses = targets.map((target) => {
+            if (target.family !== "bus") throw new Error("Local bulk mute requires bus targets.");
+            return target.index;
+        });
+        const result = await muteBusBatch(buses, mute);
+        if (result.failures.length > 0) {
+            throw new Error(`Certaines commandes bus ont échoué : ${result.failures.join(" | ")}`);
+        }
+    },
+    muteAllBuses: async (mute, except = []) => {
+        const excluded = new Set(except.map((target) => {
+            if (target.family !== "bus") throw new Error("Local bulk mute exception must be a bus.");
+            return target.index;
+        }));
+        const buses = namedTargetRange("bus").filter((bus) => !excluded.has(bus));
+        const result = await muteBusBatch(buses, mute);
+        if (result.failures.length > 0) {
+            throw new Error(`Certaines commandes bus ont échoué : ${result.failures.join(" | ")}`);
+        }
+    },
+    writeSendBatchDb: async (source, destinations, db, includeMain) => {
+        if (source.family !== "channel") throw new Error("Local bulk send source must be a channel.");
+        const buses = destinations.map((target) => {
+            if (target.family !== "bus") throw new Error("Local bulk send destinations must be buses.");
+            return target.index;
+        });
+        await setChannelSendBatchDb(source.index, buses, db, includeMain);
+    },
+    writeSendAllBusesDb: async (source, db, includeMain) => {
+        if (source.family !== "channel") throw new Error("Local bulk send source must be a channel.");
+        await setChannelSendBatchDb(source.index, namedTargetRange("bus"), db, includeMain);
+    },
 });
 
 export function getRuntimeTools(
@@ -1274,6 +1307,37 @@ function rampAction(input: AutomationRampInput): AutomationRampAction {
         curve: input.curve,
         read: adapter.read,
         write: (level) => adapter.write(clampLevel(level)),
+    };
+}
+
+async function setChannelSendBatchDb(
+    channel: number,
+    buses: number[],
+    db: number,
+    includeMain = false,
+): Promise<{ buses: number[]; level: number; db: number; index: number; clipped: boolean }> {
+    const uniqueBuses = Array.from(new Set(buses));
+    const invalidBuses = uniqueBuses.filter((bus) => !Number.isInteger(bus) || bus < 1 || bus > oscRuntimeConfig.busCount);
+    if (invalidBuses.length > 0) {
+        throw new Error(`Invalid bus number(s): ${invalidBuses.join(", ")}. Configured bus range is 1 to ${oscRuntimeConfig.busCount}.`);
+    }
+    if (uniqueBuses.length === 0) {
+        throw new Error(`At least one valid bus number from 1 to ${oscRuntimeConfig.busCount} is required`);
+    }
+    const converted = dbToFaderLevel(db);
+    await osc.assertMixerOnline();
+    for (const bus of uniqueBuses) {
+        await osc.sendToBusUnchecked(channel, bus, converted.level);
+    }
+    if (includeMain) {
+        await osc.setFaderUnchecked(channel, converted.level);
+    }
+    return {
+        buses: uniqueBuses,
+        level: converted.level,
+        db: converted.db,
+        index: converted.index,
+        clipped: converted.clipped,
     };
 }
 
@@ -2653,20 +2717,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
             case "osc_send_to_all_buses_db": {
                 const { channel, db, includeMain } = args as { channel: number; db: number; includeMain?: boolean };
-                const converted = dbToFaderLevel(db);
-                const buses = namedTargetRange("bus");
-                await osc.assertMixerOnline();
-                for (const bus of buses) {
-                    await osc.sendToBusUnchecked(channel, bus, converted.level);
-                }
-                if (includeMain) {
-                    await osc.setFaderUnchecked(channel, converted.level);
-                }
+                const result = await setChannelSendBatchDb(channel, namedTargetRange("bus"), db, Boolean(includeMain));
                 return {
                     content: [
                         {
                             type: "text",
-                            text: `Set channel ${channel} send to all ${buses.length} buses to ${formatDb(converted.db)} (level ${converted.level.toFixed(4)}, table index ${converted.index}${converted.clipped ? ", clipped" : ""})${includeMain ? " and set its main LR fader to the same value" : ""}`,
+                            text: `Set channel ${channel} send to all ${result.buses.length} buses to ${formatDb(result.db)} (level ${result.level.toFixed(4)}, table index ${result.index}${result.clipped ? ", clipped" : ""})${includeMain ? " and set its main LR fader to the same value" : ""}`,
                         },
                     ],
                 };
@@ -2674,23 +2730,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
             case "osc_send_to_buses_db": {
                 const { channel, buses, db, includeMain } = args as { channel: number; buses: number[]; db: number; includeMain?: boolean };
-                const uniqueBuses = Array.from(new Set(buses)).filter((bus) => Number.isInteger(bus) && bus >= 1 && bus <= oscRuntimeConfig.busCount);
-                if (uniqueBuses.length === 0) {
-                    throw new Error(`At least one valid bus number from 1 to ${oscRuntimeConfig.busCount} is required`);
-                }
-                const converted = dbToFaderLevel(db);
-                await osc.assertMixerOnline();
-                for (const bus of uniqueBuses) {
-                    await osc.sendToBusUnchecked(channel, bus, converted.level);
-                }
-                if (includeMain) {
-                    await osc.setFaderUnchecked(channel, converted.level);
-                }
+                const result = await setChannelSendBatchDb(channel, buses, db, Boolean(includeMain));
                 return {
                     content: [
                         {
                             type: "text",
-                            text: `Set channel ${channel} send to buses ${uniqueBuses.join(", ")} to ${formatDb(converted.db)} (level ${converted.level.toFixed(4)}, table index ${converted.index}${converted.clipped ? ", clipped" : ""})${includeMain ? " and set its main LR fader to the same value" : ""}`,
+                            text: `Set channel ${channel} send to buses ${result.buses.join(", ")} to ${formatDb(result.db)} (level ${result.level.toFixed(4)}, table index ${result.index}${result.clipped ? ", clipped" : ""})${includeMain ? " and set its main LR fader to the same value" : ""}`,
                         },
                     ],
                 };
