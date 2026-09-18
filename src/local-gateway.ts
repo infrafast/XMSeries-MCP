@@ -766,6 +766,20 @@ function parseIntent(raw: string): Intent | null {
         };
     }
 
+    const directionalAbsoluteTarget = text.match(
+        /^\s*(?:monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:niveau|volume|fader)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
+    );
+    if (directionalAbsoluteTarget?.[1] && directionalAbsoluteTarget[2] && directionalAbsoluteTarget[3]) {
+        const unit: LevelUnit = directionalAbsoluteTarget[3] === "%" ? "percent" : "db";
+        const value = unit === "percent"
+            ? parsePercent(directionalAbsoluteTarget[2])
+            : parseDb(directionalAbsoluteTarget[2]);
+        const targetQuery = cleanTarget(directionalAbsoluteTarget[1]);
+        if (value !== null && targetQuery) {
+            return { kind: "set_level", targetQuery, unit, value };
+        }
+    }
+
     const mutePatterns: Array<{ re: RegExp; mute: boolean }> = [
         { re: /^\s*(?:mute|coupe|couper|desactive|désactive)\s+(?:le\s+son\s+de\s+)?(.+?)\s*$/iu, mute: true },
         { re: /^\s*(?:unmute|demute|démute|reactive|réactive|remets)\s+(?:le\s+son\s+de\s+)?(.+?)\s*$/iu, mute: false },
