@@ -104,4 +104,4 @@ Implement incrementally after XDG1 live acceptance:
 
 ## Cross-repository OR4B3 status
 
-LiveStageAssistant OR4B3 is now in implementation on `or4b3-deterministic-local-engine`: a dedicated non-LLM Local engine and generic `lsa-command-gateway/v1` orchestrator are present with automated tests added. CI and Pi end-to-end acceptance remain pending.
+LiveStageAssistant OR4B3 is merged into `realtime-voice-architecture` as `e244af4a2f5d474005ff6803c5818aa25f4f87aa`. The dedicated non-LLM Local engine and generic `lsa-command-gateway/v1` orchestrator passed PR CI on Python 3.11/3.12; post-merge CI is running. Pi end-to-end acceptance remains pending.
