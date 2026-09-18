@@ -647,6 +647,27 @@ const localCommandGateway = new LocalMixerCommandGateway({
             targetDb: payload.targetDb,
         };
     },
+    previewQualitativeLevel: async (target, direction, amount) => {
+        const beforeLevel = await localGatewayReadLevel(target);
+        const computed = computeRelativeLevelAdjustment(beforeLevel, { direction, amount });
+        return {
+            beforeDb: computed.beforeDb,
+            targetDb: computed.targetDb,
+            targetLevel: computed.targetLevel,
+        };
+    },
+    previewQualitativeSend: async (source, destination, direction, amount) => {
+        if (source.family !== "channel" || destination.family !== "bus") {
+            throw new Error("Local qualitative send preview requires a channel source and bus destination.");
+        }
+        const beforeLevel = await osc.getSendToBus(source.index, destination.index);
+        const computed = computeRelativeLevelAdjustment(beforeLevel, { direction, amount });
+        return {
+            beforeDb: computed.beforeDb,
+            targetDb: computed.targetDb,
+            targetLevel: computed.targetLevel,
+        };
+    },
 });
 
 export function getRuntimeTools(
