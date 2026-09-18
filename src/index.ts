@@ -634,6 +634,19 @@ const localCommandGateway = new LocalMixerCommandGateway({
             targetDb: payload.targetDb,
         };
     },
+    adjustQualitativeSend: async (source, destination, direction, amount) => {
+        const payload = JSON.parse(
+            await applyRelativeLevelAdjustment({
+                target: localGatewaySendAutomationTarget(source, destination),
+                direction,
+                amount,
+            }),
+        ) as { beforeDb: number; targetDb: number };
+        return {
+            beforeDb: payload.beforeDb,
+            targetDb: payload.targetDb,
+        };
+    },
 });
 
 export function getRuntimeTools(
