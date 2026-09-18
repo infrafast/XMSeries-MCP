@@ -76,7 +76,7 @@ Shared dependency:
 
 Implement incrementally after XDG1 live acceptance.
 
-OR4B4 PR #12 implements the first advanced deterministic Local slice. It deliberately reuses the existing live resolver, send paths and `AutomationEngine`; no OSC or automation protocol logic is duplicated in the Local parser.
+OR4B4 PR #12 merged on `main` as `968c94f69d4bd007191fff1762101707a94c70b5`. PR CI is green on Node 20.20 and 22. This first advanced deterministic Local slice deliberately reuses the existing live resolver, send paths and `AutomationEngine`; no OSC or automation protocol logic is duplicated in the Local parser. Live Pi acceptance of the new advanced commands remains pending.
 
 - [~] source -> destination channel-to-bus sends: absolute/relative level commands implemented on PR #12; ownership-phrase/live acceptance still pending;
 - [~] dB and percent, absolute and relative values: implemented for single targets and channel-to-bus sends on PR #12; relative percent is defined deterministically as percentage points on normalized fader level;
