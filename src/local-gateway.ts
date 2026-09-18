@@ -271,7 +271,7 @@ function parseFlexibleTemporalIntent(raw: string): Intent | null {
     let relativeMatch: RegExpMatchArray | null = null;
     if (!rangeMatch) {
         absoluteMatch = text.match(
-            /\b(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\b/iu,
+            /(?:^|\s)(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\b/iu,
         );
         relativeMatch = text.match(
             /\b(?:de|by)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\b/iu,
