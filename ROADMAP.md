@@ -80,10 +80,10 @@ OR4B4 PR #12 merged on `main` as `968c94f69d4bd007191fff1762101707a94c70b5`. PR 
 
 - [~] source -> destination channel-to-bus sends: absolute/relative level commands implemented on PR #12; ownership-phrase/live acceptance still pending;
 - [~] dB and percent, absolute and relative values: implemented for single targets and channel-to-bus sends on PR #12; relative percent is defined deterministically as percentage points on normalized fader level;
-- [ ] grouped/bulk operations;
+- [~] grouped/bulk operations: this branch adds deterministic Local parity for selected/all/all-except bus mute and channel-send dB writes to selected/all buses, including explicit Main LR inclusion; live Pi acceptance pending;
 - [ ] speaker-context defaults;
 - [~] fades/ramps and delayed actions through the existing MCP-side automation engine: PR #12 implements fade-in/out, progressive absolute/relative ramps, explicit from/to ranges, source-to-bus ramps and delayed level changes. Live Pi validation now confirms a real progressive fade on channel `batterie` to -30 dB over 2 seconds and a real delayed action (`mets batterie à -27 dB dans 2 secondes`) that held the prior level before applying the target after the requested delay. Source-to-bus ramps remain pending;
-- [~] automation status/cancel through Local natural commands: PR #13 merged as `43aa59c79b8424993d20339610c40309cdd2117f` with Node 20.20/22 CI green; supports `statut des automations`, explicit `auto-N` cancellation, and `annule la dernière automation`; live Pi acceptance pending;
+- [x] automation status/cancel through Local natural commands: PR #13 merged as `43aa59c79b8424993d20339610c40309cdd2117f` with Node 20.20/22 CI green; live Pi acceptance confirmed that a long fade could be listed as running, cancelled via `annule la dernière automation`, and the channel then restored to -27 dB;
 - [x] preserve level vs mute semantics and all protocol-specific unsupported-operation guards by delegating execution to existing resolver/OSC/automation adapters.
 
 Temporal grammar in this slice is explicit: `en N secondes` is ramp duration; `dans N secondes` is delay before an action. Fade-in/out without an explicit target defaults to Main LR/façade.
@@ -101,7 +101,7 @@ Temporal grammar in this slice is explicit: `en N secondes` is ramp duration; `d
 - [x] LiveStageAssistant Local STDIO integration;
 - [x] one controlled read + mute/unmute + absolute/relative level write;
 - [ ] ambiguity/confirmation and stale-plan tests;
-- [ ] fade/delay acceptance after XDG2;
+- [x] fade/delay acceptance after XDG2;
 - [x] target deterministic parser/plan overhead <100 ms typical on Pi5, excluding mixer network I/O;
 - [ ] verify no LLM process or inference dependency is started by the gateway.
 
