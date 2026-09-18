@@ -20,6 +20,7 @@ let writes = [];
 let muteWrites = [];
 let sendLevel = 0.5;
 let sendWrites = [];
+let automationCalls = [];
 let stale = false;
 
 const adapter = {
@@ -62,6 +63,22 @@ const adapter = {
     async writeSendLevel(source, destination, next) {
         sendWrites.push({ source, destination, level: next });
         sendLevel = next;
+    },
+    async startLevelRamp(target, toLevel, durationSeconds, fromLevel) {
+        automationCalls.push({ kind: "ramp", target, toLevel, durationSeconds, fromLevel });
+        return "auto-level";
+    },
+    async startSendRamp(source, destination, toLevel, durationSeconds, fromLevel) {
+        automationCalls.push({ kind: "send-ramp", source, destination, toLevel, durationSeconds, fromLevel });
+        return "auto-send";
+    },
+    async scheduleLevel(target, toLevel, delaySeconds) {
+        automationCalls.push({ kind: "delay", target, toLevel, delaySeconds });
+        return "auto-delay";
+    },
+    async scheduleSend(source, destination, toLevel, delaySeconds) {
+        automationCalls.push({ kind: "send-delay", source, destination, toLevel, delaySeconds });
+        return "auto-send-delay";
     },
 };
 
@@ -286,6 +303,79 @@ async function ready(text) {
     assert.equal(result.ok, true);
     assert.equal(sendWrites.length, 1);
     assert.ok(Math.abs(sendWrites[0].level - 0.5) < 1e-9);
+}
+
+// OR4B4 fade-out defaults to the named target and starts background automation.
+{
+    automationCalls = [];
+    const analyzed = await ready("fade out Voix en 10 secondes");
+    assert.equal(analyzed.effect, "write");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(automationCalls.length, 1);
+    assert.equal(automationCalls[0].kind, "ramp");
+    assert.equal(automationCalls[0].target.name, "Voix");
+    assert.equal(automationCalls[0].durationSeconds, 10);
+    assert.equal(automationCalls[0].toLevel, 0);
+    assert.match(result.responseText, /auto-level/);
+}
+
+// OR4B4 fade-out without a target owns Main LR in the mixer domain.
+{
+    automationCalls = [];
+    const analyzed = await ready("fade out en 5 secondes");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(automationCalls[0].target.family, "main");
+}
+
+// OR4B4 progressive relative percent ramp.
+{
+    automationCalls = [];
+    level = 0.5;
+    const analyzed = await ready("monte progressivement Voix de 10% en 4 secondes");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(automationCalls[0].kind, "ramp");
+    assert.ok(Math.abs(automationCalls[0].toLevel - 0.6) < 1e-9);
+    assert.equal(automationCalls[0].durationSeconds, 4);
+}
+
+// OR4B4 delayed level uses "dans" as a delay, not a ramp.
+{
+    automationCalls = [];
+    const analyzed = await ready("mets Voix à -15 dB dans 2 secondes");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(automationCalls[0].kind, "delay");
+    assert.equal(automationCalls[0].delaySeconds, 2);
+}
+
+// OR4B4 source -> bus ramp reuses send automation.
+{
+    automationCalls = [];
+    const analyzed = await ready("monte progressivement batterie sur Anthony à -10 dB en 3 secondes");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(automationCalls[0].kind, "send-ramp");
+    assert.equal(automationCalls[0].source.name, "Batterie");
+    assert.equal(automationCalls[0].destination.name, "Anthony");
+    assert.equal(automationCalls[0].durationSeconds, 3);
 }
 
 // Default/cloud inventory is unchanged; Local adds only two reserved tools.
