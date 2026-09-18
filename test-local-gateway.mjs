@@ -23,6 +23,7 @@ let writes = [];
 let muteWrites = [];
 let sendLevel = 0.5;
 let sendWrites = [];
+let sendMuteWrites = [];
 let automationCalls = [];
 let automationJobs = [];
 let bulkMuteCalls = [];
@@ -76,6 +77,9 @@ const adapter = {
     async writeSendLevel(source, destination, next) {
         sendWrites.push({ source, destination, level: next });
         sendLevel = next;
+    },
+    async setSendMute(source, destination, mute) {
+        sendMuteWrites.push({ source, destination, mute });
     },
     async startLevelRamp(target, toLevel, durationSeconds, fromLevel) {
         automationCalls.push({ kind: "ramp", target, toLevel, durationSeconds, fromLevel });
@@ -400,6 +404,62 @@ async function ready(text) {
     assert.equal(qualitativeSendCalls[0].source.name, "Batterie");
     assert.equal(qualitativeSendCalls[0].destination.name, "Anthony");
     assert.equal(qualitativeSendCalls[0].direction, "up");
+}
+
+// Route mute is distinct from whole-source mute.
+{
+    muteWrites = [];
+    sendMuteWrites = [];
+    const analyzed = await ready("mute Batterie sur Anthony");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(sendMuteWrites.length, 1);
+    assert.equal(sendMuteWrites[0].source.name, "Batterie");
+    assert.equal(sendMuteWrites[0].source.family, "channel");
+    assert.equal(sendMuteWrites[0].destination.name, "Anthony");
+    assert.equal(sendMuteWrites[0].mute, true);
+    assert.equal(muteWrites.length, 0);
+}
+
+// Route unmute preserves the same source/destination identity.
+{
+    sendMuteWrites = [];
+    const analyzed = await ready("unmute Batterie sur Anthony");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(sendMuteWrites[0].mute, false);
+}
+
+// FX return -> bus mute uses the route-mute path.
+{
+    sendMuteWrites = [];
+    const analyzed = await ready("coupe Hall FX sur Anthony");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(sendMuteWrites[0].source.family, "fxreturn");
+    assert.equal(sendMuteWrites[0].destination.family, "bus");
+}
+
+// Aux return -> bus unmute uses the route-mute path.
+{
+    sendMuteWrites = [];
+    const analyzed = await ready("réactive Playback dans Anthony");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(sendMuteWrites[0].source.family, "aux");
+    assert.equal(sendMuteWrites[0].mute, false);
 }
 
 // Mute/unmute
