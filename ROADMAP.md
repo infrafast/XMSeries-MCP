@@ -33,7 +33,7 @@ Under this proposal, Laurent's default return is bus `Laurent`, while Thomas's d
 
 ## Deterministic Local Command Gateway — coordinated with LiveStageAssistant OR4
 
-Status: **shared core available; QLCPlus OR4B1 integration in progress; XMSeries OR4B2 next**
+Status: **shared core available; QLCPlus OR4B1 merged and CI-validated; XMSeries OR4B2 next**
 
 Product boundary:
 
@@ -44,7 +44,7 @@ Product boundary:
 
 Shared dependency:
 
-- consume the versioned `@infrafast/stage-command-core` package; QLCPlus-MCP is validating the first OR4B1 vertical slice before XMSeries OR4B2 begins;
+- consume the versioned `@infrafast/stage-command-core` package; QLCPlus-MCP has merged the first OR4B1 vertical slice with automated CI green, while Pi/LSA live acceptance remains pending;
 - pin an exact compatible version/commit in `package-lock.json`;
 - shared code owns only tokenizer/matcher primitives, raw+normalized spans, generic value/duration extraction, gateway wire types, clarification/plan-token lifecycle and corpus helpers;
 - mixer actions, synonyms, target families, name resolution, dB semantics, routing and OSC remain XMSeries-MCP-owned.
