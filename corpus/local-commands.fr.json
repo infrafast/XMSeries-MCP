@@ -615,6 +615,46 @@
       }
     },
     {
+      "name": "speaker-main-monitor",
+      "utterance": "monte mon retour de 3 dB",
+      "context": {
+        "speaker": {
+          "name": "Thomas",
+          "confidence": 0.95,
+          "backend": "resemblyzer"
+        }
+      },
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "family": "main",
+          "name": "Main LR"
+        }
+      }
+    },
+    {
+      "name": "speaker-main-source",
+      "utterance": "mets Batterie dans mon retour à -20 dB",
+      "context": {
+        "speaker": {
+          "name": "Thomas",
+          "confidence": 0.95,
+          "backend": "resemblyzer"
+        }
+      },
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "family": "channel",
+          "name": "Batterie"
+        }
+      }
+    },
+    {
       "name": "speaker-unknown",
       "utterance": "monte mon retour de 3 dB",
       "context": {

@@ -100,7 +100,7 @@ Both MCP transports read these values at startup:
 XMS_SPEAKER_MAP='{"laurent":{"bus":"Laurent","channel":"Talk Laurent"},"marie":{"bus":"Marie"}}'
 ```
 
-If a known speaker has no explicit entry, `osc_get_speaker_context` defaults `busName` to the speaker name and leaves `channelName` empty. Use explicit entries when mixer labels differ from speaker names.
+Speaker destinations are explicit and fail-closed: if a speaker has an explicit `bus` in `XMS_SPEAKER_MAP`, that bus is the personal monitor destination; if the speaker is explicitly mapped but has no `bus`, the personal monitor destination is Main LR / façade; if the speaker is absent from `XMS_SPEAKER_MAP`, the context is unresolved and commands such as `mon retour` require clarification. `channel` remains optional and is used for first-person input phrases such as `mon micro` / `ma voix`.
 
 In HTTP mode, the `/mcp` admin page exposes this same speaker mapping as `XMS_SPEAKER_MAP` in the configuration form. Saving it updates the running HTTP server immediately; for `stdio` mode, set `XMS_SPEAKER_MAP` in the MCP client config `env` before launching the server.
 
@@ -548,8 +548,8 @@ Important syntax rules:
 - French STT robustness: `montre Batterie` and `montre le volume` are accepted as likely `monte` transcriptions in mixer-level command shapes. Explicit display/read forms such as `montre-moi le niveau de Batterie` are **not** rewritten into writes.
 - DCA writes are not yet part of the deterministic Local write surface.
 - Group/bulk natural-language commands are supported for bus-master mute/unmute and channel-send dB writes to selected/all buses, including an explicit Main LR/façade inclusion.
-- Speaker-context defaults are supported for first-person phrases when the host supplies recognized-speaker context. XMSeries-MCP remains responsible for mapping the speaker through `XMS_SPEAKER_MAP` / `osc_get_speaker_context`.
-- Canonical first-person examples: `monte mon retour de 3 dB`, `mets mon micro à -12 dB`, `mets batterie dans mon retour à -20 dB`. If the speaker is unknown or the required bus/channel mapping is unavailable, the Local parser asks for clarification instead of guessing.
+- Speaker-context defaults are supported for first-person phrases when the host supplies recognized-speaker context. XMSeries-MCP remains responsible for mapping the speaker through `XMS_SPEAKER_MAP` / `osc_get_speaker_context`. An explicit mapped `bus` means that bus; an explicitly mapped speaker without a bus means Main LR/façade; an unmapped speaker is unresolved and must clarify.
+- Canonical first-person examples: `monte mon retour de 3 dB`, `mets mon micro à -12 dB`, `mets batterie dans mon retour à -20 dB`. For a Main-destination speaker, `mon retour` controls Main LR and `batterie dans mon retour` controls Batterie’s Main LR fader path rather than inventing a bus. If the speaker is unknown or a required input channel mapping is unavailable, the Local parser asks for clarification instead of guessing.
 
 The deterministic grammar is not intended to accept arbitrary prose. For temporal commands it is deliberately **flexible on constituent order but strict on semantic markers**. For example, `baisse progressivement batterie à -30 dB en 2 secondes`, `baisse progressivement en 2 secondes batterie à -30 dB`, and `en 2 secondes baisse progressivement batterie à -30 dB` resolve to the same ramp plan. A bare `-30 dB` without `à`/`de` remains unsupported rather than guessed. If a phrase is not documented and is not covered by parser tests, treat it as unsupported rather than assuming the parser will infer the intent.
 

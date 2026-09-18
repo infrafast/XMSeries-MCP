@@ -29,6 +29,7 @@ export interface LocalMixerTarget {
 export interface LocalSpeakerMixerContext {
     speaker: string;
     known: boolean;
+    monitorDestination: { kind: "bus"; name: string } | { kind: "main" } | null;
     busName: string | null;
     channelName: string | null;
     source: string;
@@ -1070,16 +1071,31 @@ export class LocalMixerCommandGateway {
 
         let expanded = text;
         if (hasMonitorPhrase) {
-            if (!resolved.busName) {
+            const destination = resolved.monitorDestination;
+            if (!destination) {
                 return {
                     text,
-                    clarification: "Aucun retour/bus n'est configuré pour ce locuteur. Précise la destination.",
+                    clarification: "Aucune destination de retour n'est configurée pour ce locuteur. Précise la destination.",
                 };
             }
-            expanded = expanded.replace(
-                /\b(?:mon\s+retour|mes\s+retours|mon\s+wedge|mes\s+ears)\b/giu,
-                resolved.busName,
-            );
+            const monitorPhrase = "(?:mon\\s+retour|mes\\s+retours|mon\\s+wedge|mes\\s+ears)";
+            if (destination.kind === "main") {
+                // Source -> "my return" means source -> Main LR. XMSeries owns this
+                // semantic rewrite; LSA transports only neutral speaker metadata.
+                expanded = expanded.replace(
+                    new RegExp(`\\s+(?:sur|dans|vers|chez|to|in)\\s+${monitorPhrase}\\b`, "giu"),
+                    " ",
+                );
+                expanded = expanded.replace(
+                    new RegExp(`\\b${monitorPhrase}\\b`, "giu"),
+                    "main",
+                );
+            } else {
+                expanded = expanded.replace(
+                    new RegExp(`\\b${monitorPhrase}\\b`, "giu"),
+                    destination.name,
+                );
+            }
         }
         if (hasInputPhrase) {
             if (!resolved.channelName) {

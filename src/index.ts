@@ -23,6 +23,11 @@ import {
     type LocalMixerTarget,
     withLocalGatewayTools,
 } from "./local-gateway.js";
+import {
+    parseSpeakerMap,
+    resolveSpeakerMixerContext,
+    type SpeakerMixerMapping,
+} from "./speaker-context.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -138,36 +143,6 @@ function parseOscProtocol(value?: string): OSCProtocol {
     throw new Error(`Invalid OSC_PROTOCOL "${value}". Expected "OSCX32M32" or "OSCXR".`);
 }
 
-interface SpeakerMixerMapping {
-    bus?: string;
-    channel?: string;
-    enabled?: boolean;
-}
-
-function parseSpeakerMap(raw: string): Record<string, SpeakerMixerMapping> {
-    if (!raw.trim()) return {};
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        throw new Error("XMS_SPEAKER_MAP must be a JSON object.");
-    }
-
-    const normalized: Record<string, SpeakerMixerMapping> = {};
-    for (const [speaker, value] of Object.entries(parsed)) {
-        const key = String(speaker || "").trim().toLowerCase();
-        if (!key) continue;
-        if (!value || typeof value !== "object" || Array.isArray(value)) {
-            throw new Error(`XMS_SPEAKER_MAP.${key} must be an object.`);
-        }
-        const mapping = value as Record<string, unknown>;
-        normalized[key] = {
-            bus: mapping.bus === undefined ? undefined : String(mapping.bus).trim(),
-            channel: mapping.channel === undefined ? undefined : String(mapping.channel).trim(),
-            enabled: mapping.enabled === undefined ? undefined : Boolean(mapping.enabled),
-        };
-    }
-    return normalized;
-}
-
 function speakerMapFromEnv(): Record<string, SpeakerMixerMapping> {
     const raw = process.env.XMS_SPEAKER_MAP || "";
     if (!raw.trim()) return {};
@@ -195,18 +170,7 @@ export function configureSpeakerMapConfig(input: unknown): {
 }
 
 function speakerContextObject(speaker: string) {
-    const normalized = String(speaker || "unknown").trim().toLowerCase();
-    const mappings = speakerMapFromEnv();
-    const mapping = mappings[normalized];
-    const enabled = mapping?.enabled !== false;
-    const known = Boolean(normalized && normalized !== "unknown" && enabled);
-    return {
-        speaker: normalized || "unknown",
-        known,
-        busName: known ? (mapping?.bus || normalized) : null,
-        channelName: known ? (mapping?.channel || null) : null,
-        source: mapping ? "XMS_SPEAKER_MAP" : "default-speaker-name",
-    };
+    return resolveSpeakerMixerContext(speaker, speakerMapFromEnv());
 }
 
 function speakerContextPayload(speaker: string): string {
