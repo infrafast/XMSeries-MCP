@@ -301,6 +301,45 @@
       }
     },
     {
+      "name": "send-read-channel",
+      "utterance": "niveau de Batterie sur Anthony",
+      "expected": {
+        "status": "ready",
+        "effect": "read",
+        "operation": {
+          "kind": "read_send",
+          "source": "Batterie",
+          "destination": "Anthony"
+        }
+      }
+    },
+    {
+      "name": "send-read-fx",
+      "utterance": "quel est le niveau de Hall FX sur Anthony",
+      "expected": {
+        "status": "ready",
+        "effect": "read",
+        "operation": {
+          "kind": "read_send",
+          "source": "Hall FX",
+          "destination": "Anthony"
+        }
+      }
+    },
+    {
+      "name": "send-read-aux",
+      "utterance": "donne le niveau de Playback dans Anthony",
+      "expected": {
+        "status": "ready",
+        "effect": "read",
+        "operation": {
+          "kind": "read_send",
+          "source": "Playback",
+          "destination": "Anthony"
+        }
+      }
+    },
+    {
       "name": "send-absolute",
       "utterance": "mets Batterie sur Anthony à -20 dB",
       "expected": {
