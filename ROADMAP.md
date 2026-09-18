@@ -12,7 +12,7 @@ Implemented semantics for `XMS_SPEAKER_MAP` and `osc_get_speaker_context`:
 - Model the destination explicitly as `bus` or `main` rather than using a synthetic bus name such as `main`.
 - Route source-level commands according to the destination type: source-to-bus commands use channel/FX/aux sends; source-to-Main commands use the source's own Main LR fader path.
 - Route monitor-master commands according to the destination type: a bus destination controls the bus master; a Main destination controls the Main LR fader.
-- Keep mute semantics conservative, especially for source-to-Main requests, so a missing dedicated Main-send mute cannot silently broaden into a whole-source mute.
+- [x] Keep mute semantics conservative for source-to-Main requests: monitor-master mute maps to Main LR, while source→Main mute requests fail closed instead of broadening into whole-source mute.
 
 Example intended future configuration semantics:
 
