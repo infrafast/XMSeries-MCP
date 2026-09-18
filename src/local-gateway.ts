@@ -67,6 +67,17 @@ export interface LocalMixerGatewayAdapter {
         direction: LocalRelativeDirection,
         amount: LocalRelativeAmount,
     ): Promise<{ beforeDb: number; targetDb: number }>;
+    previewQualitativeLevel(
+        target: LocalMixerTarget,
+        direction: LocalRelativeDirection,
+        amount: LocalRelativeAmount,
+    ): Promise<{ beforeDb: number; targetDb: number; targetLevel: number }>;
+    previewQualitativeSend(
+        source: LocalMixerTarget,
+        destination: LocalMixerTarget,
+        direction: LocalRelativeDirection,
+        amount: LocalRelativeAmount,
+    ): Promise<{ beforeDb: number; targetDb: number; targetLevel: number }>;
 }
 
 type LevelUnit = "db" | "percent";
@@ -82,7 +93,9 @@ type Intent =
     | { kind: "send_adjust_level"; sourceQuery: string; destinationQuery: string; unit: LevelUnit; delta: number }
     | { kind: "send_adjust_level_qualitative"; sourceQuery: string; destinationQuery: string; direction: LocalRelativeDirection; amount: LocalRelativeAmount }
     | { kind: "ramp_level"; targetQuery: string; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
+    | { kind: "ramp_level_qualitative"; targetQuery: string; direction: LocalRelativeDirection; amount: LocalRelativeAmount; durationSeconds: number }
     | { kind: "send_ramp_level"; sourceQuery: string; destinationQuery: string; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
+    | { kind: "send_ramp_level_qualitative"; sourceQuery: string; destinationQuery: string; direction: LocalRelativeDirection; amount: LocalRelativeAmount; durationSeconds: number }
     | { kind: "delay_level"; targetQuery: string; value: LevelValue; delaySeconds: number }
     | { kind: "send_delay_level"; sourceQuery: string; destinationQuery: string; value: LevelValue; delaySeconds: number }
     | { kind: "automation_list" }
@@ -105,7 +118,9 @@ type LocalPlan =
     | { kind: "send_adjust_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; unit: LevelUnit; delta: number }
     | { kind: "send_adjust_level_qualitative"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; direction: LocalRelativeDirection; amount: LocalRelativeAmount }
     | { kind: "ramp_level"; targetQuery: string; target: LocalMixerTarget; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
+    | { kind: "ramp_level_qualitative"; targetQuery: string; target: LocalMixerTarget; direction: LocalRelativeDirection; amount: LocalRelativeAmount; durationSeconds: number }
     | { kind: "send_ramp_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
+    | { kind: "send_ramp_level_qualitative"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; direction: LocalRelativeDirection; amount: LocalRelativeAmount; durationSeconds: number }
     | { kind: "delay_level"; targetQuery: string; target: LocalMixerTarget; value: LevelValue; delaySeconds: number }
     | { kind: "send_delay_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; value: LevelValue; delaySeconds: number }
     | { kind: "automation_list" }
@@ -260,6 +275,14 @@ function parseFlexibleTemporalIntent(raw: string): Intent | null {
     );
     const direction = directionMatch?.[1] ? simplify(directionMatch[1]) : "";
     const isDown = ["baisse", "diminue", "lower", "decrease"].includes(direction);
+    const amountMatch = text.match(/\b(un\s+peu|beaucoup|a\s+little|a\s+lot|slightly)\b/iu);
+    const amountText = simplify(amountMatch?.[1] || "");
+    const qualitativeAmount: LocalRelativeAmount =
+        amountText === "un peu" || amountText === "a little" || amountText === "slightly"
+            ? "little"
+            : amountText === "beaucoup" || amountText === "a lot"
+              ? "much"
+              : "normal";
 
     const fadeMatch = text.match(/\bfade[ -]?(in|out)\b/iu);
     const hasProgressiveMarker =
@@ -314,6 +337,7 @@ function parseFlexibleTemporalIntent(raw: string): Intent | null {
     remainder = remainder
         .replace(/\bfade[ -]?(?:in|out)\b/giu, " ")
         .replace(/\b(?:progressivement|progressively|gradually|rampe|ramp)\b/giu, " ")
+        .replace(/\b(?:un\s+peu|beaucoup|a\s+little|a\s+lot|slightly)\b/giu, " ")
         .replace(/\b(?:fais|faire)\b/giu, " ")
         .replace(
             /\b(?:monte|augmente|raise|increase|baisse|diminue|lower|decrease|mets|met|regle|règle|fixe|set)\b/giu,
@@ -374,7 +398,25 @@ function parseFlexibleTemporalIntent(raw: string): Intent | null {
                 value: simplify(fadeMatch[1]) === "out" ? -120 : 0,
             };
         } else if (direction) {
-            delta = { unit: "db", value: isDown ? -3 : 3 };
+            const qualitativeDirection: LocalRelativeDirection = isDown ? "down" : "up";
+            if (routeMatch) {
+                if (!sourceQuery || !destinationQuery) return null;
+                return {
+                    kind: "send_ramp_level_qualitative",
+                    sourceQuery,
+                    destinationQuery,
+                    direction: qualitativeDirection,
+                    amount: qualitativeAmount,
+                    durationSeconds,
+                };
+            }
+            return {
+                kind: "ramp_level_qualitative",
+                targetQuery: targetQuery || "main",
+                direction: qualitativeDirection,
+                amount: qualitativeAmount,
+                durationSeconds,
+            };
         } else {
             return null;
         }
@@ -1102,6 +1144,7 @@ export class LocalMixerCommandGateway {
             intent.kind === "send_adjust_level" ||
             intent.kind === "send_adjust_level_qualitative" ||
             intent.kind === "send_ramp_level" ||
+            intent.kind === "send_ramp_level_qualitative" ||
             intent.kind === "send_delay_level"
         ) {
             return await this.planSendIntent(intent);
@@ -1241,6 +1284,7 @@ export class LocalMixerCommandGateway {
                 plan.kind === "send_adjust_level" ||
                 plan.kind === "send_adjust_level_qualitative" ||
                 plan.kind === "send_ramp_level" ||
+                plan.kind === "send_ramp_level_qualitative" ||
                 plan.kind === "send_delay_level"
             ) {
                 const source = await this.revalidateScopedTarget(plan.sourceQuery, plan.source, ["channel"]);
@@ -1287,6 +1331,26 @@ export class LocalMixerCommandGateway {
                     };
                 }
 
+                if (plan.kind === "send_ramp_level_qualitative") {
+                    const preview = await this.adapter.previewQualitativeSend(
+                        source,
+                        destination,
+                        plan.direction,
+                        plan.amount,
+                    );
+                    const jobId = await this.adapter.startSendRamp(
+                        source,
+                        destination,
+                        preview.targetLevel,
+                        plan.durationSeconds,
+                    );
+                    return {
+                        protocol: GATEWAY_PROTOCOL,
+                        ok: true,
+                        responseText: `Automation ${jobId} démarrée : ${displayName(source)} → ${displayName(destination)} de ${formatDb(preview.beforeDb)} vers ${formatDb(preview.targetDb)} sur ${plan.durationSeconds} s.`,
+                    };
+                }
+
                 const current = await this.adapter.readSendLevel(source, destination);
                 const toLevel = plan.delta
                     ? adjustedLevel(current, plan.delta.unit, plan.delta.value).level
@@ -1309,6 +1373,24 @@ export class LocalMixerCommandGateway {
                     protocol: GATEWAY_PROTOCOL,
                     ok: true,
                     responseText: `Action programmée ${jobId} : ${displayName(liveTarget)} à ${converted.label} dans ${plan.delaySeconds} s.`,
+                };
+            }
+
+            if (plan.kind === "ramp_level_qualitative") {
+                const preview = await this.adapter.previewQualitativeLevel(
+                    liveTarget,
+                    plan.direction,
+                    plan.amount,
+                );
+                const jobId = await this.adapter.startLevelRamp(
+                    liveTarget,
+                    preview.targetLevel,
+                    plan.durationSeconds,
+                );
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    ok: true,
+                    responseText: `Automation ${jobId} démarrée : ${displayName(liveTarget)} de ${formatDb(preview.beforeDb)} vers ${formatDb(preview.targetDb)} sur ${plan.durationSeconds} s.`,
                 };
             }
 

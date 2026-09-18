@@ -247,6 +247,36 @@
       }
     },
     {
+      "name": "ramp-channel-qualitative-little",
+      "utterance": "baisse un peu progressivement Batterie en 2 secondes",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "qualitative_ramp_preview",
+          "family": "channel",
+          "name": "Batterie",
+          "direction": "down",
+          "amount": "little"
+        }
+      }
+    },
+    {
+      "name": "ramp-send-qualitative-much",
+      "utterance": "monte beaucoup progressivement Batterie sur Anthony en 3 secondes",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "qualitative_send_ramp_preview",
+          "source": "Batterie",
+          "destination": "Anthony",
+          "direction": "up",
+          "amount": "much"
+        }
+      }
+    },
+    {
       "name": "ramp-channel-duration-before-target",
       "utterance": "baisse progressivement en 2 secondes Batterie à -30 dB",
       "expected": {

@@ -28,6 +28,7 @@ let bulkSendCalls = [];
 let speakerContexts = new Map();
 let qualitativeCalls = [];
 let qualitativeSendCalls = [];
+let qualitativePreviewCalls = [];
 let stale = false;
 
 const adapter = {
@@ -125,6 +126,14 @@ const adapter = {
     async adjustQualitativeSend(source, destination, direction, amount) {
         qualitativeSendCalls.push({ source, destination, direction, amount });
         return { beforeDb: -20, targetDb: direction === "up" ? -17 : -23 };
+    },
+    async previewQualitativeLevel(target, direction, amount) {
+        qualitativePreviewCalls.push({ kind: "level", target, direction, amount });
+        return { beforeDb: -20, targetDb: direction === "up" ? -17 : -23, targetLevel: direction === "up" ? 0.6 : 0.4 };
+    },
+    async previewQualitativeSend(source, destination, direction, amount) {
+        qualitativePreviewCalls.push({ kind: "send", source, destination, direction, amount });
+        return { beforeDb: -20, targetDb: direction === "up" ? -17 : -23, targetLevel: direction === "up" ? 0.6 : 0.4 };
     },
 };
 
@@ -537,6 +546,44 @@ async function ready(text) {
     });
     assert.notEqual(analyzed.status, "ready");
     assert.equal(analyzed.effect, "none");
+}
+
+// Qualitative progressive target ramps preview the same adaptive semantics as osc_adjust_level.
+{
+    automationCalls = [];
+    qualitativePreviewCalls = [];
+    const analyzed = await ready("baisse un peu progressivement Batterie en 2 secondes");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(qualitativePreviewCalls.length, 1);
+    assert.equal(qualitativePreviewCalls[0].kind, "level");
+    assert.equal(qualitativePreviewCalls[0].target.name, "Batterie");
+    assert.equal(qualitativePreviewCalls[0].direction, "down");
+    assert.equal(qualitativePreviewCalls[0].amount, "little");
+    assert.equal(automationCalls[0].kind, "ramp");
+    assert.equal(automationCalls[0].toLevel, 0.4);
+}
+
+// Qualitative progressive source->bus ramps use the same adaptive preview.
+{
+    automationCalls = [];
+    qualitativePreviewCalls = [];
+    const analyzed = await ready("monte beaucoup progressivement Batterie sur Anthony en 3 secondes");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(qualitativePreviewCalls[0].kind, "send");
+    assert.equal(qualitativePreviewCalls[0].source.name, "Batterie");
+    assert.equal(qualitativePreviewCalls[0].destination.name, "Anthony");
+    assert.equal(qualitativePreviewCalls[0].direction, "up");
+    assert.equal(qualitativePreviewCalls[0].amount, "much");
+    assert.equal(automationCalls[0].kind, "send-ramp");
+    assert.equal(automationCalls[0].toLevel, 0.6);
 }
 
 // OR4B4 delayed level uses "dans" as a delay, not a ramp.

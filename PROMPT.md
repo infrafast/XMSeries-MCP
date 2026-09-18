@@ -209,7 +209,7 @@ Relative level:
 
 Default relative amount:
 
-The deterministic Local parser must use this same `osc_adjust_level` calculation for qualitative commands; do not maintain a separate Local-only fixed-dB interpretation.
+The deterministic Local parser must use this same `osc_adjust_level` calculation for qualitative commands; do not maintain a separate Local-only fixed-dB interpretation. For `monte/baisse [un peu/beaucoup] progressivement ... en N secondes`, compute/preview the same adaptive target from the current level and ramp to it; do not substitute a fixed ±3 dB Local step.
 
 * `un peu`: 15% below -40 dB, 10% from -40 to -10 dB, 1 dB above -10 dB
 * `beaucoup`: 30% below -40 dB, 15% from -40 to -10 dB, 5 dB above -10 dB
