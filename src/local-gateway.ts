@@ -541,6 +541,24 @@ function parseIntent(raw: string): Intent | null {
         }
     }
 
+    const sendRelative = text.match(
+        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:de|by)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
+    );
+    if (sendRelative?.[1] && sendRelative[2] && sendRelative[3] && sendRelative[4] && sendRelative[5]) {
+        const unit: LevelUnit = sendRelative[5] === "%" ? "percent" : "db";
+        const base = unit === "percent" ? parsePercent(sendRelative[4]) : parseDb(sendRelative[4]);
+        if (base !== null) {
+            const down = ["baisse", "diminue", "lower", "decrease"].includes(simplify(sendRelative[1]));
+            return {
+                kind: "send_adjust_level",
+                sourceQuery: cleanTarget(sendRelative[2]),
+                destinationQuery: cleanTarget(sendRelative[3]),
+                unit,
+                delta: down ? -Math.abs(base) : Math.abs(base),
+            };
+        }
+    }
+
     const sendQualitative = text.match(
         /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:(un\s+peu|beaucoup|a\s+little|a\s+lot|slightly)\s+)?(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s*$/iu,
     );
@@ -562,24 +580,6 @@ function parseIntent(raw: string): Intent | null {
             direction,
             amount,
         };
-    }
-
-    const sendRelative = text.match(
-        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:de|by)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
-    );
-    if (sendRelative?.[1] && sendRelative[2] && sendRelative[3] && sendRelative[4] && sendRelative[5]) {
-        const unit: LevelUnit = sendRelative[5] === "%" ? "percent" : "db";
-        const base = unit === "percent" ? parsePercent(sendRelative[4]) : parseDb(sendRelative[4]);
-        if (base !== null) {
-            const down = ["baisse", "diminue", "lower", "decrease"].includes(simplify(sendRelative[1]));
-            return {
-                kind: "send_adjust_level",
-                sourceQuery: cleanTarget(sendRelative[2]),
-                destinationQuery: cleanTarget(sendRelative[3]),
-                unit,
-                delta: down ? -Math.abs(base) : Math.abs(base),
-            };
-        }
     }
 
     const mutePatterns: Array<{ re: RegExp; mute: boolean }> = [
