@@ -495,6 +495,32 @@ async function localGatewaySetMute(target: LocalMixerTarget, mute: boolean): Pro
     }
 }
 
+function localGatewayAutomationTarget(target: LocalMixerTarget): AutomationTargetSpec {
+    switch (target.family) {
+        case "main":
+            return { kind: "main_fader" };
+        case "channel":
+            return { kind: "channel_fader", channel: target.index };
+        case "bus":
+            return { kind: "bus_fader", bus: target.index };
+        case "fxreturn":
+            return { kind: "fx_return_fader", effect: target.index };
+        case "aux":
+            return { kind: "aux_fader", aux: target.index };
+        case "matrix":
+            return { kind: "matrix_fader", matrix: target.index };
+        case "dca":
+            throw new Error("Les automations DCA ne font pas partie du gateway déterministe actuel.");
+    }
+}
+
+function localGatewaySendAutomationTarget(source: LocalMixerTarget, destination: LocalMixerTarget): AutomationTargetSpec {
+    if (source.family !== "channel" || destination.family !== "bus") {
+        throw new Error("Local send automation requires a channel source and bus destination.");
+    }
+    return { kind: "channel_send", channel: source.index, bus: destination.index };
+}
+
 const localCommandGateway = new LocalMixerCommandGateway({
     resolve: async (query, families) => {
         const scoped = families
@@ -516,6 +542,44 @@ const localCommandGateway = new LocalMixerCommandGateway({
             throw new Error("Local send level requires a channel source and bus destination.");
         }
         await osc.sendToBus(source.index, destination.index, level);
+    },
+    startLevelRamp: async (target, toLevel, durationSeconds, fromLevel) => {
+        const action = rampAction({
+            target: localGatewayAutomationTarget(target),
+            toLevel,
+            fromLevel,
+            durationSeconds,
+            label: `Local ramp ${target.family} ${target.name}`,
+        });
+        return automation.start(action.description || "Local ramp", [action]).id;
+    },
+    startSendRamp: async (source, destination, toLevel, durationSeconds, fromLevel) => {
+        const action = rampAction({
+            target: localGatewaySendAutomationTarget(source, destination),
+            toLevel,
+            fromLevel,
+            durationSeconds,
+            label: `Local ramp ${source.name} -> ${destination.name}`,
+        });
+        return automation.start(action.description || "Local send ramp", [action]).id;
+    },
+    scheduleLevel: async (target, toLevel, delaySeconds) => {
+        const action = delayedStructuredLevelAction({
+            target: localGatewayAutomationTarget(target),
+            toLevel,
+            delaySeconds,
+            label: `Local delayed level ${target.name}`,
+        });
+        return automation.start(action.description || "Local delayed level", [action]).id;
+    },
+    scheduleSend: async (source, destination, toLevel, delaySeconds) => {
+        const action = delayedStructuredLevelAction({
+            target: localGatewaySendAutomationTarget(source, destination),
+            toLevel,
+            delaySeconds,
+            label: `Local delayed send ${source.name} -> ${destination.name}`,
+        });
+        return automation.start(action.description || "Local delayed send", [action]).id;
     },
 });
 
