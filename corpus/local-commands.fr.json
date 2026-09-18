@@ -538,6 +538,19 @@
       }
     },
     {
+      "name": "send-absolute-structured-ownership",
+      "utterance": "mets la guitare de anto sur claude à -5db",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "write_send",
+          "source": "guitar-anto",
+          "destination": "Claude"
+        }
+      }
+    },
+    {
       "name": "send-relative",
       "utterance": "monte Batterie sur Anthony de 3 dB",
       "expected": {
