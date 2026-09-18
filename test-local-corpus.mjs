@@ -120,6 +120,14 @@ function makeHarness() {
             operations.push({ kind: "qualitative_send", source: source.name, destination: destination.name, direction, amount });
             return { beforeDb: -20, targetDb: direction === "up" ? -17 : -23 };
         },
+        async previewQualitativeLevel(target, direction, amount) {
+            operations.push({ kind: "qualitative_ramp_preview", family: target.family, name: target.name, direction, amount });
+            return { beforeDb: -20, targetDb: direction === "up" ? -17 : -23, targetLevel: direction === "up" ? 0.6 : 0.4 };
+        },
+        async previewQualitativeSend(source, destination, direction, amount) {
+            operations.push({ kind: "qualitative_send_ramp_preview", source: source.name, destination: destination.name, direction, amount });
+            return { beforeDb: -20, targetDb: direction === "up" ? -17 : -23, targetLevel: direction === "up" ? 0.6 : 0.4 };
+        },
     };
 
     return { gateway: new LocalMixerCommandGateway(adapter), operations };
