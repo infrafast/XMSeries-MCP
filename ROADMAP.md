@@ -110,3 +110,8 @@ LiveStageAssistant OR4B3 is merged into `realtime-voice-architecture` as `e244af
 ### OR4C shared-core alignment
 
 QLCPlus-MCP PR #8 merged as `b46f0c5d9aa859281976bec48090dd9a8f0bfffe`. QLCPlus-MCP and XMSeries-MCP now both pin `stage-command-core@fa9f8baef06a668efb18b1bfc50060335689f287`; QLC PR and post-merge Node 20.20/22 CI are green. Both gateways remain on `lsa-command-gateway/v1`.
+
+
+## OR4C live acceptance readiness
+
+LiveStageAssistant now includes the domain-neutral Raspberry Pi/rack acceptance harness, merged into `realtime-voice-architecture` as `63019ba4089b7b9c6d06ac5b307914fca8645a5e`. PR and post-merge Python 3.11/3.12 CI are green. The harness exercises `lsa-command-gateway/v1`, records per-command latency evidence, blocks live writes unless explicitly enabled, and checks for newly spawned known local-LLM processes. Real Pi/rack execution remains pending and is not counted as live validation yet.
