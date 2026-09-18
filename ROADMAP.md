@@ -74,15 +74,19 @@ Shared dependency:
 
 ### XDG2 — Advanced semantic parity
 
-Implement incrementally after XDG1 live acceptance:
+Implement incrementally after XDG1 live acceptance.
 
-- [ ] source -> destination sends and ownership phrases;
-- [ ] dB and percent, absolute and relative values;
+OR4B4 PR #12 implements the first advanced deterministic Local slice. It deliberately reuses the existing live resolver, send paths and `AutomationEngine`; no OSC or automation protocol logic is duplicated in the Local parser.
+
+- [~] source -> destination channel-to-bus sends: absolute/relative level commands implemented on PR #12; ownership-phrase/live acceptance still pending;
+- [~] dB and percent, absolute and relative values: implemented for single targets and channel-to-bus sends on PR #12; relative percent is defined deterministically as percentage points on normalized fader level;
 - [ ] grouped/bulk operations;
 - [ ] speaker-context defaults;
-- [ ] fades/ramps and delayed actions through the existing MCP-side automation engine;
-- [ ] automation status/cancel;
-- [ ] preserve level vs mute semantics and all protocol-specific unsupported-operation guards.
+- [~] fades/ramps and delayed actions through the existing MCP-side automation engine: PR #12 implements fade-in/out, progressive absolute/relative ramps, explicit from/to ranges, source-to-bus ramps and delayed level changes;
+- [ ] automation status/cancel through Local natural commands;
+- [x] preserve level vs mute semantics and all protocol-specific unsupported-operation guards by delegating execution to existing resolver/OSC/automation adapters.
+
+Temporal grammar in this slice is explicit: `en N secondes` is ramp duration; `dans N secondes` is delay before an action. Fade-in/out without an explicit target defaults to Main LR/façade.
 
 ### XDG3 — Regression corpus and cloud/local drift control
 
