@@ -149,6 +149,51 @@
       }
     },
     {
+      "name": "send-qualitative",
+      "utterance": "monte Batterie sur Anthony",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "qualitative_send",
+          "source": "Batterie",
+          "destination": "Anthony",
+          "direction": "up",
+          "amount": "normal"
+        }
+      }
+    },
+    {
+      "name": "send-qualitative-homophone-source",
+      "utterance": "monte Basse sur Anthony",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "qualitative_send",
+          "source": "Basse",
+          "destination": "Anthony",
+          "direction": "up",
+          "amount": "normal"
+        }
+      }
+    },
+    {
+      "name": "send-qualitative-little",
+      "utterance": "baisse un peu Batterie dans Anthony",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "qualitative_send",
+          "source": "Batterie",
+          "destination": "Anthony",
+          "direction": "down",
+          "amount": "little"
+        }
+      }
+    },
+    {
       "name": "ramp-channel",
       "utterance": "baisse progressivement Batterie à -30 dB en 2 secondes",
       "expected": {
