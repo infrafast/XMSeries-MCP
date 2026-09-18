@@ -83,7 +83,7 @@ OR4B4 PR #12 merged on `main` as `968c94f69d4bd007191fff1762101707a94c70b5`. PR 
 - [ ] grouped/bulk operations;
 - [ ] speaker-context defaults;
 - [~] fades/ramps and delayed actions through the existing MCP-side automation engine: PR #12 implements fade-in/out, progressive absolute/relative ramps, explicit from/to ranges, source-to-bus ramps and delayed level changes. Live Pi validation now confirms a real progressive fade on channel `batterie` to -30 dB over 2 seconds and a real delayed action (`mets batterie à -27 dB dans 2 secondes`) that held the prior level before applying the target after the requested delay. Source-to-bus ramps remain pending;
-- [ ] automation status/cancel through Local natural commands;
+- [~] automation status/cancel through Local natural commands: PR #13 merged as `43aa59c79b8424993d20339610c40309cdd2117f` with Node 20.20/22 CI green; supports `statut des automations`, explicit `auto-N` cancellation, and `annule la dernière automation`; live Pi acceptance pending;
 - [x] preserve level vs mute semantics and all protocol-specific unsupported-operation guards by delegating execution to existing resolver/OSC/automation adapters.
 
 Temporal grammar in this slice is explicit: `en N secondes` is ramp duration; `dans N secondes` is delay before an action. Fade-in/out without an explicit target defaults to Main LR/façade.
