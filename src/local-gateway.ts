@@ -232,6 +232,7 @@ function cleanTemporalSubject(value: string): string {
             .replace(/[,;]+/gu, " ")
             .replace(/\s+/gu, " ")
             .trim()
+            .replace(/^(?:un|une)\s+/iu, "")
             .replace(
                 /^(?:le\s+|la\s+)?(?:niveau|volume|fader)\s+(?:(?:de|du|de la|de l['’]?|of)\s+)?/iu,
                 "",
