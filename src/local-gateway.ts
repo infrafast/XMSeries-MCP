@@ -329,7 +329,15 @@ function parseFlexibleTemporalIntent(raw: string): Intent | null {
     const destinationQuery = routeMatch?.[2] ? cleanTemporalSubject(routeMatch[2]) : "";
     const targetQuery = routeMatch ? "" : cleanTemporalSubject(remainder || "main");
 
+    const unboundLevelLiteral = remainder.match(
+        /[+-]?\d+(?:[.,]\d+)?\s*(?:d[bB]|%)/u,
+    );
+    if (unboundLevelLiteral) return null;
+
     if (delayMatch?.[1]) {
+        // "dans" is a delay marker. A progressive request without its own
+        // "en N secondes" duration is incomplete and must not degrade to a direct set.
+        if (hasProgressiveMarker) return null;
         const delaySeconds = Number(delayMatch[1].replace(",", "."));
         if (!Number.isFinite(delaySeconds) || delaySeconds < 0 || !value) return null;
         if (routeMatch) {
