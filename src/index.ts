@@ -496,11 +496,27 @@ async function localGatewaySetMute(target: LocalMixerTarget, mute: boolean): Pro
 }
 
 const localCommandGateway = new LocalMixerCommandGateway({
-    resolve: async (query) => await findNamedTargets(query),
+    resolve: async (query, families) => {
+        const scoped = families
+            ?.filter((family): family is NamedTargetFamily => family !== "main" && NAMED_TARGET_FAMILIES.includes(family as NamedTargetFamily));
+        return await findNamedTargets(query, scoped && scoped.length > 0 ? scoped : NAMED_TARGET_FAMILIES);
+    },
     status: async () => await osc.getMixerStatus(),
     readLevel: localGatewayReadLevel,
     writeLevel: localGatewayWriteLevel,
     setMute: localGatewaySetMute,
+    readSendLevel: async (source, destination) => {
+        if (source.family !== "channel" || destination.family !== "bus") {
+            throw new Error("Local send level requires a channel source and bus destination.");
+        }
+        return await osc.getSendToBus(source.index, destination.index);
+    },
+    writeSendLevel: async (source, destination, level) => {
+        if (source.family !== "channel" || destination.family !== "bus") {
+            throw new Error("Local send level requires a channel source and bus destination.");
+        }
+        await osc.sendToBus(source.index, destination.index, level);
+    },
 });
 
 export function getRuntimeTools(
