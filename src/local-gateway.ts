@@ -166,13 +166,13 @@ function parseIntent(raw: string): Intent | null {
     }
 
     const qualitativeRelative = text.match(
-        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:(un\s+peu|beaucoup|a\s+lot|slightly)\s+)?(?:le\s+)?(?:niveau|volume|fader)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s*$/iu,
+        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:(un\s+peu|beaucoup|a\s+little|a\s+lot|slightly)\s+)?(?:le\s+)?(?:niveau|volume|fader)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s*$/iu,
     );
     if (qualitativeRelative?.[1] && qualitativeRelative[3]) {
         const verb = simplify(qualitativeRelative[1]);
         const amount = simplify(qualitativeRelative[2] || "");
         const magnitude =
-            amount === "un peu" || amount === "slightly"
+            amount === "un peu" || amount === "a little" || amount === "slightly"
                 ? 1
                 : amount === "beaucoup" || amount === "a lot"
                   ? 6
