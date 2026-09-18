@@ -1249,6 +1249,7 @@ export class LocalMixerCommandGateway {
             intent.kind === "send_set_level" ||
             intent.kind === "send_adjust_level" ||
             intent.kind === "send_adjust_level_qualitative" ||
+            intent.kind === "send_mute" ||
             intent.kind === "send_ramp_level" ||
             intent.kind === "send_ramp_level_qualitative" ||
             intent.kind === "send_delay_level"
