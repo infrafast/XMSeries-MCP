@@ -33,7 +33,7 @@ Under this proposal, Laurent's default return is bus `Laurent`, while Thomas's d
 
 ## Deterministic Local Command Gateway — coordinated with LiveStageAssistant OR4
 
-Status: **OR4B2 implementation complete on PR #11; automated Node 20.20/22 CI validated; Pi/LSA live acceptance pending**
+Status: **OR4B2 merged on `main` as `0256b3d66dcdf6594f25e8aa0b6fe7ecec07bfed`; PR and post-merge Node 20.20/22 CI validated; Pi/LSA live acceptance pending**
 
 Product boundary:
 
