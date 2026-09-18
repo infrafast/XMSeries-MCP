@@ -40,6 +40,45 @@
       }
     },
     {
+      "name": "absolute-channel-directional-up",
+      "utterance": "monte Batterie à -8 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "family": "channel",
+          "name": "Batterie"
+        }
+      }
+    },
+    {
+      "name": "absolute-channel-directional-down",
+      "utterance": "baisse le niveau de Batterie à -20 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "family": "channel",
+          "name": "Batterie"
+        }
+      }
+    },
+    {
+      "name": "absolute-send-directional-down",
+      "utterance": "baisse Batterie sur Anthony à -20 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "write_send",
+          "source": "Batterie",
+          "destination": "Anthony"
+        }
+      }
+    },
+    {
       "name": "relative-channel-db",
       "utterance": "monte Batterie de 3 dB",
       "expected": {
