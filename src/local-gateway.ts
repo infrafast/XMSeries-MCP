@@ -56,6 +56,9 @@ type Intent =
     | { kind: "send_delay_level"; sourceQuery: string; destinationQuery: string; value: LevelValue; delaySeconds: number }
     | { kind: "mute"; targetQuery: string; mute: boolean };
 
+type TargetIntent = Extract<Intent, { targetQuery: string }>;
+type SendIntent = Extract<Intent, { sourceQuery: string; destinationQuery: string }>;
+
 type LocalPlan =
     | { kind: "status" }
     | { kind: "read_level"; targetQuery: string; target: LocalMixerTarget }
@@ -70,7 +73,7 @@ type LocalPlan =
     | { kind: "mute"; targetQuery: string; target: LocalMixerTarget; mute: boolean };
 
 interface LocalContinuation {
-    intent: Exclude<Intent, { kind: "status" }>;
+    intent: TargetIntent | SendIntent;
     candidates: LocalMixerTarget[];
 }
 
@@ -757,7 +760,7 @@ export class LocalMixerCommandGateway {
     }
 
     private async planSendIntent(
-        intent: Extract<Intent, { kind: "send_set_level" | "send_adjust_level" | "send_ramp_level" | "send_delay_level" }>,
+        intent: SendIntent,
     ): Promise<AnalyzeCommandResult> {
         const sourceMatches = await this.adapter.resolve(intent.sourceQuery, ["channel"]);
         const destinationMatches = await this.adapter.resolve(intent.destinationQuery, ["bus"]);
@@ -800,7 +803,7 @@ export class LocalMixerCommandGateway {
     }
 
     private async planTargetIntent(
-        intent: Exclude<Intent, { kind: "status" }>,
+        intent: TargetIntent,
     ): Promise<AnalyzeCommandResult> {
         const main = mainTarget(intent.targetQuery);
         if (main) return this.readyTargetPlan(intent, main);
@@ -834,7 +837,7 @@ export class LocalMixerCommandGateway {
     }
 
     private readyTargetPlan(
-        intent: Exclude<Intent, { kind: "status" }>,
+        intent: TargetIntent,
         target: LocalMixerTarget,
     ): AnalyzeCommandResult {
         if (
@@ -895,6 +898,16 @@ export class LocalMixerCommandGateway {
                     continuation.error === "expired_token"
                         ? "Cette clarification a expiré."
                         : "Cette clarification n'est plus valide.",
+            };
+        }
+
+        if ("sourceQuery" in continuation.value.intent) {
+            return {
+                protocol: GATEWAY_PROTOCOL,
+                recognized: true,
+                status: "clarification",
+                effect: "none",
+                responseText: "Reformule la commande complète avec la source et le bus de destination exacts.",
             };
         }
 
