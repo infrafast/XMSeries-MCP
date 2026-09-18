@@ -483,10 +483,19 @@ function localGatewayAutomationTarget(target: LocalMixerTarget): AutomationTarge
 }
 
 function localGatewaySendAutomationTarget(source: LocalMixerTarget, destination: LocalMixerTarget): AutomationTargetSpec {
-    if (source.family !== "channel" || destination.family !== "bus") {
-        throw new Error("Local send automation requires a channel source and bus destination.");
+    if (destination.family !== "bus") {
+        throw new Error("Local send automation requires a bus destination.");
     }
-    return { kind: "channel_send", channel: source.index, bus: destination.index };
+    switch (source.family) {
+        case "channel":
+            return { kind: "channel_send", channel: source.index, bus: destination.index };
+        case "fxreturn":
+            return { kind: "fx_send", effect: source.index, bus: destination.index };
+        case "aux":
+            return { kind: "aux_send", aux: source.index, bus: destination.index };
+        default:
+            throw new Error("Local send automation source must be a channel, FX return or aux return.");
+    }
 }
 
 const localCommandGateway = new LocalMixerCommandGateway({
@@ -500,16 +509,37 @@ const localCommandGateway = new LocalMixerCommandGateway({
     writeLevel: localGatewayWriteLevel,
     setMute: localGatewaySetMute,
     readSendLevel: async (source, destination) => {
-        if (source.family !== "channel" || destination.family !== "bus") {
-            throw new Error("Local send level requires a channel source and bus destination.");
+        if (destination.family !== "bus") {
+            throw new Error("Local send level requires a bus destination.");
         }
-        return await osc.getSendToBus(source.index, destination.index);
+        switch (source.family) {
+            case "channel":
+                return await osc.getSendToBus(source.index, destination.index);
+            case "fxreturn":
+                return await osc.getFxToBus(source.index, destination.index);
+            case "aux":
+                return await osc.getAuxToBus(source.index, destination.index);
+            default:
+                throw new Error("Local send source must be a channel, FX return or aux return.");
+        }
     },
     writeSendLevel: async (source, destination, level) => {
-        if (source.family !== "channel" || destination.family !== "bus") {
-            throw new Error("Local send level requires a channel source and bus destination.");
+        if (destination.family !== "bus") {
+            throw new Error("Local send level requires a bus destination.");
         }
-        await osc.sendToBus(source.index, destination.index, level);
+        switch (source.family) {
+            case "channel":
+                await osc.sendToBus(source.index, destination.index, level);
+                return;
+            case "fxreturn":
+                await osc.sendFxToBus(source.index, destination.index, level);
+                return;
+            case "aux":
+                await osc.sendAuxToBus(source.index, destination.index, level);
+                return;
+            default:
+                throw new Error("Local send source must be a channel, FX return or aux return.");
+        }
     },
     startLevelRamp: async (target, toLevel, durationSeconds, fromLevel) => {
         const action = rampAction({
@@ -621,10 +651,11 @@ const localCommandGateway = new LocalMixerCommandGateway({
         };
     },
     previewQualitativeSend: async (source, destination, direction, amount) => {
-        if (source.family !== "channel" || destination.family !== "bus") {
-            throw new Error("Local qualitative send preview requires a channel source and bus destination.");
+        if (destination.family !== "bus") {
+            throw new Error("Local qualitative send preview requires a bus destination.");
         }
-        const beforeLevel = await osc.getSendToBus(source.index, destination.index);
+        const adapter = targetAdapter(localGatewaySendAutomationTarget(source, destination));
+        const beforeLevel = await adapter.read();
         const computed = computeRelativeLevelAdjustment(beforeLevel, { direction, amount });
         return {
             beforeDb: computed.beforeDb,
