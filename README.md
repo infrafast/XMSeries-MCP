@@ -513,7 +513,7 @@ The parser is intentionally bounded and deterministic. Prefer the canonical form
 | Mute / unmute | `mute batterie` · `unmute batterie` |
 | Absolute dB | `mets batterie à -30 dB` · `mets le niveau de batterie à -30 dB` |
 | Relative dB | `monte batterie de 3 dB` · `baisse batterie de 3 dB` |
-| Qualitative relative | `monte un peu le niveau de batterie` · `baisse beaucoup batterie` |
+| Qualitative relative | `monte un peu le niveau de batterie` · `baisse beaucoup batterie` · `monte le volume` · `baisse un peu le volume` (Main LR) |
 | Absolute percent | `mets batterie à 50%` |
 | Relative percent | `monte batterie de 10%` · `baisse batterie de 1%` · `monte le volume de 100%` (Main LR) |
 | Channel -> bus absolute | `mets batterie sur Anthony à -20 dB` |
@@ -536,6 +536,7 @@ Important syntax rules:
 
 - **`à` means an absolute target**: `mets batterie à -30 dB`. With no named target, `mets/monte/baisse le volume à 100%` targets Main LR.
 - **`de` means a relative change**: `monte batterie de 3 dB`. With no named target, `monte le volume de 10%` adjusts Main LR relatively.
+- Qualitative commands (`monte`, `baisse`, `un peu`, `beaucoup`) use the same adaptive relative-level calculation as the cloud `osc_adjust_level` tool. They are not separate hard-coded Local dB steps.
 - **`en N secondes` means ramp duration**: the level moves progressively for that duration.
 - **`dans N secondes` means delayed execution**: the level stays unchanged until the delay expires, then the target is applied.
 - Percent values use the normalized fader range. An absolute `100%` means the top of the normalized fader range; a relative `+10%` means ten percentage points on that normalized range.

@@ -34,6 +34,9 @@ export interface LocalSpeakerMixerContext {
     source: string;
 }
 
+export type LocalRelativeDirection = "up" | "down";
+export type LocalRelativeAmount = "little" | "normal" | "much";
+
 export interface LocalMixerGatewayAdapter {
     resolve(query: string, families?: LocalMixerTargetFamily[]): Promise<LocalMixerTarget[]>;
     status(): Promise<any>;
@@ -53,6 +56,11 @@ export interface LocalMixerGatewayAdapter {
     writeSendBatchDb(source: LocalMixerTarget, destinations: LocalMixerTarget[], db: number, includeMain: boolean): Promise<void>;
     writeSendAllBusesDb(source: LocalMixerTarget, db: number, includeMain: boolean): Promise<void>;
     speakerContext(speaker: string): Promise<LocalSpeakerMixerContext>;
+    adjustQualitativeLevel(
+        target: LocalMixerTarget,
+        direction: LocalRelativeDirection,
+        amount: LocalRelativeAmount,
+    ): Promise<{ beforeDb: number; targetDb: number; targetLevel: number }>;
 }
 
 type LevelUnit = "db" | "percent";
@@ -63,6 +71,7 @@ type Intent =
     | { kind: "read_level"; targetQuery: string }
     | { kind: "set_level"; targetQuery: string; unit: LevelUnit; value: number }
     | { kind: "adjust_level"; targetQuery: string; unit: LevelUnit; delta: number }
+    | { kind: "adjust_level_qualitative"; targetQuery: string; direction: LocalRelativeDirection; amount: LocalRelativeAmount }
     | { kind: "send_set_level"; sourceQuery: string; destinationQuery: string; unit: LevelUnit; value: number }
     | { kind: "send_adjust_level"; sourceQuery: string; destinationQuery: string; unit: LevelUnit; delta: number }
     | { kind: "ramp_level"; targetQuery: string; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
@@ -84,6 +93,7 @@ type LocalPlan =
     | { kind: "read_level"; targetQuery: string; target: LocalMixerTarget }
     | { kind: "set_level"; targetQuery: string; target: LocalMixerTarget; unit: LevelUnit; value: number }
     | { kind: "adjust_level"; targetQuery: string; target: LocalMixerTarget; unit: LevelUnit; delta: number }
+    | { kind: "adjust_level_qualitative"; targetQuery: string; target: LocalMixerTarget; direction: LocalRelativeDirection; amount: LocalRelativeAmount }
     | { kind: "send_set_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; unit: LevelUnit; value: number }
     | { kind: "send_adjust_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; unit: LevelUnit; delta: number }
     | { kind: "ramp_level"; targetQuery: string; target: LocalMixerTarget; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
@@ -602,24 +612,47 @@ function parseIntent(raw: string): Intent | null {
         }
     }
 
+    const mainQualitativeRelative = text.match(
+        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:(un\s+peu|beaucoup|a\s+little|a\s+lot|slightly)\s+)?(?:le\s+)?(?:niveau|volume|fader)\s*$/iu,
+    );
+    if (mainQualitativeRelative?.[1]) {
+        const verb = simplify(mainQualitativeRelative[1]);
+        const amountText = simplify(mainQualitativeRelative[2] || "");
+        const amount: LocalRelativeAmount =
+            amountText === "un peu" || amountText === "a little" || amountText === "slightly"
+                ? "little"
+                : amountText === "beaucoup" || amountText === "a lot"
+                  ? "much"
+                  : "normal";
+        const direction: LocalRelativeDirection =
+            ["baisse", "diminue", "lower", "decrease"].includes(verb) ? "down" : "up";
+        return {
+            kind: "adjust_level_qualitative",
+            targetQuery: "main",
+            direction,
+            amount,
+        };
+    }
+
     const qualitativeRelative = text.match(
         /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:(un\s+peu|beaucoup|a\s+little|a\s+lot|slightly)\s+)?(?:le\s+)?(?:niveau|volume|fader)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s*$/iu,
     );
     if (qualitativeRelative?.[1] && qualitativeRelative[3]) {
         const verb = simplify(qualitativeRelative[1]);
-        const amount = simplify(qualitativeRelative[2] || "");
-        const magnitude =
-            amount === "un peu" || amount === "a little" || amount === "slightly"
-                ? 1
-                : amount === "beaucoup" || amount === "a lot"
-                  ? 6
-                  : 3;
-        const down = ["baisse", "diminue", "lower", "decrease"].includes(verb);
+        const amountText = simplify(qualitativeRelative[2] || "");
+        const amount: LocalRelativeAmount =
+            amountText === "un peu" || amountText === "a little" || amountText === "slightly"
+                ? "little"
+                : amountText === "beaucoup" || amountText === "a lot"
+                  ? "much"
+                  : "normal";
+        const direction: LocalRelativeDirection =
+            ["baisse", "diminue", "lower", "decrease"].includes(verb) ? "down" : "up";
         return {
-            kind: "adjust_level",
+            kind: "adjust_level_qualitative",
             targetQuery: cleanTarget(qualitativeRelative[3]),
-            unit: "db",
-            delta: down ? -magnitude : magnitude,
+            direction,
+            amount,
         };
     }
 
@@ -1056,6 +1089,19 @@ export class LocalMixerCommandGateway {
                     protocol: GATEWAY_PROTOCOL,
                     ok: true,
                     responseText: `${displayName(liveTarget)} réglé à ${converted.label}.`,
+                };
+            }
+
+            if (plan.kind === "adjust_level_qualitative") {
+                const adjusted = await this.adapter.adjustQualitativeLevel(
+                    liveTarget,
+                    plan.direction,
+                    plan.amount,
+                );
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    ok: true,
+                    responseText: `${displayName(liveTarget)} : ${formatDb(adjusted.beforeDb)} → ${formatDb(adjusted.targetDb)}.`,
                 };
             }
 

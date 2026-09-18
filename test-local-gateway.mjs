@@ -26,6 +26,7 @@ let automationJobs = [];
 let bulkMuteCalls = [];
 let bulkSendCalls = [];
 let speakerContexts = new Map();
+let qualitativeCalls = [];
 let stale = false;
 
 const adapter = {
@@ -116,6 +117,10 @@ const adapter = {
             source: "test",
         };
     },
+    async adjustQualitativeLevel(target, direction, amount) {
+        qualitativeCalls.push({ target, direction, amount });
+        return { beforeDb: -20, targetDb: direction === "up" ? -17 : -23, targetLevel: 0.5 };
+    },
 };
 
 const gateway = new LocalMixerCommandGateway(adapter);
@@ -195,17 +200,48 @@ async function ready(text) {
     assert.equal(writes.length, 1);
 }
 
-// Qualitative relative write, English variant
+// Qualitative relative write, English variant, reuses shared osc_adjust_level semantics.
 {
-    writes = [];
+    qualitativeCalls = [];
     const analyzed = await ready("raise a little Drums");
     const result = await gateway.execute({
         protocol: GATEWAY_PROTOCOL,
         planToken: analyzed.planToken,
     });
     assert.equal(result.ok, true);
-    assert.equal(writes.length, 1);
-    assert.equal(writes[0].target.family, "bus");
+    assert.equal(qualitativeCalls.length, 1);
+    assert.equal(qualitativeCalls[0].target.family, "bus");
+    assert.equal(qualitativeCalls[0].direction, "up");
+    assert.equal(qualitativeCalls[0].amount, "little");
+}
+
+// Targetless qualitative level phrases are owned by Main LR.
+{
+    qualitativeCalls = [];
+    const analyzed = await ready("baisse un peu le volume");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(qualitativeCalls.length, 1);
+    assert.equal(qualitativeCalls[0].target.family, "main");
+    assert.equal(qualitativeCalls[0].direction, "down");
+    assert.equal(qualitativeCalls[0].amount, "little");
+}
+
+// Plain targetless direction is also Main LR with normal shared amount semantics.
+{
+    qualitativeCalls = [];
+    const analyzed = await ready("monte le volume");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(qualitativeCalls[0].target.family, "main");
+    assert.equal(qualitativeCalls[0].direction, "up");
+    assert.equal(qualitativeCalls[0].amount, "normal");
 }
 
 // Mute/unmute

@@ -206,6 +206,8 @@ Relative level:
 
 Default relative amount:
 
+The deterministic Local parser must use this same `osc_adjust_level` calculation for qualitative commands; do not maintain a separate Local-only fixed-dB interpretation.
+
 * `un peu`: 15% below -40 dB, 10% from -40 to -10 dB, 1 dB above -10 dB
 * `beaucoup`: 30% below -40 dB, 15% from -40 to -10 dB, 5 dB above -10 dB
 * unspecified: 20% below -40 dB, 15% from -40 to -10 dB, 2 dB above -10 dB
