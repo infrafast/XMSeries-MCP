@@ -3,6 +3,60 @@
   "locale": "fr",
   "cases": [
     {
+      "name": "main-read-front",
+      "utterance": "niveau de front",
+      "expected": {
+        "status": "ready",
+        "effect": "read",
+        "operation": {
+          "kind": "read_level",
+          "family": "main",
+          "name": "Main LR"
+        }
+      }
+    },
+    {
+      "name": "main-read-principal",
+      "utterance": "niveau de principal",
+      "expected": {
+        "status": "ready",
+        "effect": "read",
+        "operation": {
+          "kind": "read_level",
+          "family": "main",
+          "name": "Main LR"
+        }
+      }
+    },
+    {
+      "name": "main-son-qualitative",
+      "utterance": "monte le son",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "qualitative",
+          "family": "main",
+          "name": "Main LR",
+          "direction": "up",
+          "amount": "normal"
+        }
+      }
+    },
+    {
+      "name": "main-son-absolute",
+      "utterance": "mets le son à -10 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "family": "main",
+          "name": "Main LR"
+        }
+      }
+    },
+    {
       "name": "mixer-status",
       "utterance": "statut mixeur",
       "expected": {
@@ -241,6 +295,62 @@
           "family": "channel",
           "name": "Batterie",
           "mute": true
+        }
+      }
+    },
+    {
+      "name": "mute-channel-eteins",
+      "utterance": "éteins Batterie",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "mute",
+          "family": "channel",
+          "name": "Batterie",
+          "mute": true
+        }
+      }
+    },
+    {
+      "name": "unmute-channel-rallume",
+      "utterance": "rallume Batterie",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "mute",
+          "family": "channel",
+          "name": "Batterie",
+          "mute": false
+        }
+      }
+    },
+    {
+      "name": "mute-send-eteins",
+      "utterance": "éteins Batterie sur Anthony",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "mute_send",
+          "source": "Batterie",
+          "destination": "Anthony",
+          "mute": true
+        }
+      }
+    },
+    {
+      "name": "unmute-send-ouvre",
+      "utterance": "ouvre Batterie sur Anthony",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "mute_send",
+          "source": "Batterie",
+          "destination": "Anthony",
+          "mute": false
         }
       }
     },
