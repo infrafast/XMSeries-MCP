@@ -522,7 +522,7 @@ The parser is intentionally bounded and deterministic. Prefer the canonical form
 | Bulk bus mute | `mute les bus Anthony et Laurent` · `coupe tous les bus` · `coupe tous les bus sauf Anthony` |
 | Bulk channel -> buses | `mets batterie à -20 dB sur les bus Anthony et Laurent` · `mets batterie à -25 dB sur tous les bus et façade` |
 | Progressive/ramp | `baisse progressivement batterie à -30 dB en 2 secondes` |
-| Relative progressive | `monte progressivement batterie de 3 dB en 5 secondes` |
+| Relative progressive | `monte progressivement batterie de 3 dB en 5 secondes` · `baisse un peu progressivement batterie en 2 secondes` |
 | Fade | `fade out batterie en 10 secondes` · `fade in batterie en 10 secondes` |
 | Explicit fade range | `fade batterie de -40 dB à -10 dB en 5 secondes` |
 | Delayed level | `mets batterie à -27 dB dans 2 secondes` |
@@ -537,7 +537,7 @@ Important syntax rules:
 
 - **`à` means an absolute target**: `mets batterie à -30 dB`. Directional verbs do not change that meaning: `monte batterie à -8 dB` and `baisse batterie sur Anthony à -20 dB` are still absolute writes. With no named target, `mets/monte/baisse le volume à 100%` targets Main LR.
 - **`de` means a relative change**: `monte batterie de 3 dB`. With no named target, `monte le volume de 10%` adjusts Main LR relatively.
-- Qualitative commands (`monte`, `baisse`, `un peu`, `beaucoup`) use the same adaptive relative-level calculation as the cloud `osc_adjust_level` tool. They are not separate hard-coded Local dB steps.
+- Qualitative commands (`monte`, `baisse`, `un peu`, `beaucoup`) use the same adaptive relative-level calculation as the cloud `osc_adjust_level` tool. They are not separate hard-coded Local dB steps. The same rule applies to progressive ramps: XMSeries-MCP previews the adaptive target from the current level, then starts the ramp toward that target without an intermediate write.
 - **`en N secondes` means ramp duration**: the level moves progressively for that duration. Temporal constituents may appear in different grammatical positions as long as the semantic markers remain explicit.
 - **`dans N secondes` means delayed execution**: the level stays unchanged until the delay expires, then the target is applied. `dans` is never reinterpreted as a ramp duration.
 - Percent values use the normalized fader range. An absolute `100%` means the top of the normalized fader range; a relative `+10%` means ten percentage points on that normalized range.
