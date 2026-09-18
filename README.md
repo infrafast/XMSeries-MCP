@@ -515,9 +515,11 @@ The parser is intentionally bounded and deterministic. Prefer the canonical form
 | Relative dB | `monte batterie de 3 dB` · `baisse batterie de 3 dB` |
 | Qualitative relative | `monte un peu le niveau de batterie` · `baisse beaucoup batterie` |
 | Absolute percent | `mets batterie à 50%` |
-| Relative percent | `monte batterie de 10%` · `baisse batterie de 1%` |
+| Relative percent | `monte batterie de 10%` · `baisse batterie de 1%` · `monte le volume de 100%` (Main LR) |
 | Channel -> bus absolute | `mets batterie sur Anthony à -20 dB` |
 | Channel -> bus relative | `monte batterie sur Anthony de 3 dB` |
+| Bulk bus mute | `mute les bus Anthony et Laurent` · `coupe tous les bus` · `coupe tous les bus sauf Anthony` |
+| Bulk channel -> buses | `mets batterie à -20 dB sur les bus Anthony et Laurent` · `mets batterie à -25 dB sur tous les bus et façade` |
 | Progressive/ramp | `baisse progressivement batterie à -30 dB en 2 secondes` |
 | Relative progressive | `monte progressivement batterie de 3 dB en 5 secondes` |
 | Fade | `fade out batterie en 10 secondes` · `fade in batterie en 10 secondes` |
@@ -529,8 +531,8 @@ The parser is intentionally bounded and deterministic. Prefer the canonical form
 
 Important syntax rules:
 
-- **`à` means an absolute target**: `mets batterie à -30 dB`.
-- **`de` means a relative change**: `monte batterie de 3 dB`.
+- **`à` means an absolute target**: `mets batterie à -30 dB`. With no named target, `mets/monte/baisse le volume à 100%` targets Main LR.
+- **`de` means a relative change**: `monte batterie de 3 dB`. With no named target, `monte le volume de 10%` adjusts Main LR relatively.
 - **`en N secondes` means ramp duration**: the level moves progressively for that duration.
 - **`dans N secondes` means delayed execution**: the level stays unchanged until the delay expires, then the target is applied.
 - Percent values use the normalized fader range. An absolute `100%` means the top of the normalized fader range; a relative `+10%` means ten percentage points on that normalized range.
@@ -539,7 +541,8 @@ Important syntax rules:
 - Source-to-destination syntax currently means a **channel source -> bus destination**. The source and destination are resolved independently and must each be safe and unique.
 - If a name is ambiguous or only fuzzy-matches, the gateway asks for clarification rather than guessing.
 - DCA writes are not yet part of the deterministic Local write surface.
-- Group/bulk natural-language commands and speaker-context defaults are separate OR4B4 work and must not be assumed until documented here.
+- Group/bulk natural-language commands are supported for bus-master mute/unmute and channel-send dB writes to selected/all buses, including an explicit Main LR/façade inclusion.
+- Speaker-context defaults remain separate OR4B4 work and must not be assumed until documented here.
 
 The deterministic grammar is not intended to accept arbitrary prose. If a phrase is not documented and is not covered by parser tests, treat it as unsupported rather than assuming the parser will infer the intent.
 
