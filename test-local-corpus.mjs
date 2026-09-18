@@ -11,7 +11,9 @@ const targets = [
     { family: "channel", index: 1, name: "Voix", matchType: "exact" },
     { family: "channel", index: 2, name: "Basse", matchType: "exact" },
     { family: "channel", index: 6, name: "Batterie", matchType: "exact" },
+    { family: "channel", index: 9, name: "guitar-anto", matchType: "structured" },
     { family: "bus", index: 7, name: "Anthony", matchType: "exact" },
+    { family: "bus", index: 9, name: "Claude", matchType: "exact" },
     { family: "bus", index: 8, name: "Laurent", matchType: "exact" },
     { family: "fxreturn", index: 2, name: "Hall FX", matchType: "exact" },
     { family: "aux", index: 1, name: "Playback", matchType: "exact" },
@@ -34,6 +36,10 @@ function makeHarness() {
                     { family: "bus", index: 9, name: "Tom retour", matchType: "contains" },
                     { family: "bus", index: 10, name: "Tom ears", matchType: "contains" },
                 ].filter((target) => !families || families.includes(target.family));
+            }
+            if (key === "la guitare de anto" || key === "guitare de anto") {
+                return [{ family: "channel", index: 9, name: "guitar-anto", matchType: "structured" }]
+                    .filter((target) => !families || families.includes(target.family));
             }
             const result = targets
                 .filter((target) => targetKey(target.name) === key)
