@@ -148,6 +148,8 @@ When the user says first-person input phrases such as `ma voix`, `mon micro`, or
 
 Explicit target names always override speaker context. For example, `monte guitare dans le retour de Claude` uses the named target/destination resolution, not the current speaker.
 
+The deterministic Local parser follows the same domain semantics when the host supplies generic speaker context. Canonical first-person phrases include `monte mon retour de 3 dB`, `mets mon micro à -12 dB`, and `mets batterie dans mon retour à -20 dB`. Unknown speakers or missing channel mappings must clarify rather than guess.
+
 ## 4. Main LR / façade
 
 French aliases:
