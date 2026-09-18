@@ -621,6 +621,20 @@ const localCommandGateway = new LocalMixerCommandGateway({
         await setChannelSendBatchDb(source.index, namedTargetRange("bus"), db, includeMain);
     },
     speakerContext: async (speaker) => speakerContextObject(speaker),
+    adjustQualitativeLevel: async (target, direction, amount) => {
+        const payload = JSON.parse(
+            await applyRelativeLevelAdjustment({
+                target: localGatewayAutomationTarget(target),
+                direction,
+                amount,
+            }),
+        ) as { beforeDb: number; targetDb: number; targetLevel: number };
+        return {
+            beforeDb: payload.beforeDb,
+            targetDb: payload.targetDb,
+            targetLevel: payload.targetLevel,
+        };
+    },
 });
 
 export function getRuntimeTools(
