@@ -11,11 +11,15 @@ const targets = {
     fuzzy: { family: "channel", index: 3, name: "Guitare", matchType: "fuzzy" },
     amb1: { family: "channel", index: 4, name: "Tom", matchType: "contains" },
     amb2: { family: "bus", index: 5, name: "Tom retour", matchType: "contains" },
+    batterie: { family: "channel", index: 6, name: "Batterie", matchType: "exact" },
+    anthony: { family: "bus", index: 7, name: "Anthony", matchType: "exact" },
 };
 
 let level = 0.75;
 let writes = [];
 let muteWrites = [];
+let sendLevel = 0.5;
+let sendWrites = [];
 let stale = false;
 
 const adapter = {
@@ -30,6 +34,8 @@ const adapter = {
         if (q === "guitr") return [targets.fuzzy];
         if (q === "tom") return [targets.amb1, targets.amb2];
         if (q === "guitare") return [{ ...targets.fuzzy, matchType: "exact" }];
+        if (q === "batterie") return [targets.batterie];
+        if (q === "anthony") return [targets.anthony];
         return [];
     },
     async status() {
@@ -47,6 +53,15 @@ const adapter = {
     },
     async setMute(target, mute) {
         muteWrites.push({ target, mute });
+    },
+    async readSendLevel(source, destination) {
+        assert.equal(source.family, "channel");
+        assert.equal(destination.family, "bus");
+        return sendLevel;
+    },
+    async writeSendLevel(source, destination, next) {
+        sendWrites.push({ source, destination, level: next });
+        sendLevel = next;
     },
 };
 
@@ -213,13 +228,64 @@ async function ready(text) {
     assert.equal(writes.length, 0);
 }
 
-// Percent stays outside OR4B2 MVP and must not be guessed as dB.
+// OR4B4 absolute percent write.
 {
-    const analyzed = await gateway.analyze({
+    writes = [];
+    const analyzed = await ready("mets Voix à 50%");
+    assert.equal(analyzed.effect, "write");
+    const result = await gateway.execute({
         protocol: GATEWAY_PROTOCOL,
-        text: "mets Voix à 50%",
+        planToken: analyzed.planToken,
     });
-    assert.equal(analyzed.status, "unrecognized");
+    assert.equal(result.ok, true);
+    assert.equal(writes.length, 1);
+    assert.equal(writes[0].level, 0.5);
+    assert.match(result.responseText, /50\.0%/);
+}
+
+// OR4B4 relative percent uses percentage points on normalized fader level.
+{
+    writes = [];
+    level = 0.5;
+    const analyzed = await ready("monte Voix de 10%");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(writes.length, 1);
+    assert.ok(Math.abs(writes[0].level - 0.6) < 1e-9);
+}
+
+// OR4B4 source -> bus absolute dB.
+{
+    sendWrites = [];
+    sendLevel = 0.5;
+    const analyzed = await ready("mets batterie sur Anthony à -20 dB");
+    assert.equal(analyzed.effect, "write");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(sendWrites.length, 1);
+    assert.equal(sendWrites[0].source.name, "Batterie");
+    assert.equal(sendWrites[0].destination.name, "Anthony");
+    assert.match(result.responseText, /Batterie.*Anthony/);
+}
+
+// OR4B4 source -> bus relative percent.
+{
+    sendWrites = [];
+    sendLevel = 0.4;
+    const analyzed = await ready("monte batterie sur Anthony de 10%");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(sendWrites.length, 1);
+    assert.ok(Math.abs(sendWrites[0].level - 0.5) < 1e-9);
 }
 
 // Default/cloud inventory is unchanged; Local adds only two reserved tools.
