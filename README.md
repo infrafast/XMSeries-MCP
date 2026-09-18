@@ -529,6 +529,7 @@ The parser is intentionally bounded and deterministic. Prefer the canonical form
 | Fade | `fade out batterie en 10 secondes` · `fade in batterie en 10 secondes` |
 | Explicit fade range | `fade batterie de -40 dB à -10 dB en 5 secondes` |
 | Delayed level | `mets batterie à -27 dB dans 2 secondes` |
+| Delayed mute | `mute batterie dans 5 secondes` · `dans 5 secondes mute le main LR` · `dans 3 secondes rallume batterie` |
 | Automation status | `statut des automations` · `liste les automations` |
 | Cancel by id | `annule l'automation auto-3` |
 | Cancel latest running job | `annule la dernière automation` |
@@ -542,7 +543,7 @@ Important syntax rules:
 - **`de` means a relative change**: `monte batterie de 3 dB`. With no named target, `monte le volume de 10%` adjusts Main LR relatively.
 - Qualitative commands (`monte`, `baisse`, `un peu`, `beaucoup`) use the same adaptive relative-level calculation as the cloud `osc_adjust_level` tool. They are not separate hard-coded Local dB steps. The same rule applies to progressive ramps: XMSeries-MCP previews the adaptive target from the current level, then starts the ramp toward that target without an intermediate write.
 - **`en N secondes` means ramp duration**: the level moves progressively for that duration. Temporal constituents may appear in different grammatical positions as long as the semantic markers remain explicit.
-- **`dans N secondes` means delayed execution**: the level stays unchanged until the delay expires, then the target is applied. `dans` is never reinterpreted as a ramp duration.
+- **`dans N secondes` means delayed execution**: the requested one-shot action stays pending until the delay expires. This applies to level writes and single-target mute/unmute. `dans` is never reinterpreted as a ramp duration. Delayed source→bus mute is intentionally still unsupported rather than guessed because `dans` is also a route connector.
 - Percent values use the normalized fader range. An absolute `100%` means the top of the normalized fader range; a relative `+10%` means ten percentage points on that normalized range.
 - `fade in` / `fade out` without an explicit target defaults to **Main LR / façade**.
 - Main aliases currently include `main`, `main lr`, `lr`, `façade`, `front`, `principal`, `master`, `master lr`, and `mix principal`. `son` is accepted as an explicit synonym for `volume`/`niveau` in level phrases such as `monte le son` or `mets le son à -10 dB`.
