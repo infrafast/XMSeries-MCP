@@ -222,7 +222,7 @@ function displayName(target: LocalMixerTarget): string {
 }
 
 function mainTarget(query: string): LocalMixerTarget | null {
-    const normalized = simplify(query);
+    const normalized = simplify(cleanTarget(query));
     if (!MAIN_ALIASES.has(normalized)) return null;
     return {
         family: "main",
@@ -1200,6 +1200,23 @@ function parseIntent(raw: string, allowSequence = true): Intent | null {
             if (sourceQuery && destinationQuery) {
                 return { kind: "send_read_level", sourceQuery, destinationQuery };
             }
+        }
+    }
+
+    // "sur <value>" is a value form when no destination name follows.
+    // PROMPT example: "mets guitare sur -5 dB" means the source/main fader,
+    // not a source -> destination send.
+    const targetAbsoluteSurValue = text.match(
+        /^\s*(?:mets|met|regle|règle|fixe|set|monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:(?:le\s+)?(?:niveau|volume|fader|son)\s*(?:de\s+|du\s+|de la\s+|of\s+)?)?(.+?)\s+sur\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
+    );
+    if (targetAbsoluteSurValue?.[1] && targetAbsoluteSurValue[2] && targetAbsoluteSurValue[3]) {
+        const unit: LevelUnit = targetAbsoluteSurValue[3] === "%" ? "percent" : "db";
+        const value = unit === "percent"
+            ? parsePercent(targetAbsoluteSurValue[2])
+            : parseDb(targetAbsoluteSurValue[2]);
+        const targetQuery = cleanTarget(targetAbsoluteSurValue[1]);
+        if (value !== null && targetQuery) {
+            return { kind: "set_level", targetQuery, unit, value };
         }
     }
 
