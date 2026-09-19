@@ -1496,6 +1496,40 @@ function normalizedStatusText(status: any): string {
 
 export class LocalMixerCommandGateway {
     private readonly store: TokenStore<LocalPlan, LocalContinuation>;
+    private lastReferenceIntent: Intent | null = null;
+    private lastReferenceText = "";
+
+    private rewriteCrossTurnAnaphora(text: string): string {
+        if (!this.lastReferenceIntent) return text;
+        const hasExplicitReference =
+            /\b(?:idem|pareil|same|m[eê]me\s+cible|m[eê]me\s+(?:retour|bus)|lui|elle|celui-ci|celle-ci)\b/iu.test(text) ||
+            /^(?:remonte|rebaisse|mute|coupe|unmute|rallume|reactive|réactive|remets)(?:-|\s)*(?:la|le)\b/iu.test(text);
+        if (!hasExplicitReference) return text;
+        return rewriteSequenceAnaphora(text, this.lastReferenceIntent, this.lastReferenceText);
+    }
+
+    private rememberReference(intent: Intent, text: string): void {
+        if (intent.kind === "sequence") {
+            const last = intent.clauses[intent.clauses.length - 1];
+            if (!last) return;
+            const parsed = parseIntent(last.text, false);
+            if (parsed && parsed.kind !== "sequence") {
+                this.lastReferenceIntent = parsed;
+                this.lastReferenceText = last.text;
+            }
+            return;
+        }
+        if (
+            intent.kind === "status" ||
+            intent.kind === "automation_list" ||
+            intent.kind === "automation_cancel" ||
+            intent.kind === "read_channel_name"
+        ) {
+            return;
+        }
+        this.lastReferenceIntent = intent;
+        this.lastReferenceText = text;
+    }
 
     private async expandSpeakerContext(
         text: string,
@@ -1607,7 +1641,8 @@ export class LocalMixerCommandGateway {
             return await this.continueIntent(input.text, input.continuationToken);
         }
 
-        const expanded = await this.expandSpeakerContext(input.text, input.context);
+        const referencedText = this.rewriteCrossTurnAnaphora(input.text);
+        const expanded = await this.expandSpeakerContext(referencedText, input.context);
         if (expanded.clarification) {
             const stored = this.store.createContinuation({
                 kind: "speaker_context",
@@ -1624,6 +1659,9 @@ export class LocalMixerCommandGateway {
         }
 
         const intent = parseIntent(expanded.text);
+        if (intent) {
+            this.rememberReference(intent, expanded.text);
+        }
         if (!intent) {
             return {
                 protocol: GATEWAY_PROTOCOL,
