@@ -97,6 +97,8 @@ Apply this order strictly:
 
    * if it resolves to a bus/monitor -> bus fader/mute
    * if it resolves to a channel/FX/aux -> its own main LR fader/mute
+   * if it resolves to a DCA -> use `osc_dca_fader` / `osc_mute_dca`
+   * if it resolves to a matrix -> use `osc_matrix_fader` / `osc_mute_matrix` (X32/M32 only)
    * if no target is named -> main LR/façade
 
 ## 3. Destination rule
@@ -110,6 +112,7 @@ Examples:
 * `monte le volume` -> main LR fader
 * `monte le volume de 10%` -> relative +10 percentage points on the main LR normalized fader
 * `monte le volume à 100%` -> absolute main LR target at 100%
+* `mets batterie au niveau 0.75` -> absolute normalized fader target 0.75. Explicit `niveau`/`level` wording keeps normalized values distinct from dB values.
 * Directional verbs followed by `à`/`to` remain absolute targets: `monte batterie à -8 dB` and `baisse batterie sur Anthony à -20 dB` must not be converted into relative adjustments.
 * `fais un fade out en 10 secondes` -> main LR fader automation
 * `mets à -5 dB dans 10 secondes` -> delayed main LR fader write
@@ -324,8 +327,10 @@ Rules:
 * Automation target kinds must be exact. A named bus/monitor fader uses `{"kind":"bus_fader","bus":N}`; never use `{"kind":"bus","bus":N}`.
 * For delayed fader/send level changes such as "mets la façade à 0 dB dans 5 secondes", use structured automation targets, not raw OSC addresses. For façade/main LR use `osc_automation_delayed_command` with `{"target":{"kind":"main_fader"},"toDb":0,"delaySeconds":5}` or a macro wait plus ramp step.
 * Use `osc_automation_delayed_command` for delayed one-shot actions. Prefer `target` + `toDb`/`toLevel` for known level writes; use raw `command.address` only when the exact OSC path is documented for the active protocol. Never invent OSC paths.
-* The deterministic Local parser supports single-target delayed mute/unmute through the same MCP-side AutomationEngine and the same protocol-aware mute adapter used for immediate actions. Examples: `mute batterie dans 5 secondes`, `dans 5 secondes mute le main LR`, `dans 3 secondes rallume batterie`. Do not reinterpret `mute source sur bus dans N secondes` as a single-target mute; until route-delay grammar is implemented explicitly, keep that form fail-closed.
+* The deterministic Local parser supports delayed single-target and source→bus mute/unmute through the same MCP-side AutomationEngine and protocol-aware adapters used for immediate actions. Examples: `mute batterie dans 5 secondes`, `dans 5 secondes mute le main LR`, `dans 3 secondes rallume batterie`, `mute Batterie sur Anthony dans 5 secondes`. A route-delay command must remain a route mute; on OSCXR it may resolve and schedule but the protocol guard must report the unsupported bus-specific source mute rather than widening it to a whole-source mute.
 * Use `osc_automation_macro` for sequences containing multiple actions and waits. Prefer `ramp` steps over raw `command` steps for known mixer level writes. In a macro, every `ramp` step must include its own structured `target`; after resolving a name, copy the resolved target into the ramp step. Use `type:"wait"` for delays inside macros (`type:"delay"` is accepted only as a compatibility alias).
+* The deterministic Local parser compiles `puis` / `ensuite` / `then` into one MCP-owned automation sequence and resolves every named target before it starts. `après N secondes` inserts a wait. Explicit anaphora such as `remonte-la`, `même cible`, `même bus`, and `sur le même retour` may reuse the preceding resolved command; never infer such reuse without an explicit reference.
+* Canonical delayed `fade in/out` requests that give a delay but no ramp duration, such as `dans 5 secondes, fais un fade out de snare`, use a 5-second ramp after the requested wait. Other progressive requests still require an explicit `en N secondes` duration.
 * Resolve all names before starting an automation.
 * Apply the destination rule exactly: if no target is named and no explicit anaphora refers to a previous target, automate main LR/façade.
 * Automation tools return immediately with a job id.
