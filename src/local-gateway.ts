@@ -38,6 +38,19 @@ export interface LocalSpeakerMixerContext {
 export type LocalRelativeDirection = "up" | "down";
 export type LocalRelativeAmount = "little" | "normal" | "much";
 
+export type LocalSequenceAction =
+    | { type: "wait"; durationSeconds: number; description?: string }
+    | { type: "run"; description: string; run: () => Promise<void> }
+    | {
+          type: "ramp";
+          description: string;
+          from?: number;
+          to: number;
+          durationSeconds: number;
+          read: () => Promise<number>;
+          write: (value: number) => Promise<void>;
+      };
+
 export interface LocalMixerGatewayAdapter {
     resolve(query: string, families?: LocalMixerTargetFamily[]): Promise<LocalMixerTarget[]>;
     status(): Promise<any>;
@@ -55,6 +68,7 @@ export interface LocalMixerGatewayAdapter {
     startSendRamp(source: LocalMixerTarget, destination: LocalMixerTarget, toLevel: number, durationSeconds: number, fromLevel?: number): Promise<string>;
     startDelayedLevelRamp(target: LocalMixerTarget, toLevel: number, durationSeconds: number, delaySeconds: number, fromLevel?: number): Promise<string>;
     startDelayedSendRamp(source: LocalMixerTarget, destination: LocalMixerTarget, toLevel: number, durationSeconds: number, delaySeconds: number, fromLevel?: number): Promise<string>;
+    startSequence(actions: LocalSequenceAction[]): Promise<string>;
     scheduleLevel(target: LocalMixerTarget, toLevel: number, delaySeconds: number): Promise<string>;
     scheduleMute(target: LocalMixerTarget, mute: boolean, delaySeconds: number): Promise<string>;
     scheduleSend(source: LocalMixerTarget, destination: LocalMixerTarget, toLevel: number, delaySeconds: number): Promise<string>;
@@ -125,7 +139,8 @@ type Intent =
     | { kind: "bulk_channel_mute"; mode: "selected" | "all" | "all_except"; channelQueries: string[]; mute: boolean }
     | { kind: "bulk_bus_mute"; mode: "selected" | "all" | "all_except"; busQueries: string[]; mute: boolean }
     | { kind: "bulk_send_db"; mode: "selected" | "all"; sourceQuery: string; busQueries: string[]; db: number; includeMain: boolean }
-    | { kind: "mute"; targetQuery: string; mute: boolean };
+    | { kind: "mute"; targetQuery: string; mute: boolean }
+    | { kind: "sequence"; clauses: Array<{ text: string; waitBeforeSeconds: number }> };
 
 type TargetIntent = Extract<Intent, { targetQuery: string }>;
 type SendIntent = Extract<Intent, { sourceQuery: string; destinationQuery: string }>;
@@ -161,7 +176,8 @@ type LocalPlan =
     | { kind: "bulk_channel_mute"; mode: "selected" | "all" | "all_except"; channelQueries: string[]; channels: LocalMixerTarget[]; mute: boolean }
     | { kind: "bulk_bus_mute"; mode: "selected" | "all" | "all_except"; busQueries: string[]; buses: LocalMixerTarget[]; mute: boolean }
     | { kind: "bulk_send_db"; mode: "selected" | "all"; sourceQuery: string; source: LocalMixerTarget; busQueries: string[]; buses: LocalMixerTarget[]; db: number; includeMain: boolean }
-    | { kind: "mute"; targetQuery: string; target: LocalMixerTarget; mute: boolean };
+    | { kind: "mute"; targetQuery: string; target: LocalMixerTarget; mute: boolean }
+    | { kind: "sequence"; steps: Array<{ waitBeforeSeconds: number; plan: LocalPlan }> };
 
 type LocalContinuation =
     | {
