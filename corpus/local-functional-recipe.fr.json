@@ -1,0 +1,813 @@
+{
+  "version": 1,
+  "locale": "fr-FR",
+  "description": "Canonical functional acceptance recipe for the deterministic Local mixer gateway. Each supported user intent family is represented; corpus/local-commands.fr.json retains broader grammatical permutations.",
+  "cases": [
+    {
+      "category": "status",
+      "name": "mixer-status",
+      "utterance": "statut mixeur",
+      "expected": {
+        "status": "ready",
+        "effect": "read"
+      }
+    },
+    {
+      "category": "read",
+      "name": "read-channel-level",
+      "utterance": "niveau de Batterie",
+      "expected": {
+        "status": "ready",
+        "effect": "read"
+      }
+    },
+    {
+      "category": "read",
+      "name": "read-mute-state",
+      "utterance": "état du mute de Batterie",
+      "expected": {
+        "status": "ready",
+        "effect": "read"
+      }
+    },
+    {
+      "category": "read",
+      "name": "read-fx-state",
+      "utterance": "Hall FX est-il actif ?",
+      "expected": {
+        "status": "ready",
+        "effect": "read"
+      }
+    },
+    {
+      "category": "read",
+      "name": "read-channel-name",
+      "utterance": "quel est le nom de la voie 6 ?",
+      "expected": {
+        "status": "ready",
+        "effect": "read"
+      }
+    },
+    {
+      "category": "level",
+      "name": "main-default-up",
+      "utterance": "monte le volume",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "main-absolute",
+      "utterance": "mets le son à -10 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "channel-absolute-db",
+      "utterance": "mets Batterie à -30 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "channel-absolute-percent",
+      "utterance": "mets Batterie à 50%",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "channel-normalized",
+      "utterance": "mets Batterie au niveau 0.75",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "channel-relative-db",
+      "utterance": "monte Batterie de 3 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "channel-relative-percent",
+      "utterance": "baisse Batterie de 10%",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "channel-qualitative",
+      "utterance": "baisse un peu Batterie",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "bus-read",
+      "utterance": "niveau de Anthony",
+      "expected": {
+        "status": "ready",
+        "effect": "read"
+      }
+    },
+    {
+      "category": "level",
+      "name": "bus-level",
+      "utterance": "mets Anthony à -8 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "bus-mute",
+      "utterance": "mute Anthony",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "fx-return-read",
+      "utterance": "niveau de Hall FX",
+      "expected": {
+        "status": "ready",
+        "effect": "read"
+      }
+    },
+    {
+      "category": "level",
+      "name": "fx-return-level",
+      "utterance": "mets Hall FX à -10 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "fx-return-mute",
+      "utterance": "mute Hall FX",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "aux-return-read",
+      "utterance": "niveau de Playback",
+      "expected": {
+        "status": "ready",
+        "effect": "read"
+      }
+    },
+    {
+      "category": "level",
+      "name": "aux-return-level",
+      "utterance": "mets Playback à -12 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "aux-return-mute",
+      "utterance": "mute Playback",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "main-read",
+      "utterance": "niveau de façade",
+      "expected": {
+        "status": "ready",
+        "effect": "read"
+      }
+    },
+    {
+      "category": "level",
+      "name": "main-mute",
+      "utterance": "mute le main LR",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "main-unmute",
+      "utterance": "rallume la façade",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "dca-read",
+      "utterance": "niveau de Band",
+      "expected": {
+        "status": "ready",
+        "effect": "read"
+      }
+    },
+    {
+      "category": "level",
+      "name": "matrix-read-x32",
+      "utterance": "niveau de Matrix Vox",
+      "expected": {
+        "status": "ready",
+        "effect": "read"
+      },
+      "liveNote": "X32/M32 only; OSCXR must return unsupported at execution."
+    },
+    {
+      "category": "level",
+      "name": "dca-level",
+      "utterance": "mets Band à -6 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "dca-mute",
+      "utterance": "mute Band",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "matrix-level-x32",
+      "utterance": "mets Matrix Vox à -12 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      },
+      "liveNote": "X32/M32 only; OSCXR must return unsupported at execution."
+    },
+    {
+      "category": "level",
+      "name": "matrix-mute-x32",
+      "utterance": "mute Matrix Vox",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      },
+      "liveNote": "X32/M32 only; OSCXR must return unsupported at execution."
+    },
+    {
+      "category": "mute",
+      "name": "channel-mute",
+      "utterance": "mute Batterie",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "mute",
+      "name": "channel-unmute",
+      "utterance": "rallume Batterie",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "bulk",
+      "name": "selected-channels-mute",
+      "utterance": "mute les voies Voix et Batterie",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "bulk",
+      "name": "all-channels-mute",
+      "utterance": "mute toutes les voies",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "bulk",
+      "name": "all-channels-except",
+      "utterance": "mute toutes les voies sauf Voix",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "bulk",
+      "name": "selected-buses-mute",
+      "utterance": "mute les bus Anthony et Laurent",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "bulk",
+      "name": "all-buses-mute",
+      "utterance": "coupe tous les bus",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "bulk",
+      "name": "all-buses-except",
+      "utterance": "coupe tous les bus sauf Anthony",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "send",
+      "name": "channel-send-read",
+      "utterance": "niveau de Batterie sur Anthony",
+      "expected": {
+        "status": "ready",
+        "effect": "read"
+      }
+    },
+    {
+      "category": "send",
+      "name": "channel-send-absolute",
+      "utterance": "mets Batterie sur Anthony à -20 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "send",
+      "name": "channel-send-normalized",
+      "utterance": "mets Batterie sur Anthony au niveau 0.5",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "send",
+      "name": "channel-send-relative",
+      "utterance": "monte Batterie sur Anthony de 3 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "send",
+      "name": "channel-send-qualitative",
+      "utterance": "baisse un peu Batterie dans Anthony",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "send",
+      "name": "fx-send",
+      "utterance": "mets Hall FX sur Anthony à -18 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "send",
+      "name": "aux-return-send",
+      "utterance": "mets Playback sur Anthony à -20 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "send",
+      "name": "route-mute",
+      "utterance": "mute Batterie sur Anthony",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      },
+      "liveNote": "X32/M32: route mute. OSCXR: expected explicit unsupported; must never widen to whole-channel mute."
+    },
+    {
+      "category": "send",
+      "name": "route-fx-mute",
+      "utterance": "coupe Hall FX sur Anthony",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      },
+      "liveNote": "OSCXR expected unsupported for bus-specific source mute."
+    },
+    {
+      "category": "send",
+      "name": "route-aux-unmute",
+      "utterance": "réactive Playback dans Anthony",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      },
+      "liveNote": "OSCXR expected unsupported for bus-specific source mute."
+    },
+    {
+      "category": "send",
+      "name": "ownership-route",
+      "utterance": "mets la guitare de anto sur Claude à -5 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "bulk",
+      "name": "bulk-send-selected",
+      "utterance": "mets Batterie à -20 dB sur les bus Anthony et Laurent",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "bulk",
+      "name": "bulk-send-all-main",
+      "utterance": "mets Batterie à -25 dB sur tous les bus et façade",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "aux-output",
+      "name": "channel-to-aux-output",
+      "utterance": "mets Batterie sur sortie aux 2 à 50%",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      },
+      "liveNote": "X32/M32 only; OSCXR expected unsupported."
+    },
+    {
+      "category": "aux-output",
+      "name": "channel-to-aux-output-normalized",
+      "utterance": "mets Batterie sur sortie aux 2 au niveau 0.5",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      },
+      "liveNote": "X32/M32 only; OSCXR expected unsupported."
+    },
+    {
+      "category": "automation",
+      "name": "ramp-absolute",
+      "utterance": "baisse progressivement Batterie à -30 dB en 2 secondes",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "automation",
+      "name": "ramp-relative",
+      "utterance": "monte progressivement Batterie de 3 dB en 2 secondes",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "automation",
+      "name": "ramp-qualitative",
+      "utterance": "baisse un peu progressivement Batterie en 2 secondes",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "automation",
+      "name": "ramp-normalized",
+      "utterance": "monte progressivement Batterie au niveau 0.8 en 2 secondes",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "automation",
+      "name": "send-ramp",
+      "utterance": "en 3 secondes monte progressivement Batterie sur Anthony à -10 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "automation",
+      "name": "fade-out",
+      "utterance": "fade out Batterie en 5 secondes",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "automation",
+      "name": "fade-in-main",
+      "utterance": "fade in en 5 secondes",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "automation",
+      "name": "explicit-range",
+      "utterance": "fade Batterie de -40 dB à -10 dB en 5 secondes",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "automation",
+      "name": "delayed-level",
+      "utterance": "mets Batterie à -27 dB dans 2 secondes",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "automation",
+      "name": "delayed-mute",
+      "utterance": "dans 3 secondes rallume Batterie",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "automation",
+      "name": "delayed-route-mute",
+      "utterance": "mute Batterie sur Anthony dans 5 secondes",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      },
+      "liveNote": "OSCXR planning is valid but execution must report route-mute unsupported safely."
+    },
+    {
+      "category": "automation",
+      "name": "delayed-ramp",
+      "utterance": "dans 3 secondes baisse progressivement Batterie à -30 dB en 2 secondes",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "automation",
+      "name": "delayed-fade-default",
+      "utterance": "dans 5 secondes, fais un fade out de Voix",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "automation",
+      "name": "automation-list",
+      "utterance": "statut des automations",
+      "expected": {
+        "status": "ready",
+        "effect": "read"
+      }
+    },
+    {
+      "category": "automation",
+      "name": "automation-cancel-id",
+      "utterance": "annule l'automation auto-3",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "automation",
+      "name": "automation-cancel-latest",
+      "utterance": "annule la dernière automation",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "sequence",
+      "name": "sequence-anaphora-wait",
+      "utterance": "baisse la façade puis remonte-la après 5 secondes",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "sequence",
+      "name": "sequence-delay-action",
+      "utterance": "mute Batterie puis dans 2 secondes unmute Batterie",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "sequence",
+      "name": "sequence-relative-ramp",
+      "utterance": "mets Batterie à -20 dB puis monte progressivement Batterie de 3 dB en 2 secondes",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "speaker",
+      "name": "speaker-monitor",
+      "utterance": "monte mon retour de 3 dB",
+      "context": {
+        "speaker": {
+          "name": "Laurent",
+          "confidence": 0.92,
+          "backend": "test"
+        }
+      },
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "speaker",
+      "name": "speaker-input",
+      "utterance": "mets mon micro à -12 dB",
+      "context": {
+        "speaker": {
+          "name": "Laurent",
+          "confidence": 0.92,
+          "backend": "test"
+        }
+      },
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "speaker",
+      "name": "speaker-source-monitor",
+      "utterance": "mets Batterie dans mon retour à -20 dB",
+      "context": {
+        "speaker": {
+          "name": "Laurent",
+          "confidence": 0.92,
+          "backend": "test"
+        }
+      },
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "speaker",
+      "name": "speaker-unknown",
+      "utterance": "monte mon retour de 3 dB",
+      "context": {
+        "speaker": {
+          "name": "unknown",
+          "confidence": 0,
+          "backend": "none"
+        }
+      },
+      "expected": {
+        "status": "clarification",
+        "effect": "none"
+      }
+    },
+    {
+      "category": "safety",
+      "name": "unknown-target",
+      "utterance": "mute Introuvable",
+      "expected": {
+        "status": "clarification",
+        "effect": "none"
+      }
+    },
+    {
+      "category": "safety",
+      "name": "ambiguous-target",
+      "utterance": "mute tom",
+      "expected": {
+        "status": "clarification",
+        "effect": "none"
+      }
+    },
+    {
+      "category": "safety",
+      "name": "read-display-not-write",
+      "utterance": "montre-moi le niveau de Batterie",
+      "expected": {
+        "status": "unrecognized",
+        "effect": "none"
+      }
+    },
+    {
+      "category": "safety",
+      "name": "sequence-fail-closed",
+      "utterance": "mute Batterie puis mute Introuvable",
+      "expected": {
+        "status": "clarification",
+        "effect": "none"
+      }
+    },
+    {
+      "category": "anaphora",
+      "name": "reference-seed-target",
+      "session": "target-ref",
+      "utterance": "baisse Voix",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "anaphora",
+      "name": "reference-explicit-target",
+      "session": "target-ref",
+      "utterance": "remonte-la",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "anaphora",
+      "name": "reference-seed-route",
+      "session": "route-ref",
+      "utterance": "mets Batterie sur Anthony à -12 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "anaphora",
+      "name": "reference-same-route",
+      "session": "route-ref",
+      "utterance": "mets Voix sur le même retour à -8 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    }
+  ]
+}

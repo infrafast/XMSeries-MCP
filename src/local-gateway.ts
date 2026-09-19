@@ -413,7 +413,7 @@ function parseFlexibleTemporalIntent(raw: string): Intent | null {
     remove(relativeMatch);
 
     remainder = remainder
-        .replace(/\bfade[ -]?(?:in|out)\b/giu, " ")
+        .replace(/\bfade(?:[ -]?(?:in|out))?\b/giu, " ")
         .replace(/\b(?:progressivement|progressively|gradually|rampe|ramp)\b/giu, " ")
         .replace(/\b(?:un\s+peu|beaucoup|a\s+little|a\s+lot|slightly)\b/giu, " ")
         .replace(/\b(?:fais|faire)\b/giu, " ")
@@ -758,16 +758,35 @@ function parseIntent(raw: string, allowSequence = true): Intent | null {
         }
     }
 
+    const earlyChannelToAuxNormalized = text.match(
+        /^\s*(?:mets|met|regle|règle|fixe|set)\s+(.+?)\s+(?:sur|vers|to)\s+(?:la\s+)?(?:sortie\s+aux|aux\s+output)\s+(\d+)\s+(?:(?:a|à|to)\s+)?(?:au\s+)?(?:niveau|level)\s+(0(?:[.,]\d+)?|1(?:[.,]0+)?)\s*$/iu,
+    );
+    if (earlyChannelToAuxNormalized?.[1] && earlyChannelToAuxNormalized[2] && earlyChannelToAuxNormalized[3]) {
+        const aux = Number(earlyChannelToAuxNormalized[2]);
+        const value = parseNormalizedLevel(earlyChannelToAuxNormalized[3]);
+        if (Number.isInteger(aux) && aux > 0 && value !== null) {
+            return {
+                kind: "send_to_aux_output",
+                sourceQuery: cleanTarget(earlyChannelToAuxNormalized[1]),
+                aux,
+                unit: "level",
+                value,
+            };
+        }
+    }
+
     const normalizedSend = text.match(
         /^\s*(?:mets|met|regle|règle|fixe|set|monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:(?:a|à|to)\s+)?(?:au\s+)?(?:niveau|level)\s+(0(?:[.,]\d+)?|1(?:[.,]0+)?)\s*$/iu,
     );
     if (normalizedSend?.[1] && normalizedSend[2] && normalizedSend[3]) {
+        const destinationQuery = cleanTarget(normalizedSend[2]);
+        const typedAuxOutput = /^(?:la\s+)?(?:sortie\s+aux|aux\s+output)\s+\d+$/iu.test(destinationQuery);
         const value = parseNormalizedLevel(normalizedSend[3]);
-        if (value !== null) {
+        if (!typedAuxOutput && value !== null) {
             return {
                 kind: "send_set_level",
                 sourceQuery: cleanTarget(normalizedSend[1]),
-                destinationQuery: cleanTarget(normalizedSend[2]),
+                destinationQuery,
                 unit: "level",
                 value,
             };

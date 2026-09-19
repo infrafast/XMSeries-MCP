@@ -289,11 +289,12 @@ Full list is visible to Claude; high-level groupings:
 
 | Group | Coverage |
 |---|---|
-| **Channel strips** | headamp/preamp context, fader, mute, name, source, bus sends |
-| **Bus / Matrix / Aux / FX-Return / DCA / Main** | faders, mutes, names, focused strip reads |
-| **Identity / status** | `osc_get_mixer_status` uses `/xinfo` for network address, mixer network name, console model, and console version |
-| **FX** | all-effects overview and FX return on/off plus parameter writes |
-| **Bulk reads** | `channel_strip`, `bus_strip`, `aux_strip`, `matrix_strip`, `fx_return_strip`, `main_strip`, `dca`, `headamp`, `console_overview` |
+| **Resolution / identity** | named-target resolution, channel→bus resolution, recognized-speaker context, fresh mixer status |
+| **Channel / Bus / Aux / FX-return / DCA / Main** | user-facing fader and mute controls, plus channel mute/name reads |
+| **Matrix** | fader and mute controls on X32/M32; explicitly unsupported on OSCXR |
+| **Sends** | channel / FX return / aux return → bus levels, route mutes where protocol-safe, channel → AUX output on X32/M32 |
+| **Grouped writes** | selected/all/all-except channel and bus mutes; channel level to selected/all buses with optional Main LR |
+| **FX state** | FX-return active/muted state and on/off control through the FX return |
 | **Fader dB conversion** | `osc_db_to_fader_level`, `osc_fader_level_to_db`, factorized fader/send tools with `unit:"db"` |
 | **Automation** | `osc_automation_ramp`, `osc_automation_delayed_command`, `osc_automation_macro`, `osc_automation_list`, `osc_automation_cancel` for background fades, delayed actions, and timed sequences |
 
@@ -524,6 +525,11 @@ The parser is intentionally bounded and deterministic. Prefer the canonical form
 | Read a level | `niveau de batterie` · `donne le niveau de batterie` |
 | Mute / unmute | `mute batterie` · `éteins batterie` · `unmute batterie` · `rallume batterie` |
 | DCA level / mute | `mets Band à -6 dB` · `mute Band` · `baisse progressivement Band à -20 dB en 2 secondes` |
+| Matrix level / mute | `mets Matrix Vox à -12 dB` · `mute Matrix Vox` (X32/M32 only; OSCXR must return unsupported) |
+| Read mute / FX state / channel name | `état du mute de Batterie` · `Hall FX est-il actif ?` · `quel est le nom de la voie 6 ?` |
+| Normalized level | `mets Batterie au niveau 0.75` · `mets Batterie sur Anthony au niveau 0.5` |
+| Grouped channel mute | `mute les voies Voix et Batterie` · `mute toutes les voies` · `mute toutes les voies sauf Voix` |
+| Channel -> AUX output | `mets Batterie sur sortie aux 2 à 50%` · `mets Batterie sur sortie aux 2 au niveau 0.5` (X32/M32 only) |
 | Absolute dB | `mets batterie à -30 dB` · `mets le niveau de batterie à -30 dB` |
 | Relative dB | `monte batterie de 3 dB` · `baisse batterie de 3 dB` |
 | Qualitative relative | `monte un peu le niveau de batterie` · `baisse beaucoup batterie` · `monte le volume` · `monte le son` · `baisse un peu le volume` (Main LR) · `un peu plus fort batterie` · `batterie moins fort` |
@@ -542,6 +548,10 @@ The parser is intentionally bounded and deterministic. Prefer the canonical form
 | Fade | `fade out batterie en 10 secondes` · `fade in batterie en 10 secondes` |
 | Explicit fade range | `fade batterie de -40 dB à -10 dB en 5 secondes` |
 | Delayed level | `mets batterie à -27 dB dans 2 secondes` |
+| Delayed ramp | `dans 3 secondes baisse progressivement batterie à -30 dB en 2 secondes` |
+| Delayed fade | `dans 5 secondes, fais un fade out de Voix` (without an explicit ramp duration, the canonical delayed-fade form uses a 5 s ramp) |
+| Multi-action sequence | `baisse la façade puis remonte-la après 5 secondes` · `mute Batterie puis dans 2 secondes unmute Batterie` |
+| Explicit anaphora | after `baisse Voix`: `remonte-la`; after a route command: `mets Voix sur le même retour à -8 dB` |
 | Delayed mute | `mute batterie dans 5 secondes` · `dans 5 secondes mute le main LR` · `dans 3 secondes rallume batterie` · `mute Batterie sur Anthony dans 5 secondes` |
 | Automation status | `statut des automations` · `liste les automations` |
 | Cancel by id | `annule l'automation auto-3` |
@@ -558,12 +568,15 @@ Important syntax rules:
 - **`en N secondes` means ramp duration**: the level moves progressively for that duration. Temporal constituents may appear in different grammatical positions as long as the semantic markers remain explicit.
 - **`dans N secondes` means delayed execution**: the requested one-shot action stays pending until the delay expires. This applies to level writes, single-target mute/unmute, and source→bus mute/unmute. `dans` is never reinterpreted as a ramp duration. For route mutes the parser binds the source and bus first, then the delay, so `mute Batterie sur Anthony dans 5 secondes` and `dans 5 secondes, mute Batterie sur Anthony` are equivalent.
 - Percent values use the normalized fader range. An absolute `100%` means the top of the normalized fader range; a relative `+10%` means ten percentage points on that normalized range.
+- Explicit normalized values use `niveau 0.0..1.0` / `level 0.0..1.0`, for example `mets Batterie au niveau 0.75`. This explicit wording prevents a unitless dB-looking number from being reinterpreted as a normalized fader value.
+- Multi-action phrases separated by `puis`, `ensuite`, or `then` are resolved completely before one MCP-owned automation starts. `après N secondes` adds a wait between steps. If any step is ambiguous, the whole sequence remains fail-closed.
+- Cross-turn context is never inherited implicitly. Explicit anaphora such as `remonte-la`, `même cible`, `même bus`, `sur le même retour`, `lui`, or `elle` may refer to the preceding deterministic command.
 - `fade in` / `fade out` without an explicit target defaults to **Main LR / façade**.
 - Main aliases currently include `main`, `main lr`, `lr`, `façade`, `front`, `principal`, `master`, `master lr`, and `mix principal`. `son` is accepted as an explicit synonym for `volume`/`niveau` in level phrases such as `monte le son` or `mets le son à -10 dB`.
 - Source-to-destination syntax supports **channel / FX return / aux return -> bus** for reads and writes. The source and destination are resolved independently and must each be safe and unique. Examples: `niveau de Batterie sur Anthony`, `monte batterie sur Anthony`, `mets Hall FX sur Anthony à -18 dB`, `baisse un peu Playback dans Anthony`. Route reads are strictly read-only. Route mute/unmute such as `mute Batterie sur Anthony` is a distinct send operation and never degrades into whole-source mute. Qualitative route commands use the same adaptive `osc_adjust_level` semantics as cloud tools; a source name such as `Basse` remains a source candidate in `monte Basse sur Anthony`, not a contradictory direction.
 - If a name is ambiguous or only fuzzy-matches, the gateway asks for clarification rather than guessing.
 - French STT robustness: `montre Batterie` and `montre le volume` are accepted as likely `monte` transcriptions in mixer-level command shapes. Explicit display/read forms such as `montre-moi le niveau de Batterie` are **not** rewritten into writes.
-- DCA writes are not yet part of the deterministic Local write surface.
+- DCA fader, mute and level automation are part of the deterministic Local write surface. Matrix fader/mute/automation are supported for X32/M32 and remain explicitly unsupported on OSCXR.
 - Group/bulk natural-language commands are supported for bus-master mute/unmute and channel-send dB writes to selected/all buses, including an explicit Main LR/façade inclusion.
 - Speaker-context defaults are supported for first-person phrases when the host supplies recognized-speaker context. XMSeries-MCP remains responsible for mapping the speaker through `XMS_SPEAKER_MAP` / `osc_get_speaker_context`. An explicit mapped `bus` means that bus; an explicitly mapped speaker without a bus means Main LR/façade; an unmapped speaker is unresolved and must clarify.
 - Canonical first-person examples: `monte mon retour de 3 dB`, `mets mon micro à -12 dB`, `mets batterie dans mon retour à -20 dB`. For a Main-destination speaker, `mon retour` controls Main LR and `batterie dans mon retour` controls Batterie’s Main LR fader path rather than inventing a bus. `mute mon retour` therefore mutes Main LR, but `mute batterie dans mon retour` is intentionally refused because no dedicated source→Main send mute exists and broadening it to whole-source mute would be unsafe. If the speaker is unknown or a required input channel mapping is unavailable, the Local parser asks for clarification instead of guessing.
@@ -571,6 +584,21 @@ Important syntax rules:
 The deterministic grammar is not intended to accept arbitrary prose. For temporal commands it is deliberately **flexible on constituent order but strict on semantic markers**. For example, `baisse progressivement batterie à -30 dB en 2 secondes`, `baisse progressivement en 2 secondes batterie à -30 dB`, and `en 2 secondes baisse progressivement batterie à -30 dB` resolve to the same ramp plan. A bare `-30 dB` without `à`/`de` remains unsupported rather than guessed. If a phrase is not documented and is not covered by parser tests, treat it as unsupported rather than assuming the parser will infer the intent.
 
 The canonical regression source is `corpus/local-commands.fr.json`. CI executes every corpus phrase through the real deterministic gateway with a fake mixer adapter via `test-local-corpus.mjs`. When adding or changing Local syntax, update this corpus together with the parser, tool-side semantics, tests and this README.
+
+### Functional acceptance recipe
+
+The milestone-level acceptance source is `corpus/local-functional-recipe.fr.json`. It is intentionally smaller than the grammatical regression corpus: it contains one or more canonical commands for **every distinct user-facing intent family** documented here and in `PROMPT.md`. CI runs it through `test-local-recipe.mjs`, including execution against a fake mixer adapter.
+
+Run both deterministic suites locally with:
+
+```bash
+npm run test:local-gateway
+npm run test:local-recipe
+```
+
+For a live rack test, type the recipe utterances from `corpus/local-functional-recipe.fr.json` into LSA. Observe each `liveNote`: on OSCXR, bus-specific source mute, matrices and channel-to-AUX-output are expected to report **unsupported** at execution and must never broaden into a different operation. The same recipe can be run against X32/M32 to validate those operations positively.
+
+The recipe covers status/reads, Main/channel/bus/FX/aux/DCA/matrix levels and mutes, dB/percent/normalized values, source-to-bus routing, structured ownership names, grouped operations, AUX outputs, ramps/fades/delays, multi-action sequences, automation list/cancel, speaker context, explicit anaphora, ambiguity and unknown-target fail-closed behavior. The larger grammar corpus covers additional word-order and synonym permutations.
 
 ### Cloud/LLM mode versus deterministic parsing
 
