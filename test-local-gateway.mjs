@@ -1274,6 +1274,46 @@ async function ready(text) {
     assert.equal(automationCalls[0].durationSeconds, 5);
 }
 
+// Explicit cross-turn anaphora may reuse the previous target; implicit inheritance may not.
+{
+    qualitativeCalls = [];
+    let analyzed = await ready("baisse Voix");
+    let result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+
+    analyzed = await ready("remonte-la");
+    result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(qualitativeCalls.at(-1).target.name, "Voix");
+    assert.equal(qualitativeCalls.at(-1).direction, "up");
+}
+
+// Explicit "same return" reuses only the previous route destination.
+{
+    sendWrites = [];
+    let analyzed = await ready("mets Batterie sur Anthony à -12 dB");
+    let result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+
+    analyzed = await ready("mets Voix sur le même retour à -8 dB");
+    result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(sendWrites.at(-1).source.name, "Voix");
+    assert.equal(sendWrites.at(-1).destination.name, "Anthony");
+}
+
 // Multi-action macro: explicit anaphora stays on the first target.
 {
     sequenceCalls = [];
