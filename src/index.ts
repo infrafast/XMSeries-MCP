@@ -438,7 +438,8 @@ async function localGatewayWriteLevel(target: LocalMixerTarget, level: number): 
             await osc.setMatrixFader(target.index, level);
             return;
         case "dca":
-            throw new Error("Les écritures DCA ne font pas partie du MVP déterministe actuel.");
+            await osc.setDcaFader(target.index, level);
+            return;
     }
 }
 
@@ -463,7 +464,8 @@ async function localGatewaySetMute(target: LocalMixerTarget, mute: boolean): Pro
             await osc.muteMatrix(target.index, mute);
             return;
         case "dca":
-            throw new Error("Les écritures DCA ne font pas partie du MVP déterministe actuel.");
+            await osc.muteDca(target.index, mute);
+            return;
     }
 }
 
@@ -505,7 +507,7 @@ function localGatewayAutomationTarget(target: LocalMixerTarget): AutomationTarge
         case "matrix":
             return { kind: "matrix_fader", matrix: target.index };
         case "dca":
-            throw new Error("Les automations DCA ne font pas partie du gateway déterministe actuel.");
+            return { kind: "dca_fader", dca: target.index };
     }
 }
 
@@ -801,6 +803,7 @@ type AutomationTargetKind =
     | "aux_fader"
     | "aux_send"
     | "matrix_fader"
+    | "dca_fader"
     | "raw";
 
 interface AutomationTargetSpec {
@@ -810,6 +813,7 @@ interface AutomationTargetSpec {
     effect?: number;
     aux?: number;
     matrix?: number;
+    dca?: number;
     address?: string;
     readAddress?: string;
     writeAddress?: string;
@@ -1268,6 +1272,19 @@ function targetAdapter(target: AutomationTargetSpec): AutomationTargetAdapter {
                 write: (level) => osc.sendLevelRaw(address, level, { allowOfflineWrite: true }),
             };
         }
+        case "dca_fader": {
+            const dca = requireNumber(target.dca, "dca");
+            const address = `/dca/${dca}/fader`;
+            return {
+                label: `DCA ${dca} fader`,
+                read: async () => {
+                    const state = await osc.getDCA(dca);
+                    if (typeof state?.fader !== "number") throw new Error(`Unable to read DCA ${dca} fader`);
+                    return state.fader;
+                },
+                write: (level) => osc.sendLevelRaw(address, level, { allowOfflineWrite: true }),
+            };
+        }
         case "raw": {
             const readAddress = target.readAddress || target.address;
             const writeAddress = target.writeAddress || target.address;
@@ -1285,7 +1302,7 @@ function targetAdapter(target: AutomationTargetSpec): AutomationTargetAdapter {
         default:
             throw new Error(
                 `Unsupported automation target kind "${kind ?? "(missing)"}". ` +
-                    "Use one of: channel_fader, channel_send, bus_fader, main_fader, fx_return_fader, fx_send, aux_fader, aux_send, matrix_fader, raw. " +
+                    "Use one of: channel_fader, channel_send, bus_fader, main_fader, fx_return_fader, fx_send, aux_fader, aux_send, matrix_fader, dca_fader, raw. " +
                     'For a bus fader, use target.kind="bus_fader", not "bus".'
             );
     }
@@ -1676,9 +1693,9 @@ export const TOOLS: Tool[] = [
             properties: {
                 target: {
                     type: "object",
-                    description: "Target to automate. Use channel_fader for source on main LR, channel_send for source to bus, bus_fader for a named bus/monitor fader, main_fader, fx_return_fader, fx_send, aux_fader, aux_send, matrix_fader, or raw. Never use kind='bus'; use kind='bus_fader'. On OSCXR all listed mapped level targets are supported except matrix_fader.",
+                    description: "Target to automate. Use channel_fader for source on main LR, channel_send for source to bus, bus_fader for a named bus/monitor fader, main_fader, fx_return_fader, fx_send, aux_fader, aux_send, matrix_fader, dca_fader, or raw. Never use kind='bus'; use kind='bus_fader'. On OSCXR all listed mapped level targets are supported except matrix_fader.",
                     properties: {
-                        kind: { type: "string", enum: ["channel_fader", "channel_send", "bus_fader", "main_fader", "fx_return_fader", "fx_send", "aux_fader", "aux_send", "matrix_fader", "raw"] },
+                        kind: { type: "string", enum: ["channel_fader", "channel_send", "bus_fader", "main_fader", "fx_return_fader", "fx_send", "aux_fader", "aux_send", "matrix_fader", "dca_fader", "raw"] },
                         channel: { type: "number" },
                         bus: { type: "number" },
                         effect: { type: "number" },
@@ -1714,7 +1731,7 @@ export const TOOLS: Tool[] = [
                     type: "object",
                     description: "Structured level target for delayed fader/send writes. Use main_fader for facade/main LR, bus_fader for a named bus/monitor, channel_fader for a source on main LR, channel_send for source to bus, etc. Prefer this over raw command.",
                     properties: {
-                        kind: { type: "string", enum: ["channel_fader", "channel_send", "bus_fader", "main_fader", "fx_return_fader", "fx_send", "aux_fader", "aux_send", "matrix_fader", "raw"] },
+                        kind: { type: "string", enum: ["channel_fader", "channel_send", "bus_fader", "main_fader", "fx_return_fader", "fx_send", "aux_fader", "aux_send", "matrix_fader", "dca_fader", "raw"] },
                         channel: { type: "number" },
                         bus: { type: "number" },
                         effect: { type: "number" },
@@ -2080,6 +2097,33 @@ export const TOOLS: Tool[] = [
                 mute: { type: "boolean", description: "True to mute all other buses, false to unmute all other buses" },
             },
             required: ["exceptBuses", "mute"],
+        },
+    },
+    // ========== DCA Controls ==========
+    {
+        name: "osc_dca_fader",
+        description: "Get or set a DCA fader. Use unit='db' for dB requests; default unit='db' for reads; set actions require explicit unit.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                action: { type: "string", enum: ["get", "set"] },
+                dca: { type: "number", description: "DCA number within the configured runtime dcaCount.", minimum: 1 },
+                unit: { type: "string", enum: ["level", "percent", "db"] },
+                value: { type: "number", minimum: -120, maximum: 100 },
+            },
+            required: ["action", "dca"],
+        },
+    },
+    {
+        name: "osc_mute_dca",
+        description: "Mute or unmute a DCA group.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                dca: { type: "number", description: "DCA number within the configured runtime dcaCount.", minimum: 1 },
+                mute: { type: "boolean" },
+            },
+            required: ["dca", "mute"],
         },
     },
     // ========== Aux Controls ==========
@@ -2950,6 +2994,33 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
 
 
+
+            // ========== DCA Controls ==========
+            case "osc_dca_fader": {
+                const { dca, ...levelInput } = args as unknown as { dca: number } & LevelToolInput;
+                if (!Number.isInteger(dca) || dca < 1 || dca > oscRuntimeConfig.dcaCount) {
+                    throw new Error(`Invalid DCA number ${dca}. Configured DCA range is 1 to ${oscRuntimeConfig.dcaCount}.`);
+                }
+                const operation = parseLevelOperation(levelInput);
+                const label = `DCA ${dca} fader`;
+                if (operation.action === "get") {
+                    const state = await osc.getDCA(dca);
+                    if (typeof state?.fader !== "number") throw new Error(`Unable to read DCA ${dca} fader`);
+                    return { content: [{ type: "text", text: formatLevelRead(label, state.fader, operation.unit) }] };
+                }
+                const target = levelValueToNormalized(operation);
+                await osc.setDcaFader(dca, target.level);
+                return { content: [{ type: "text", text: `Set DCA ${dca} fader to ${target.text}` }] };
+            }
+
+            case "osc_mute_dca": {
+                const { dca, mute } = args as { dca: number; mute: boolean };
+                if (!Number.isInteger(dca) || dca < 1 || dca > oscRuntimeConfig.dcaCount) {
+                    throw new Error(`Invalid DCA number ${dca}. Configured DCA range is 1 to ${oscRuntimeConfig.dcaCount}.`);
+                }
+                await osc.muteDca(dca, mute);
+                return { content: [{ type: "text", text: `DCA ${dca} ${mute ? "muted" : "unmuted"}` }] };
+            }
 
             // ========== Aux Controls ==========
             case "osc_aux_fader": {
