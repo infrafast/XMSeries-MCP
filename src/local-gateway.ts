@@ -55,6 +55,8 @@ export interface LocalMixerGatewayAdapter {
     scheduleSendMute(source: LocalMixerTarget, destination: LocalMixerTarget, mute: boolean, delaySeconds: number): Promise<string>;
     listAutomations(): Promise<Array<{ id: string; label?: string; status: string; currentAction?: string; error?: string }>>;
     cancelAutomation(id: string): Promise<{ id: string; label?: string; status: string } | null>;
+    muteChannelBatch(targets: LocalMixerTarget[], mute: boolean): Promise<void>;
+    muteAllChannels(mute: boolean, except?: LocalMixerTarget[]): Promise<void>;
     muteBusBatch(targets: LocalMixerTarget[], mute: boolean): Promise<void>;
     muteAllBuses(mute: boolean, except?: LocalMixerTarget[]): Promise<void>;
     writeSendBatchDb(source: LocalMixerTarget, destinations: LocalMixerTarget[], db: number, includeMain: boolean): Promise<void>;
@@ -108,13 +110,14 @@ type Intent =
     | { kind: "send_delay_mute"; sourceQuery: string; destinationQuery: string; mute: boolean; delaySeconds: number }
     | { kind: "automation_list" }
     | { kind: "automation_cancel"; id?: string; lastRunning: boolean }
+    | { kind: "bulk_channel_mute"; mode: "selected" | "all" | "all_except"; channelQueries: string[]; mute: boolean }
     | { kind: "bulk_bus_mute"; mode: "selected" | "all" | "all_except"; busQueries: string[]; mute: boolean }
     | { kind: "bulk_send_db"; mode: "selected" | "all"; sourceQuery: string; busQueries: string[]; db: number; includeMain: boolean }
     | { kind: "mute"; targetQuery: string; mute: boolean };
 
 type TargetIntent = Extract<Intent, { targetQuery: string }>;
 type SendIntent = Extract<Intent, { sourceQuery: string; destinationQuery: string }>;
-type BulkIntent = Extract<Intent, { kind: "bulk_bus_mute" | "bulk_send_db" }>;
+type BulkIntent = Extract<Intent, { kind: "bulk_channel_mute" | "bulk_bus_mute" | "bulk_send_db" }>;
 
 type LocalPlan =
     | { kind: "status" }
@@ -137,6 +140,7 @@ type LocalPlan =
     | { kind: "send_delay_mute"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; mute: boolean; delaySeconds: number }
     | { kind: "automation_list" }
     | { kind: "automation_cancel"; id: string }
+    | { kind: "bulk_channel_mute"; mode: "selected" | "all" | "all_except"; channelQueries: string[]; channels: LocalMixerTarget[]; mute: boolean }
     | { kind: "bulk_bus_mute"; mode: "selected" | "all" | "all_except"; busQueries: string[]; buses: LocalMixerTarget[]; mute: boolean }
     | { kind: "bulk_send_db"; mode: "selected" | "all"; sourceQuery: string; source: LocalMixerTarget; busQueries: string[]; buses: LocalMixerTarget[]; db: number; includeMain: boolean }
     | { kind: "mute"; targetQuery: string; target: LocalMixerTarget; mute: boolean };
@@ -593,6 +597,31 @@ function parseIntent(raw: string): Intent | null {
         const value = parseLevelValue(mainAbsolute[1], mainAbsolute[2]);
         if (value) {
             return { kind: "set_level", targetQuery: "main", unit: value.unit, value: value.value };
+        }
+    }
+
+    const bulkAllChannelMute = text.match(
+        /^\s*(mute|coupe|couper|desactive|désactive|eteins|éteins|unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\s+(?:(?:toutes\s+les\s+(?:voies|tranches))|(?:tous\s+les\s+(?:canaux|channels))|all\s+channels)(?:\s+(?:sauf|except)\s+(.+))?\s*$/iu,
+    );
+    if (bulkAllChannelMute?.[1]) {
+        const mute = !["unmute", "demute", "démute", "reactive", "réactive", "remets"].includes(bulkAllChannelMute[1].toLocaleLowerCase("fr-FR"));
+        const channelQueries = bulkAllChannelMute[2] ? splitTargetList(bulkAllChannelMute[2]) : [];
+        return {
+            kind: "bulk_channel_mute",
+            mode: channelQueries.length > 0 ? "all_except" : "all",
+            channelQueries,
+            mute,
+        };
+    }
+
+    const bulkSelectedChannelMute = text.match(
+        /^\s*(mute|coupe|couper|desactive|désactive|eteins|éteins|unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\s+(?:(?:les\s+)?(?:voies|tranches|canaux|channels))\s+(.+?)\s*$/iu,
+    );
+    if (bulkSelectedChannelMute?.[1] && bulkSelectedChannelMute[2]) {
+        const channelQueries = splitTargetList(bulkSelectedChannelMute[2]);
+        if (channelQueries.length > 0) {
+            const mute = !["unmute", "demute", "démute", "reactive", "réactive", "remets"].includes(bulkSelectedChannelMute[1].toLocaleLowerCase("fr-FR"));
+            return { kind: "bulk_channel_mute", mode: "selected", channelQueries, mute };
         }
     }
 
@@ -1322,7 +1351,7 @@ export class LocalMixerCommandGateway {
             };
         }
 
-        if (intent.kind === "bulk_bus_mute" || intent.kind === "bulk_send_db") {
+        if (intent.kind === "bulk_channel_mute" || intent.kind === "bulk_bus_mute" || intent.kind === "bulk_send_db") {
             return await this.planBulkIntent(intent);
         }
 
@@ -1410,6 +1439,32 @@ export class LocalMixerCommandGateway {
                     protocol: GATEWAY_PROTOCOL,
                     ok: true,
                     responseText: `Automation ${job.id} : ${job.status}.`,
+                };
+            }
+
+            if (plan.kind === "bulk_channel_mute") {
+                if (plan.mode === "all") {
+                    await this.adapter.muteAllChannels(plan.mute);
+                    return {
+                        protocol: GATEWAY_PROTOCOL,
+                        ok: true,
+                        responseText: `Toutes les voies ont été ${plan.mute ? "coupées" : "réactivées"}.`,
+                    };
+                }
+                const channels = await this.revalidateChannelTargets(plan.channelQueries, plan.channels);
+                if (plan.mode === "all_except") {
+                    await this.adapter.muteAllChannels(plan.mute, channels);
+                    return {
+                        protocol: GATEWAY_PROTOCOL,
+                        ok: true,
+                        responseText: `Toutes les voies sauf ${channels.map(displayName).join(", ")} ont été ${plan.mute ? "coupées" : "réactivées"}.`,
+                    };
+                }
+                await this.adapter.muteChannelBatch(channels, plan.mute);
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    ok: true,
+                    responseText: `${channels.map(displayName).join(", ")} : ${plan.mute ? "coupées" : "réactivées"}.`,
                 };
             }
 
@@ -1750,6 +1805,43 @@ export class LocalMixerCommandGateway {
         };
     }
 
+    private async resolveExactChannelQueries(
+        queries: string[],
+    ): Promise<{ targets: LocalMixerTarget[]; errorText?: string }> {
+        const targets: LocalMixerTarget[] = [];
+        for (const query of queries) {
+            const matches = await this.adapter.resolve(query, ["channel"]);
+            const resolved = safeUnique(matches);
+            if (!resolved || resolved.matchType === "fuzzy") {
+                const candidates = matches.length > 0 ? summarizeCandidates(matches) : "aucune";
+                return {
+                    targets: [],
+                    errorText: `Voie « ${query} » ambiguë ou introuvable. Correspondances: ${candidates}. Reformule avec les noms exacts.`,
+                };
+            }
+            targets.push(resolved);
+        }
+        return { targets };
+    }
+
+    private async revalidateChannelTargets(
+        queries: string[],
+        expected: LocalMixerTarget[],
+    ): Promise<LocalMixerTarget[]> {
+        const resolved = await this.resolveExactChannelQueries(queries);
+        if (resolved.errorText || resolved.targets.length !== expected.length) {
+            throw new Error("stale_plan");
+        }
+        for (let index = 0; index < expected.length; index += 1) {
+            const current = resolved.targets[index];
+            const snapshot = expected[index];
+            if (current.family !== snapshot.family || current.index !== snapshot.index || current.name !== snapshot.name) {
+                throw new Error("stale_plan");
+            }
+        }
+        return resolved.targets;
+    }
+
     private async resolveExactBusQueries(
         queries: string[],
     ): Promise<{ targets: LocalMixerTarget[]; errorText?: string }> {
@@ -1770,6 +1862,44 @@ export class LocalMixerCommandGateway {
     }
 
     private async planBulkIntent(intent: BulkIntent): Promise<AnalyzeCommandResult> {
+        if (intent.kind === "bulk_channel_mute") {
+            if (intent.mode === "all") {
+                const stored = this.store.createPlan({ ...intent, channels: [] }, "write");
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    recognized: true,
+                    status: "ready",
+                    effect: "write",
+                    planToken: stored.token,
+                    expiresInMs: stored.expiresInMs,
+                    responseText: null,
+                };
+            }
+            const resolved = await this.resolveExactChannelQueries(intent.channelQueries);
+            if (resolved.errorText) {
+                const stored = this.store.createContinuation({ intent, candidates: [] });
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    recognized: true,
+                    status: "clarification",
+                    effect: "none",
+                    continuationToken: stored.token,
+                    expiresInMs: stored.expiresInMs,
+                    responseText: resolved.errorText,
+                };
+            }
+            const stored = this.store.createPlan({ ...intent, channels: resolved.targets }, "write");
+            return {
+                protocol: GATEWAY_PROTOCOL,
+                recognized: true,
+                status: "ready",
+                effect: "write",
+                planToken: stored.token,
+                expiresInMs: stored.expiresInMs,
+                responseText: null,
+            };
+        }
+
         if (intent.kind === "bulk_bus_mute") {
             if (intent.mode === "all") {
                 const stored = this.store.createPlan({ ...intent, buses: [] }, "write");
