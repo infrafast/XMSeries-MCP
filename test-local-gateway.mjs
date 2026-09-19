@@ -113,6 +113,14 @@ const adapter = {
         automationCalls.push({ kind: "send-ramp", source, destination, toLevel, durationSeconds, fromLevel });
         return "auto-send";
     },
+    async startDelayedLevelRamp(target, toLevel, durationSeconds, delaySeconds, fromLevel) {
+        automationCalls.push({ kind: "delayed-ramp", target, toLevel, durationSeconds, delaySeconds, fromLevel });
+        return "auto-delayed-ramp";
+    },
+    async startDelayedSendRamp(source, destination, toLevel, durationSeconds, delaySeconds, fromLevel) {
+        automationCalls.push({ kind: "delayed-send-ramp", source, destination, toLevel, durationSeconds, delaySeconds, fromLevel });
+        return "auto-delayed-send-ramp";
+    },
     async scheduleLevel(target, toLevel, delaySeconds) {
         automationCalls.push({ kind: "delay", target, toLevel, delaySeconds });
         return "auto-delay";
@@ -1114,6 +1122,54 @@ async function ready(text) {
     assert.equal(qualitativePreviewCalls[0].amount, "much");
     assert.equal(automationCalls[0].kind, "send-ramp");
     assert.equal(automationCalls[0].toLevel, 0.6);
+}
+
+// Delayed ramp is one deterministic macro: wait, then ramp.
+{
+    automationCalls = [];
+    const analyzed = await ready("dans 3 secondes baisse progressivement Batterie à -30 dB en 2 secondes");
+    assert.equal(analyzed.effect, "write");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(automationCalls.length, 1);
+    assert.equal(automationCalls[0].kind, "delayed-ramp");
+    assert.equal(automationCalls[0].target.name, "Batterie");
+    assert.equal(automationCalls[0].delaySeconds, 3);
+    assert.equal(automationCalls[0].durationSeconds, 2);
+    assert.match(result.responseText, /dans 3 s sur 2 s/);
+}
+
+// Delayed route ramp preserves source and destination.
+{
+    automationCalls = [];
+    const analyzed = await ready("dans 4 secondes monte progressivement Batterie sur Anthony à -10 dB en 3 secondes");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(automationCalls[0].kind, "delayed-send-ramp");
+    assert.equal(automationCalls[0].source.name, "Batterie");
+    assert.equal(automationCalls[0].destination.name, "Anthony");
+    assert.equal(automationCalls[0].delaySeconds, 4);
+    assert.equal(automationCalls[0].durationSeconds, 3);
+}
+
+// Constituent order remains flexible: delay may follow the ramp phrase.
+{
+    automationCalls = [];
+    const analyzed = await ready("baisse progressivement Batterie à -30 dB en 2 secondes dans 3 secondes");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(automationCalls[0].kind, "delayed-ramp");
+    assert.equal(automationCalls[0].delaySeconds, 3);
+    assert.equal(automationCalls[0].durationSeconds, 2);
 }
 
 // OR4B4 delayed level uses "dans" as a delay, not a ramp.

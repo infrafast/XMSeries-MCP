@@ -608,6 +608,36 @@ const localCommandGateway = new LocalMixerCommandGateway({
         });
         return automation.start(action.description || "Local send ramp", [action]).id;
     },
+    startDelayedLevelRamp: async (target, toLevel, durationSeconds, delaySeconds, fromLevel) => {
+        const wait: AutomationAction = {
+            type: "wait",
+            durationSeconds: delaySeconds,
+            description: `wait ${delaySeconds}s`,
+        };
+        const ramp = rampAction({
+            target: localGatewayAutomationTarget(target),
+            toLevel,
+            fromLevel,
+            durationSeconds,
+            label: `Local delayed ramp ${target.family} ${target.name}`,
+        });
+        return automation.start(ramp.description || "Local delayed ramp", [wait, ramp]).id;
+    },
+    startDelayedSendRamp: async (source, destination, toLevel, durationSeconds, delaySeconds, fromLevel) => {
+        const wait: AutomationAction = {
+            type: "wait",
+            durationSeconds: delaySeconds,
+            description: `wait ${delaySeconds}s`,
+        };
+        const ramp = rampAction({
+            target: localGatewaySendAutomationTarget(source, destination),
+            toLevel,
+            fromLevel,
+            durationSeconds,
+            label: `Local delayed ramp ${source.name} -> ${destination.name}`,
+        });
+        return automation.start(ramp.description || "Local delayed send ramp", [wait, ramp]).id;
+    },
     scheduleLevel: async (target, toLevel, delaySeconds) => {
         const action = delayedStructuredLevelAction({
             target: localGatewayAutomationTarget(target),

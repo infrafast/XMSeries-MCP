@@ -53,6 +53,8 @@ export interface LocalMixerGatewayAdapter {
     setSendMute(source: LocalMixerTarget, destination: LocalMixerTarget, mute: boolean): Promise<void>;
     startLevelRamp(target: LocalMixerTarget, toLevel: number, durationSeconds: number, fromLevel?: number): Promise<string>;
     startSendRamp(source: LocalMixerTarget, destination: LocalMixerTarget, toLevel: number, durationSeconds: number, fromLevel?: number): Promise<string>;
+    startDelayedLevelRamp(target: LocalMixerTarget, toLevel: number, durationSeconds: number, delaySeconds: number, fromLevel?: number): Promise<string>;
+    startDelayedSendRamp(source: LocalMixerTarget, destination: LocalMixerTarget, toLevel: number, durationSeconds: number, delaySeconds: number, fromLevel?: number): Promise<string>;
     scheduleLevel(target: LocalMixerTarget, toLevel: number, delaySeconds: number): Promise<string>;
     scheduleMute(target: LocalMixerTarget, mute: boolean, delaySeconds: number): Promise<string>;
     scheduleSend(source: LocalMixerTarget, destination: LocalMixerTarget, toLevel: number, delaySeconds: number): Promise<string>;
@@ -109,8 +111,10 @@ type Intent =
     | { kind: "send_mute"; sourceQuery: string; destinationQuery: string; mute: boolean }
     | { kind: "send_to_aux_output"; sourceQuery: string; aux: number; unit: LevelUnit; value: number }
     | { kind: "ramp_level"; targetQuery: string; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
+    | { kind: "delayed_ramp_level"; targetQuery: string; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number; delaySeconds: number }
     | { kind: "ramp_level_qualitative"; targetQuery: string; direction: LocalRelativeDirection; amount: LocalRelativeAmount; durationSeconds: number }
     | { kind: "send_ramp_level"; sourceQuery: string; destinationQuery: string; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
+    | { kind: "send_delayed_ramp_level"; sourceQuery: string; destinationQuery: string; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number; delaySeconds: number }
     | { kind: "send_ramp_level_qualitative"; sourceQuery: string; destinationQuery: string; direction: LocalRelativeDirection; amount: LocalRelativeAmount; durationSeconds: number }
     | { kind: "delay_level"; targetQuery: string; value: LevelValue; delaySeconds: number }
     | { kind: "delay_mute"; targetQuery: string; mute: boolean; delaySeconds: number }
@@ -143,8 +147,10 @@ type LocalPlan =
     | { kind: "send_mute"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; mute: boolean }
     | { kind: "send_to_aux_output"; sourceQuery: string; source: LocalMixerTarget; aux: number; unit: LevelUnit; value: number }
     | { kind: "ramp_level"; targetQuery: string; target: LocalMixerTarget; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
+    | { kind: "delayed_ramp_level"; targetQuery: string; target: LocalMixerTarget; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number; delaySeconds: number }
     | { kind: "ramp_level_qualitative"; targetQuery: string; target: LocalMixerTarget; direction: LocalRelativeDirection; amount: LocalRelativeAmount; durationSeconds: number }
     | { kind: "send_ramp_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
+    | { kind: "send_delayed_ramp_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number; delaySeconds: number }
     | { kind: "send_ramp_level_qualitative"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; direction: LocalRelativeDirection; amount: LocalRelativeAmount; durationSeconds: number }
     | { kind: "delay_level"; targetQuery: string; target: LocalMixerTarget; value: LevelValue; delaySeconds: number }
     | { kind: "delay_mute"; targetQuery: string; target: LocalMixerTarget; mute: boolean; delaySeconds: number }
@@ -299,8 +305,7 @@ function parseFlexibleTemporalIntent(raw: string): Intent | null {
     );
 
     if (!durationMatch && !delayMatch) return null;
-    // A delay plus a ramp duration is a sequence/macro request. Do not silently collapse it.
-    if (durationMatch && delayMatch) return null;
+    const delayedRamp = Boolean(durationMatch && delayMatch);
 
     const directionMatch = text.match(
         /\b(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\b/iu,
@@ -390,6 +395,37 @@ function parseFlexibleTemporalIntent(raw: string): Intent | null {
         /[+-]?\d+(?:[.,]\d+)?\s*(?:d[bB]|%)/u,
     );
     if (unboundLevelLiteral) return null;
+
+    if (delayedRamp && durationMatch?.[1] && delayMatch?.[1]) {
+        const durationSeconds = Number(durationMatch[1].replace(",", "."));
+        const delaySeconds = Number(delayMatch[1].replace(",", "."));
+        if (!Number.isFinite(durationSeconds) || durationSeconds <= 0 || !Number.isFinite(delaySeconds) || delaySeconds < 0) {
+            return null;
+        }
+        if (!to && !delta && !from) return null;
+        if (routeMatch) {
+            if (!sourceQuery || !destinationQuery) return null;
+            return {
+                kind: "send_delayed_ramp_level",
+                sourceQuery,
+                destinationQuery,
+                ...(from ? { from } : {}),
+                ...(to ? { to } : {}),
+                ...(delta ? { delta } : {}),
+                durationSeconds,
+                delaySeconds,
+            };
+        }
+        return {
+            kind: "delayed_ramp_level",
+            targetQuery: targetQuery || "main",
+            ...(from ? { from } : {}),
+            ...(to ? { to } : {}),
+            ...(delta ? { delta } : {}),
+            durationSeconds,
+            delaySeconds,
+        };
+    }
 
     if (delayMatch?.[1]) {
         // "dans" is a delay marker. A progressive request without its own
@@ -1450,6 +1486,7 @@ export class LocalMixerCommandGateway {
             intent.kind === "send_adjust_level_qualitative" ||
             intent.kind === "send_mute" ||
             intent.kind === "send_ramp_level" ||
+            intent.kind === "send_delayed_ramp_level" ||
             intent.kind === "send_ramp_level_qualitative" ||
             intent.kind === "send_delay_level" ||
             intent.kind === "send_delay_mute"
@@ -1666,6 +1703,7 @@ export class LocalMixerCommandGateway {
                 plan.kind === "send_adjust_level_qualitative" ||
                 plan.kind === "send_mute" ||
                 plan.kind === "send_ramp_level" ||
+                plan.kind === "send_delayed_ramp_level" ||
                 plan.kind === "send_ramp_level_qualitative" ||
                 plan.kind === "send_delay_level" ||
                 plan.kind === "send_delay_mute"
@@ -1767,6 +1805,27 @@ export class LocalMixerCommandGateway {
                     };
                 }
 
+                if (plan.kind === "send_delayed_ramp_level") {
+                    const current = await this.adapter.readSendLevel(source, destination);
+                    const toLevel = plan.delta
+                        ? adjustedLevel(current, plan.delta.unit, plan.delta.value).level
+                        : levelToNormalized(plan.to!.unit, plan.to!.value).level;
+                    const fromLevel = plan.from ? levelToNormalized(plan.from.unit, plan.from.value).level : undefined;
+                    const jobId = await this.adapter.startDelayedSendRamp(
+                        source,
+                        destination,
+                        toLevel,
+                        plan.durationSeconds,
+                        plan.delaySeconds,
+                        fromLevel,
+                    );
+                    return {
+                        protocol: GATEWAY_PROTOCOL,
+                        ok: true,
+                        responseText: `Automation ${jobId} programmée : ${displayName(source)} → ${displayName(destination)} dans ${plan.delaySeconds} s sur ${plan.durationSeconds} s.`,
+                    };
+                }
+
                 const current = await this.adapter.readSendLevel(source, destination);
                 const toLevel = plan.delta
                     ? adjustedLevel(current, plan.delta.unit, plan.delta.value).level
@@ -1820,6 +1879,26 @@ export class LocalMixerCommandGateway {
                     protocol: GATEWAY_PROTOCOL,
                     ok: true,
                     responseText: `Automation ${jobId} démarrée : ${displayName(liveTarget)} de ${formatDb(preview.beforeDb)} vers ${formatDb(preview.targetDb)} sur ${plan.durationSeconds} s.`,
+                };
+            }
+
+            if (plan.kind === "delayed_ramp_level") {
+                const current = await this.adapter.readLevel(liveTarget);
+                const toLevel = plan.delta
+                    ? adjustedLevel(current, plan.delta.unit, plan.delta.value).level
+                    : levelToNormalized(plan.to!.unit, plan.to!.value).level;
+                const fromLevel = plan.from ? levelToNormalized(plan.from.unit, plan.from.value).level : undefined;
+                const jobId = await this.adapter.startDelayedLevelRamp(
+                    liveTarget,
+                    toLevel,
+                    plan.durationSeconds,
+                    plan.delaySeconds,
+                    fromLevel,
+                );
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    ok: true,
+                    responseText: `Automation ${jobId} programmée : ${displayName(liveTarget)} dans ${plan.delaySeconds} s sur ${plan.durationSeconds} s.`,
                 };
             }
 
