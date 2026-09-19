@@ -1218,6 +1218,22 @@ async function ready(text) {
     assert.equal(automationCalls[0].durationSeconds, 2);
 }
 
+// Prompt-defined delayed fade defaults to a 5-second ramp after the requested wait.
+{
+    automationCalls = [];
+    const analyzed = await ready("dans 5 secondes, fais un fade out de Voix");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(automationCalls.length, 1);
+    assert.equal(automationCalls[0].kind, "delayed-ramp");
+    assert.equal(automationCalls[0].target.name, "Voix");
+    assert.equal(automationCalls[0].delaySeconds, 5);
+    assert.equal(automationCalls[0].durationSeconds, 5);
+}
+
 // Multi-action macro: explicit anaphora stays on the first target.
 {
     sequenceCalls = [];
