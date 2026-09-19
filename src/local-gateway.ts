@@ -222,7 +222,7 @@ function displayName(target: LocalMixerTarget): string {
 }
 
 function mainTarget(query: string): LocalMixerTarget | null {
-    const normalized = simplify(query);
+    const normalized = simplify(cleanTarget(query));
     if (!MAIN_ALIASES.has(normalized)) return null;
     return {
         family: "main",
