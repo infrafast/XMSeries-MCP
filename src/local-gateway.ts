@@ -241,7 +241,7 @@ function parseDb(value: string): number | null {
 
 function cleanTarget(value: string): string {
     return value
-        .replace(/^\s*(?:le|la|les|du|de la|de l|d|the)\s+/iu, "")
+        .replace(/^\s*(?:le|la|les|de|du|de la|de l|d|the)\s+/iu, "")
         .replace(/\s*(?:fader|niveau|volume|son)\s*$/iu, "")
         .trim();
 }
@@ -441,6 +441,37 @@ function parseFlexibleTemporalIntent(raw: string): Intent | null {
             ...(from ? { from } : {}),
             ...(to ? { to } : {}),
             ...(delta ? { delta } : {}),
+            durationSeconds,
+            delaySeconds,
+        };
+    }
+
+    if (delayMatch?.[1] && fadeMatch?.[1] && !durationMatch) {
+        const delaySeconds = Number(delayMatch[1].replace(",", "."));
+        if (!Number.isFinite(delaySeconds) || delaySeconds < 0) return null;
+        const fadeTarget: LevelValue = {
+            unit: "db",
+            value: simplify(fadeMatch[1]) === "out" ? -120 : 0,
+        };
+        // Canonical delayed fades use a bounded default ramp duration when the
+        // user gives a delay but omits an explicit "en N secondes" duration.
+        // The PROMPT defines this form as a wait followed by a 5-second ramp.
+        const durationSeconds = 5;
+        if (routeMatch) {
+            if (!sourceQuery || !destinationQuery) return null;
+            return {
+                kind: "send_delayed_ramp_level",
+                sourceQuery,
+                destinationQuery,
+                to: fadeTarget,
+                durationSeconds,
+                delaySeconds,
+            };
+        }
+        return {
+            kind: "delayed_ramp_level",
+            targetQuery: targetQuery || "main",
+            to: fadeTarget,
             durationSeconds,
             delaySeconds,
         };
