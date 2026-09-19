@@ -28,6 +28,7 @@ let sendLevel = 0.5;
 let sendReadCalls = [];
 let sendWrites = [];
 let sendMuteWrites = [];
+let auxOutputWrites = [];
 let automationCalls = [];
 let delayedMuteCalls = [];
 let delayedSendMuteCalls = [];
@@ -97,6 +98,9 @@ const adapter = {
     async writeSendLevel(source, destination, next) {
         sendWrites.push({ source, destination, level: next });
         sendLevel = next;
+    },
+    async writeChannelToAux(source, aux, level) {
+        auxOutputWrites.push({ source, aux, level });
     },
     async setSendMute(source, destination, mute) {
         sendMuteWrites.push({ source, destination, mute });
@@ -530,6 +534,37 @@ async function ready(text) {
     assert.equal(qualitativeSendCalls[0].source.name, "Batterie");
     assert.equal(qualitativeSendCalls[0].destination.name, "Anthony");
     assert.equal(qualitativeSendCalls[0].direction, "up");
+}
+
+// Explicit channel -> AUX output syntax is deterministic and kept separate from AUX returns.
+{
+    auxOutputWrites = [];
+    const analyzed = await ready("mets Batterie sur sortie aux 2 à 50%");
+    assert.equal(analyzed.effect, "write");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(auxOutputWrites.length, 1);
+    assert.equal(auxOutputWrites[0].source.family, "channel");
+    assert.equal(auxOutputWrites[0].source.name, "Batterie");
+    assert.equal(auxOutputWrites[0].aux, 2);
+    assert.equal(auxOutputWrites[0].level, 0.5);
+}
+
+// Channel -> AUX output accepts dB while preserving strict destination wording.
+{
+    auxOutputWrites = [];
+    const analyzed = await ready("set Voix to aux output 3 to -12 dB");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(auxOutputWrites[0].source.name, "Voix");
+    assert.equal(auxOutputWrites[0].aux, 3);
+    assert.ok(auxOutputWrites[0].level >= 0 && auxOutputWrites[0].level <= 1);
 }
 
 // Route mute is distinct from whole-source mute.

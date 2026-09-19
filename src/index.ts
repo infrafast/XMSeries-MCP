@@ -564,6 +564,11 @@ const localCommandGateway = new LocalMixerCommandGateway({
                 throw new Error("Local send source must be a channel, FX return or aux return.");
         }
     },
+    writeChannelToAux: async (source, aux, level) => {
+        if (source.family !== "channel") throw new Error("Local channel-to-AUX source must be a channel.");
+        if (!Number.isInteger(aux) || aux < 1 || aux > 6) throw new Error("AUX output must be between 1 and 6.");
+        await osc.sendToAux(source.index, aux, level);
+    },
     writeSendLevel: async (source, destination, level) => {
         if (destination.family !== "bus") {
             throw new Error("Local send level requires a bus destination.");
