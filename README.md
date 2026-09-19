@@ -289,11 +289,12 @@ Full list is visible to Claude; high-level groupings:
 
 | Group | Coverage |
 |---|---|
-| **Channel strips** | headamp/preamp context, fader, mute, name, source, bus sends |
-| **Bus / Matrix / Aux / FX-Return / DCA / Main** | faders, mutes, names, focused strip reads |
-| **Identity / status** | `osc_get_mixer_status` uses `/xinfo` for network address, mixer network name, console model, and console version |
-| **FX** | all-effects overview and FX return on/off plus parameter writes |
-| **Bulk reads** | `channel_strip`, `bus_strip`, `aux_strip`, `matrix_strip`, `fx_return_strip`, `main_strip`, `dca`, `headamp`, `console_overview` |
+| **Resolution / identity** | named-target resolution, channel→bus resolution, recognized-speaker context, fresh mixer status |
+| **Channel / Bus / Aux / FX-return / DCA / Main** | user-facing fader and mute controls, plus channel mute/name reads |
+| **Matrix** | fader and mute controls on X32/M32; explicitly unsupported on OSCXR |
+| **Sends** | channel / FX return / aux return → bus levels, route mutes where protocol-safe, channel → AUX output on X32/M32 |
+| **Grouped writes** | selected/all/all-except channel and bus mutes; channel level to selected/all buses with optional Main LR |
+| **FX state** | FX-return active/muted state and on/off control through the FX return |
 | **Fader dB conversion** | `osc_db_to_fader_level`, `osc_fader_level_to_db`, factorized fader/send tools with `unit:"db"` |
 | **Automation** | `osc_automation_ramp`, `osc_automation_delayed_command`, `osc_automation_macro`, `osc_automation_list`, `osc_automation_cancel` for background fades, delayed actions, and timed sequences |
 
