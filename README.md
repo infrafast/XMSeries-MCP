@@ -254,6 +254,12 @@ Once wired up to LLM, natural language works:
 
 This server supports grouped operations so the agent can execute one intent across several targets without manually iterating one tool call per target.
 
+- **All input channels** (for example: `"mute all channels"`):
+  - Uses `osc_mute_all_channels` to mute/unmute every configured input channel.
+- **All input channels except named exceptions** (for example: `"mute toutes les voies sauf Kick et Snare"`):
+  - Resolve each exception in the channel family, then use `osc_mute_all_channels_except`.
+- **Selected input-channel lists** (for example: `"réactive les voies Voix et Guitare"`):
+  - Resolve each channel name, then use `osc_mute_channels`.
 - **All bus masters** (for example: `"mute all buses"`):
   - Uses `osc_mute_all_buses` to mute/unmute every bus master in one batch.
 - **Selected bus master lists** (for example: `"mute Mike and Laurent buses"`):
