@@ -808,6 +808,224 @@
         "status": "ready",
         "effect": "write"
       }
+    },
+    {
+      "category": "read",
+      "name": "read-channel-level-donne",
+      "utterance": "donne le niveau de Batterie",
+      "expected": {
+        "status": "ready",
+        "effect": "read"
+      }
+    },
+    {
+      "category": "mute",
+      "name": "channel-mute-eteins",
+      "utterance": "éteins Batterie",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "mute",
+      "name": "channel-unmute-explicit",
+      "utterance": "unmute Batterie",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "channel-qualitative-level-noun",
+      "utterance": "monte un peu le niveau de Batterie",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "channel-natural-plus-fort",
+      "utterance": "un peu plus fort Batterie",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "channel-natural-moins-fort",
+      "utterance": "Batterie moins fort",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "main-relative-100-percent",
+      "utterance": "monte le volume de 100%",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "bare-bus-relative",
+      "utterance": "monte Anthony",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "sur-value-is-not-destination",
+      "utterance": "mets Batterie sur -5 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "automation",
+      "name": "named-bus-fade-out",
+      "utterance": "fais un fade-out de Claude en 10 secondes",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "automation",
+      "name": "ownership-explicit-fade-range",
+      "utterance": "fade in guitare de anto de -90 dB à -10 dB en 30 secondes",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "automation",
+      "name": "delayed-main-level",
+      "utterance": "mets la façade à 0 dB dans 5 secondes",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "automation",
+      "name": "delayed-main-fade",
+      "utterance": "dans 5 secondes fais un fade out de la façade",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "automation",
+      "name": "constituent-order-ramp-duration-first",
+      "utterance": "en 2 secondes baisse progressivement Batterie à -30 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "automation",
+      "name": "constituent-order-ramp-duration-middle",
+      "utterance": "baisse progressivement en 2 secondes Batterie à -30 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "automation",
+      "name": "constituent-order-delayed-ramp-tail",
+      "utterance": "baisse progressivement Batterie à -30 dB en 2 secondes dans 3 secondes",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "sequence",
+      "name": "sequence-then-alias",
+      "utterance": "mute Batterie ensuite dans 2 secondes rallume Batterie",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "sequence",
+      "name": "sequence-three-actions",
+      "utterance": "mets Batterie à -20 dB puis baisse progressivement Batterie à -30 dB en 2 secondes puis mute Batterie",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "sequence",
+      "name": "sequence-same-target",
+      "utterance": "baisse Batterie puis mute la même cible",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "sequence",
+      "name": "sequence-same-return",
+      "utterance": "mets Batterie sur Anthony à -12 dB puis mets Voix sur le même retour à -8 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "safety",
+      "name": "no-implicit-target-seed",
+      "session": "no-implicit-target",
+      "utterance": "baisse Voix",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "safety",
+      "name": "no-implicit-target-main",
+      "session": "no-implicit-target",
+      "utterance": "monte le volume",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "safety",
+      "name": "fuzzy-no-write",
+      "utterance": "mute Guitr",
+      "expected": {
+        "status": "clarification",
+        "effect": "none"
+      }
+    },
+    {
+      "category": "safety",
+      "name": "sequence-ambiguous-fail-closed",
+      "utterance": "mute Batterie puis mute tom",
+      "expected": {
+        "status": "clarification",
+        "effect": "none"
+      }
     }
   ]
 }
