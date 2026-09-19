@@ -45,7 +45,7 @@ export type LocalSequenceAction =
           type: "ramp";
           description: string;
           from?: number;
-          to: number;
+          to: number | (() => Promise<number>);
           durationSeconds: number;
           read: () => Promise<number>;
           write: (value: number) => Promise<void>;
