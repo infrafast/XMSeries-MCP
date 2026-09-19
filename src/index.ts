@@ -1486,10 +1486,11 @@ function delayedStructuredLevelAction(input: AutomationDelayedCommandInput): Aut
         description: input.label || `delayed ${ramp.description || "level change"}`,
         run: async () => {
             await osc.assertMixerOnline();
-            await ramp.write(ramp.to);
+            const expected = typeof ramp.to === "function" ? await ramp.to() : ramp.to;
+            await ramp.write(expected);
             const actual = await ramp.read();
-            if (Math.abs(actual - ramp.to) > 0.002) {
-                throw new Error(`Delayed level verification failed for ${ramp.description || "target"}: expected ${ramp.to.toFixed(6)}, read ${actual.toFixed(6)}`);
+            if (Math.abs(actual - expected) > 0.002) {
+                throw new Error(`Delayed level verification failed for ${ramp.description || "target"}: expected ${expected.toFixed(6)}, read ${actual.toFixed(6)}`);
             }
         },
     };
