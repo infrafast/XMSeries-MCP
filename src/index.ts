@@ -2156,6 +2156,33 @@ export const TOOLS: Tool[] = [
             required: ["dca", "mute"],
         },
     },
+    // ========== Matrix Controls (X32/M32 only) ==========
+    {
+        name: "osc_matrix_fader",
+        description: "Get or set a matrix fader. X32/M32 only; OSCXR matrices are unsupported. Use unit='db' for dB requests; default unit='db' for reads; set actions require explicit unit.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                action: { type: "string", enum: ["get", "set"] },
+                matrix: { type: "number", description: "Matrix number (1-6)", minimum: 1, maximum: 6 },
+                unit: { type: "string", enum: ["level", "percent", "db"] },
+                value: { type: "number", minimum: -120, maximum: 100 },
+            },
+            required: ["action", "matrix"],
+        },
+    },
+    {
+        name: "osc_mute_matrix",
+        description: "Mute or unmute a matrix. X32/M32 only; OSCXR matrices are unsupported.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                matrix: { type: "number", description: "Matrix number (1-6)", minimum: 1, maximum: 6 },
+                mute: { type: "boolean" },
+            },
+            required: ["matrix", "mute"],
+        },
+    },
     // ========== Aux Controls ==========
     {
         name: "osc_aux_fader",
@@ -3050,6 +3077,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 }
                 await osc.muteDca(dca, mute);
                 return { content: [{ type: "text", text: `DCA ${dca} ${mute ? "muted" : "unmuted"}` }] };
+            }
+
+            // ========== Matrix Controls ==========
+            case "osc_matrix_fader": {
+                const { matrix, ...levelInput } = args as unknown as { matrix: number } & LevelToolInput;
+                if (!Number.isInteger(matrix) || matrix < 1 || matrix > 6) {
+                    throw new Error("Matrix number must be between 1 and 6.");
+                }
+                const operation = parseLevelOperation(levelInput);
+                const label = `Matrix ${matrix} fader`;
+                if (operation.action === "get") {
+                    const level = await osc.getMatrixFader(matrix);
+                    return { content: [{ type: "text", text: formatLevelRead(label, level, operation.unit) }] };
+                }
+                const target = levelValueToNormalized(operation);
+                await osc.setMatrixFader(matrix, target.level);
+                return { content: [{ type: "text", text: `Set matrix ${matrix} fader to ${target.text}` }] };
+            }
+
+            case "osc_mute_matrix": {
+                const { matrix, mute } = args as { matrix: number; mute: boolean };
+                if (!Number.isInteger(matrix) || matrix < 1 || matrix > 6) {
+                    throw new Error("Matrix number must be between 1 and 6.");
+                }
+                await osc.muteMatrix(matrix, mute);
+                return { content: [{ type: "text", text: `Matrix ${matrix} ${mute ? "muted" : "unmuted"}` }] };
             }
 
             // ========== Aux Controls ==========
