@@ -30,6 +30,7 @@ let delayedMuteCalls = [];
 let delayedSendMuteCalls = [];
 let automationJobs = [];
 let bulkMuteCalls = [];
+let bulkChannelMuteCalls = [];
 let bulkSendCalls = [];
 let speakerContexts = new Map();
 let qualitativeCalls = [];
@@ -117,6 +118,12 @@ const adapter = {
         if (!job) return null;
         job.status = "cancelled";
         return job;
+    },
+    async muteChannelBatch(targets, mute) {
+        bulkChannelMuteCalls.push({ kind: "selected", targets, mute });
+    },
+    async muteAllChannels(mute, except = []) {
+        bulkChannelMuteCalls.push({ kind: "all", except, mute });
     },
     async muteBusBatch(targets, mute) {
         bulkMuteCalls.push({ kind: "selected", targets, mute });
@@ -1105,6 +1112,48 @@ async function ready(text) {
     assert.equal(result.ok, true);
     assert.equal(writes[0].target.family, "main");
     assert.equal(writes[0].level, 1);
+}
+
+// Grouped channel mute fills the documented "all channels except" gap.
+{
+    bulkChannelMuteCalls = [];
+    const analyzed = await ready("mute toutes les voies sauf Voix et Batterie");
+    assert.equal(analyzed.effect, "write");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(bulkChannelMuteCalls.length, 1);
+    assert.equal(bulkChannelMuteCalls[0].kind, "all");
+    assert.deepEqual(bulkChannelMuteCalls[0].except.map((target) => target.name), ["Voix", "Batterie"]);
+    assert.equal(bulkChannelMuteCalls[0].mute, true);
+}
+
+// Selected channel list stays channel-scoped.
+{
+    bulkChannelMuteCalls = [];
+    const analyzed = await ready("réactive les voies Voix et Batterie");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(bulkChannelMuteCalls[0].kind, "selected");
+    assert.deepEqual(bulkChannelMuteCalls[0].targets.map((target) => target.name), ["Voix", "Batterie"]);
+    assert.equal(bulkChannelMuteCalls[0].mute, false);
+}
+
+// English all-channels form is deterministic too.
+{
+    bulkChannelMuteCalls = [];
+    const analyzed = await ready("mute all channels except Voix");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.deepEqual(bulkChannelMuteCalls[0].except.map((target) => target.name), ["Voix"]);
 }
 
 // OR4B4 selected bus bulk mute.
