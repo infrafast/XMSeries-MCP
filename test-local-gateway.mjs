@@ -21,6 +21,9 @@ const targets = {
 let level = 0.75;
 let writes = [];
 let muteWrites = [];
+let muteReadCalls = [];
+let effectStateCalls = [];
+let channelNameCalls = [];
 let sendLevel = 0.5;
 let sendReadCalls = [];
 let sendWrites = [];
@@ -65,6 +68,18 @@ const adapter = {
     },
     async readLevel() {
         return level;
+    },
+    async readChannelMute(target) {
+        muteReadCalls.push(target);
+        return target.name === "Batterie";
+    },
+    async readEffectOn(target) {
+        effectStateCalls.push(target);
+        return true;
+    },
+    async readChannelName(channel) {
+        channelNameCalls.push(channel);
+        return channel === 6 ? "Batterie" : `Channel-${channel}`;
     },
     async writeLevel(target, next) {
         writes.push({ target, level: next });
@@ -183,6 +198,63 @@ async function ready(text) {
     });
     assert.equal(result.ok, true);
     assert.match(result.responseText, /XR16/);
+}
+
+// Channel mute state read is deterministic and channel-scoped.
+{
+    muteReadCalls = [];
+    const analyzed = await ready("état du mute de Batterie");
+    assert.equal(analyzed.effect, "read");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(muteReadCalls.length, 1);
+    assert.equal(muteReadCalls[0].family, "channel");
+    assert.equal(muteReadCalls[0].name, "Batterie");
+    assert.match(result.responseText, /mutée/);
+}
+
+// Natural mute question uses the same read path.
+{
+    muteReadCalls = [];
+    const analyzed = await ready("est-ce que Voix est mutée ?");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(muteReadCalls[0].name, "Voix");
+    assert.match(result.responseText, /active/);
+}
+
+// FX on/off state read stays FX-return scoped.
+{
+    effectStateCalls = [];
+    const analyzed = await ready("Hall FX est-il actif ?");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(effectStateCalls.length, 1);
+    assert.equal(effectStateCalls[0].family, "fxreturn");
+    assert.equal(effectStateCalls[0].name, "Hall FX");
+    assert.match(result.responseText, /actif/);
+}
+
+// Numeric channel name read maps directly to the dedicated MCP primitive.
+{
+    channelNameCalls = [];
+    const analyzed = await ready("quel est le nom de la voie 6 ?");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.deepEqual(channelNameCalls, [6]);
+    assert.match(result.responseText, /Batterie/);
 }
 
 // Named target level read, resolver reused

@@ -533,6 +533,20 @@ const localCommandGateway = new LocalMixerCommandGateway({
     },
     status: async () => await osc.getMixerStatus(),
     readLevel: localGatewayReadLevel,
+    readChannelMute: async (target) => {
+        if (target.family !== "channel") throw new Error("Local mute read requires a channel target.");
+        return osc.getMute(target.index);
+    },
+    readEffectOn: async (target) => {
+        if (target.family !== "fxreturn") throw new Error("Local FX state read requires an FX return target.");
+        return osc.getEffectOn(target.index);
+    },
+    readChannelName: async (channel) => {
+        if (!Number.isInteger(channel) || channel < 1 || channel > oscRuntimeConfig.channelCount) {
+            throw new Error(`Invalid channel number ${channel}. Configured channel range is 1 to ${oscRuntimeConfig.channelCount}.`);
+        }
+        return osc.getChannelName(channel);
+    },
     writeLevel: localGatewayWriteLevel,
     setMute: localGatewaySetMute,
     readSendLevel: async (source, destination) => {
