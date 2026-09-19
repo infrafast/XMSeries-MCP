@@ -413,7 +413,7 @@ function parseFlexibleTemporalIntent(raw: string): Intent | null {
     remove(relativeMatch);
 
     remainder = remainder
-        .replace(/\bfade[ -]?(?:in|out)\b/giu, " ")
+        .replace(/\bfade(?:[ -]?(?:in|out))?\b/giu, " ")
         .replace(/\b(?:progressivement|progressively|gradually|rampe|ramp)\b/giu, " ")
         .replace(/\b(?:un\s+peu|beaucoup|a\s+little|a\s+lot|slightly)\b/giu, " ")
         .replace(/\b(?:fais|faire)\b/giu, " ")
