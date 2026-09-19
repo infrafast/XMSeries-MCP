@@ -560,6 +560,53 @@ The parser is intentionally bounded and deterministic. Prefer the canonical form
 | Speaker input context | `mets mon micro à -12 dB` · `baisse ma voix de 2 dB` |
 | Source -> speaker monitor | `mets batterie dans mon retour à -20 dB` |
 
+### Functional acceptance recipe
+
+The deterministic Local milestone has an executable acceptance corpus in `corpus/local-functional-recipe.fr.json`. It is run by CI and can also be run locally without a mixer:
+
+```bash
+npm run test:local-recipe
+```
+
+This recipe covers the user-facing command families documented above and the canonical behaviors required by `PROMPT.md`: reads, absolute/relative/qualitative levels, mutes, source-to-bus routes, grouped operations, normalized values, DCA, X32 matrices, channel-to-AUX output, ramps/fades/delays, automation status/cancel, multi-action sequences, explicit anaphora, speaker context, and fail-closed ambiguity handling.
+
+For a Raspberry Pi live recipe, update/build the MCP first:
+
+```bash
+cd /home/pi/XMSeries-MCP && git pull && npm ci && npm run build
+```
+
+Then update and start LiveStageAssistant with the Raspberry offline profile:
+
+```bash
+cd /home/pi/LiveStageAssistant && git pull && .venv/bin/python -m voice_assistant.runtime --env-file raspi_service_pack_stdio/.env.offline
+```
+
+The WebGUI text composer and backend voice path feed the same Local deterministic command gateway. Commands typed in the chat therefore exercise the same parser and MCP execution path as spoken commands, except that speaker-context cases require a speaker profile to be selected/recognized.
+
+For the current 16-channel / 4-bus Raspberry profile, startup should report the configured OSC limits (16 channels, 4 buses, 4 FX returns/slots, 4 DCA groups). If the log reports larger defaults, fix the active `.env`/MCP profile before testing names.
+
+Recommended live acceptance order:
+
+1. **Identity/read-only first:** `statut mixeur`, `niveau de Batterie`, `état du mute de Batterie`, `Hall FX est-il actif ?`, `quel est le nom de la voie 6 ?`.
+2. **Single-target writes:** `mets Batterie à -30 dB`, `monte Batterie de 3 dB`, `baisse un peu Batterie`, `mute Batterie`, `rallume Batterie`.
+3. **Main aliases/value semantics:** `mets la façade à -10 dB`, `monte le volume`, `mets Batterie sur -5 dB`. The last command must change the Batterie fader; `-5 dB` must never be treated as a destination.
+4. **Named routing:** `niveau de Batterie sur Anthony`, `mets Batterie sur Anthony à -20 dB`, `monte Batterie sur Anthony de 3 dB`, `mets la guitare de anto sur Claude à -5 dB`.
+5. **Grouped operations:** `mute les voies Voix et Batterie`, `mute toutes les voies sauf Voix`, `mute les bus Anthony et Laurent`, `coupe tous les bus sauf Anthony`, `mets Batterie à -20 dB sur les bus Anthony et Laurent`, `mets Batterie à -25 dB sur tous les bus et façade`.
+6. **Automation:** `baisse progressivement Batterie à -30 dB en 2 secondes`, `fade out Batterie en 5 secondes`, `mets Batterie à -27 dB dans 2 secondes`, `dans 3 secondes baisse progressivement Batterie à -30 dB en 2 secondes`, `statut des automations`, then `annule la dernière automation` while a job is running.
+7. **Sequences/anaphora:** `baisse la façade puis remonte-la après 5 secondes`, `mute Batterie puis dans 2 secondes unmute Batterie`, `mets Batterie à -20 dB puis baisse progressivement Batterie à -30 dB en 2 secondes puis mute Batterie`. Cross-turn: send `baisse Voix`, then `remonte-la`; send `mets Batterie sur Anthony à -12 dB`, then `mets Voix sur le même retour à -8 dB`.
+8. **DCA / X32-only areas:** if the mixer has the names used by the test, `mets Band à -6 dB`, `mute Band`, `baisse progressivement Band à -20 dB en 2 secondes`. On X32/M32 also test `mets Matrix Vox à -12 dB`, `mute Matrix Vox`, and `mets Batterie sur sortie aux 2 à 50%`.
+9. **Safety/fail-closed:** `mute Introuvable` must request clarification; an ambiguous name must not execute; `mute Batterie puis mute Introuvable` must not execute the first step; a fuzzy-only target must not authorize a write.
+10. **Speaker context:** select/recognize a configured speaker in the WebGUI, then test `monte mon retour de 3 dB`, `mets mon micro à -12 dB`, and `mets Batterie dans mon retour à -20 dB`.
+
+Protocol-specific expected behavior:
+
+- **OSCXR:** channel/bus/Main/FX/aux mapped level operations, reads, ramps, fades, delays and sequences are valid. Bus-specific source mute such as `mute Batterie sur Anthony` is expected to return an explicit unsupported error; it must never mute Batterie globally. Matrix controls and X32 channel-to-AUX-output commands are also expected to report unsupported.
+- **X32/M32:** route mutes, matrices and channel-to-AUX-output commands are expected to execute normally when the resolved targets exist.
+- A clarification or explicit unsupported response is a valid safe outcome where documented. `Commande non reconnue.` is not a valid substitute for mixer/protocol/configuration failures.
+
+The JSON corpus remains the exhaustive machine-readable checklist. When adding a new user-facing deterministic command to the README or `PROMPT.md`, add a matching acceptance case to `corpus/local-functional-recipe.fr.json` so documentation and parser coverage cannot drift.
+
 Important syntax rules:
 
 - **`à` means an absolute target**: `mets batterie à -30 dB`. Directional verbs do not change that meaning: `monte batterie à -8 dB` and `baisse batterie sur Anthony à -20 dB` are still absolute writes. With no named target, `mets/monte/baisse le volume à 100%` targets Main LR.
