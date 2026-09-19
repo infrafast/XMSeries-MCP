@@ -2277,26 +2277,6 @@ export class LocalMixerCommandGateway {
         intent: TargetIntent,
         target: LocalMixerTarget,
     ): AnalyzeCommandResult {
-        if (
-            target.family === "dca" &&
-            intent.kind !== "read_level"
-        ) {
-            const stored = this.store.createContinuation({
-                intent,
-                candidates: [target],
-            });
-            return {
-                protocol: GATEWAY_PROTOCOL,
-                recognized: true,
-                status: "clarification",
-                effect: "none",
-                continuationToken: stored.token,
-                expiresInMs: stored.expiresInMs,
-                responseText:
-                    "Les écritures DCA ne font pas partie du MVP déterministe actuel. Indique une autre cible.",
-            };
-        }
-
         const effect = intent.kind === "read_level" ? "read" : "write";
         const plan: LocalPlan = { ...intent, target } as LocalPlan;
 
