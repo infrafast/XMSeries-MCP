@@ -38,6 +38,19 @@ export interface LocalSpeakerMixerContext {
 export type LocalRelativeDirection = "up" | "down";
 export type LocalRelativeAmount = "little" | "normal" | "much";
 
+export type LocalSequenceAction =
+    | { type: "wait"; durationSeconds: number; description?: string }
+    | { type: "run"; description: string; run: () => Promise<void> }
+    | {
+          type: "ramp";
+          description: string;
+          from?: number;
+          to: number | (() => Promise<number>);
+          durationSeconds: number;
+          read: () => Promise<number>;
+          write: (value: number) => Promise<void>;
+      };
+
 export interface LocalMixerGatewayAdapter {
     resolve(query: string, families?: LocalMixerTargetFamily[]): Promise<LocalMixerTarget[]>;
     status(): Promise<any>;
@@ -55,6 +68,7 @@ export interface LocalMixerGatewayAdapter {
     startSendRamp(source: LocalMixerTarget, destination: LocalMixerTarget, toLevel: number, durationSeconds: number, fromLevel?: number): Promise<string>;
     startDelayedLevelRamp(target: LocalMixerTarget, toLevel: number, durationSeconds: number, delaySeconds: number, fromLevel?: number): Promise<string>;
     startDelayedSendRamp(source: LocalMixerTarget, destination: LocalMixerTarget, toLevel: number, durationSeconds: number, delaySeconds: number, fromLevel?: number): Promise<string>;
+    startSequence(actions: LocalSequenceAction[]): Promise<string>;
     scheduleLevel(target: LocalMixerTarget, toLevel: number, delaySeconds: number): Promise<string>;
     scheduleMute(target: LocalMixerTarget, mute: boolean, delaySeconds: number): Promise<string>;
     scheduleSend(source: LocalMixerTarget, destination: LocalMixerTarget, toLevel: number, delaySeconds: number): Promise<string>;
@@ -92,7 +106,7 @@ export interface LocalMixerGatewayAdapter {
     ): Promise<{ beforeDb: number; targetDb: number; targetLevel: number }>;
 }
 
-type LevelUnit = "db" | "percent";
+type LevelUnit = "db" | "percent" | "level";
 type LevelValue = { unit: LevelUnit; value: number };
 
 type Intent =
@@ -125,7 +139,8 @@ type Intent =
     | { kind: "bulk_channel_mute"; mode: "selected" | "all" | "all_except"; channelQueries: string[]; mute: boolean }
     | { kind: "bulk_bus_mute"; mode: "selected" | "all" | "all_except"; busQueries: string[]; mute: boolean }
     | { kind: "bulk_send_db"; mode: "selected" | "all"; sourceQuery: string; busQueries: string[]; db: number; includeMain: boolean }
-    | { kind: "mute"; targetQuery: string; mute: boolean };
+    | { kind: "mute"; targetQuery: string; mute: boolean }
+    | { kind: "sequence"; clauses: Array<{ text: string; waitBeforeSeconds: number }> };
 
 type TargetIntent = Extract<Intent, { targetQuery: string }>;
 type SendIntent = Extract<Intent, { sourceQuery: string; destinationQuery: string }>;
@@ -161,7 +176,8 @@ type LocalPlan =
     | { kind: "bulk_channel_mute"; mode: "selected" | "all" | "all_except"; channelQueries: string[]; channels: LocalMixerTarget[]; mute: boolean }
     | { kind: "bulk_bus_mute"; mode: "selected" | "all" | "all_except"; busQueries: string[]; buses: LocalMixerTarget[]; mute: boolean }
     | { kind: "bulk_send_db"; mode: "selected" | "all"; sourceQuery: string; source: LocalMixerTarget; busQueries: string[]; buses: LocalMixerTarget[]; db: number; includeMain: boolean }
-    | { kind: "mute"; targetQuery: string; target: LocalMixerTarget; mute: boolean };
+    | { kind: "mute"; targetQuery: string; target: LocalMixerTarget; mute: boolean }
+    | { kind: "sequence"; steps: Array<{ waitBeforeSeconds: number; plan: LocalPlan }> };
 
 type LocalContinuation =
     | {
@@ -170,6 +186,9 @@ type LocalContinuation =
       }
     | {
           kind: "speaker_context";
+      }
+    | {
+          kind: "sequence_context";
       };
 
 const SEND_SOURCE_FAMILIES: LocalMixerTargetFamily[] = ["channel", "fxreturn", "aux"];
@@ -222,7 +241,7 @@ function parseDb(value: string): number | null {
 
 function cleanTarget(value: string): string {
     return value
-        .replace(/^\s*(?:le|la|les|du|de la|de l|d|the)\s+/iu, "")
+        .replace(/^\s*(?:le|la|les|de|du|de la|de l|d|the)\s+/iu, "")
         .replace(/\s*(?:fader|niveau|volume|son)\s*$/iu, "")
         .trim();
 }
@@ -239,7 +258,16 @@ function parsePercent(value: string): number | null {
     return number !== null && Number.isFinite(number) ? number : null;
 }
 
+function parseNormalizedLevel(value: string): number | null {
+    const number = parseDb(value);
+    return number !== null && number >= 0 && number <= 1 ? number : null;
+}
+
 function levelToNormalized(unit: LevelUnit, value: number): { level: number; label: string } {
+    if (unit === "level") {
+        const level = Math.min(1, Math.max(0, value));
+        return { level, label: `niveau ${level.toFixed(4)}` };
+    }
     if (unit === "percent") {
         const level = Math.min(1, Math.max(0, value / 100));
         return { level, label: `${(level * 100).toFixed(1)}%` };
@@ -252,6 +280,14 @@ function levelToNormalized(unit: LevelUnit, value: number): { level: number; lab
 }
 
 function adjustedLevel(currentLevel: number, unit: LevelUnit, delta: number): { level: number; beforeLabel: string; afterLabel: string } {
+    if (unit === "level") {
+        const next = Math.min(1, Math.max(0, currentLevel + delta));
+        return {
+            level: next,
+            beforeLabel: `niveau ${currentLevel.toFixed(4)}`,
+            afterLabel: `niveau ${next.toFixed(4)}`,
+        };
+    }
     if (unit === "percent") {
         const next = Math.min(1, Math.max(0, currentLevel + delta / 100));
         return {
@@ -274,8 +310,13 @@ function adjustedLevel(currentLevel: number, unit: LevelUnit, delta: number): { 
 
 
 function parseTemporalLevelValue(rawValue: string, rawUnit: string): LevelValue | null {
-    const unit: LevelUnit = rawUnit === "%" ? "percent" : "db";
-    const value = unit === "percent" ? parsePercent(rawValue) : parseDb(rawValue);
+    const normalizedUnit = simplify(rawUnit);
+    const unit: LevelUnit = rawUnit === "%" ? "percent" : normalizedUnit === "level" || normalizedUnit === "niveau" ? "level" : "db";
+    const value = unit === "percent"
+        ? parsePercent(rawValue)
+        : unit === "level"
+          ? parseNormalizedLevel(rawValue)
+          : parseDb(rawValue);
     return value === null ? null : { unit, value };
 }
 
@@ -427,6 +468,37 @@ function parseFlexibleTemporalIntent(raw: string): Intent | null {
         };
     }
 
+    if (delayMatch?.[1] && fadeMatch?.[1] && !durationMatch) {
+        const delaySeconds = Number(delayMatch[1].replace(",", "."));
+        if (!Number.isFinite(delaySeconds) || delaySeconds < 0) return null;
+        const fadeTarget: LevelValue = {
+            unit: "db",
+            value: simplify(fadeMatch[1]) === "out" ? -120 : 0,
+        };
+        // Canonical delayed fades use a bounded default ramp duration when the
+        // user gives a delay but omits an explicit "en N secondes" duration.
+        // The PROMPT defines this form as a wait followed by a 5-second ramp.
+        const durationSeconds = 5;
+        if (routeMatch) {
+            if (!sourceQuery || !destinationQuery) return null;
+            return {
+                kind: "send_delayed_ramp_level",
+                sourceQuery,
+                destinationQuery,
+                to: fadeTarget,
+                durationSeconds,
+                delaySeconds,
+            };
+        }
+        return {
+            kind: "delayed_ramp_level",
+            targetQuery: targetQuery || "main",
+            to: fadeTarget,
+            durationSeconds,
+            delaySeconds,
+        };
+    }
+
     if (delayMatch?.[1]) {
         // "dans" is a delay marker. A progressive request without its own
         // "en N secondes" duration is incomplete and must not degrade to a direct set.
@@ -526,9 +598,87 @@ function normalizeLikelyFrenchSttDirection(raw: string): string {
     return text;
 }
 
-function parseIntent(raw: string): Intent | null {
+function sequencePrimaryTarget(intent: Intent): string | null {
+    if ("targetQuery" in intent && typeof intent.targetQuery === "string") return intent.targetQuery;
+    return null;
+}
+
+function sequenceDestination(intent: Intent): string | null {
+    if ("destinationQuery" in intent && typeof intent.destinationQuery === "string") return intent.destinationQuery;
+    return null;
+}
+
+function rewriteSequenceAnaphora(clause: string, previousIntent: Intent | null, previousText: string): string {
+    let text = clause.trim();
+    if (/^(?:idem|pareil|same)$/iu.test(text)) return previousText;
+
+    const target = previousIntent ? sequencePrimaryTarget(previousIntent) : null;
+    const destination = previousIntent ? sequenceDestination(previousIntent) : null;
+
+    if (target) {
+        const simple = [
+            [/^remonte(?:-|\s)*(?:la|le)$/iu, `monte ${target}`],
+            [/^rebaisse(?:-|\s)*(?:la|le)$/iu, `baisse ${target}`],
+            [/^(?:mute|coupe)(?:-|\s)*(?:la|le)$/iu, `mute ${target}`],
+            [/^(?:unmute|rallume|reactive|réactive|remets)(?:-|\s)*(?:la|le)$/iu, `unmute ${target}`],
+        ] as const;
+        for (const [pattern, replacement] of simple) {
+            if (pattern.test(text)) return replacement;
+        }
+        text = text.replace(/\b(?:la\s+)?m[eê]me\s+cible\b/giu, target);
+        text = text.replace(/\b(?:lui|elle|celui-ci|celle-ci)\b/giu, target);
+    }
+
+    if (destination) {
+        text = text
+            .replace(/\b(?:le\s+)?m[eê]me\s+(?:retour|bus)\b/giu, destination)
+            .replace(/\bsur\s+le\s+m[eê]me\s+retour\b/giu, `sur ${destination}`);
+    }
+    return text;
+}
+
+function parseSequenceIntent(raw: string): Intent | null {
+    const parts = raw.split(/\s+(?:puis|ensuite|then)\s+/iu).map((part) => part.trim()).filter(Boolean);
+    if (parts.length < 2) return null;
+
+    const clauses: Array<{ text: string; waitBeforeSeconds: number }> = [];
+    let previousIntent: Intent | null = null;
+    let previousText = "";
+
+    for (let index = 0; index < parts.length; index += 1) {
+        let clause = parts[index];
+        let waitBeforeSeconds = 0;
+        if (index > 0) {
+            const waitMatch = clause.match(
+                /(?:^|\s)(?:apres|après|after)\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\b/iu,
+            );
+            if (waitMatch?.[1]) {
+                waitBeforeSeconds = Number(waitMatch[1].replace(",", "."));
+                if (!Number.isFinite(waitBeforeSeconds) || waitBeforeSeconds < 0) return null;
+                clause = clause.replace(waitMatch[0], " ").replace(/\s+/gu, " ").trim();
+            }
+        }
+
+        clause = rewriteSequenceAnaphora(clause, previousIntent, previousText);
+        const parsed = parseIntent(clause, false);
+        if (!parsed || parsed.kind === "sequence") return null;
+
+        clauses.push({ text: clause, waitBeforeSeconds });
+        previousIntent = parsed;
+        previousText = clause;
+    }
+
+    return { kind: "sequence", clauses };
+}
+
+function parseIntent(raw: string, allowSequence = true): Intent | null {
     const text = normalizeLikelyFrenchSttDirection(raw);
     const normalized = simplify(text);
+
+    if (allowSequence) {
+        const sequence = parseSequenceIntent(text);
+        if (sequence) return sequence;
+    }
 
     if (
         [
@@ -575,6 +725,65 @@ function parseIntent(raw: string): Intent | null {
     const parseLevelValue = (rawValue: string, rawUnit: string): LevelValue | null =>
         parseTemporalLevelValue(rawValue, rawUnit);
 
+    const normalizedSendRamp = text.match(
+        /^\s*(?:monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+progressivement\s+(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:(?:a|à|to)\s+)?(?:au\s+)?(?:niveau|level)\s+(0(?:[.,]\d+)?|1(?:[.,]0+)?)\s+en\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
+    );
+    if (normalizedSendRamp?.[1] && normalizedSendRamp[2] && normalizedSendRamp[3] && normalizedSendRamp[4]) {
+        const value = parseNormalizedLevel(normalizedSendRamp[3]);
+        const durationSeconds = Number(normalizedSendRamp[4].replace(",", "."));
+        if (value !== null && Number.isFinite(durationSeconds) && durationSeconds > 0) {
+            return {
+                kind: "send_ramp_level",
+                sourceQuery: cleanTarget(normalizedSendRamp[1]),
+                destinationQuery: cleanTarget(normalizedSendRamp[2]),
+                to: { unit: "level", value },
+                durationSeconds,
+            };
+        }
+    }
+
+    const normalizedTargetRamp = text.match(
+        /^\s*(?:monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+progressivement\s+(.+?)\s+(?:(?:a|à|to)\s+)?(?:au\s+)?(?:niveau|level)\s+(0(?:[.,]\d+)?|1(?:[.,]0+)?)\s+en\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
+    );
+    if (normalizedTargetRamp?.[1] && normalizedTargetRamp[2] && normalizedTargetRamp[3]) {
+        const value = parseNormalizedLevel(normalizedTargetRamp[2]);
+        const durationSeconds = Number(normalizedTargetRamp[3].replace(",", "."));
+        if (value !== null && Number.isFinite(durationSeconds) && durationSeconds > 0) {
+            return {
+                kind: "ramp_level",
+                targetQuery: cleanTarget(normalizedTargetRamp[1]),
+                to: { unit: "level", value },
+                durationSeconds,
+            };
+        }
+    }
+
+    const normalizedSend = text.match(
+        /^\s*(?:mets|met|regle|règle|fixe|set|monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:(?:a|à|to)\s+)?(?:au\s+)?(?:niveau|level)\s+(0(?:[.,]\d+)?|1(?:[.,]0+)?)\s*$/iu,
+    );
+    if (normalizedSend?.[1] && normalizedSend[2] && normalizedSend[3]) {
+        const value = parseNormalizedLevel(normalizedSend[3]);
+        if (value !== null) {
+            return {
+                kind: "send_set_level",
+                sourceQuery: cleanTarget(normalizedSend[1]),
+                destinationQuery: cleanTarget(normalizedSend[2]),
+                unit: "level",
+                value,
+            };
+        }
+    }
+
+    const normalizedTarget = text.match(
+        /^\s*(?:mets|met|regle|règle|fixe|set|monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:(?:le\s+)?(?:niveau|volume|fader|son)\s+(?:de\s+)?)?(.+?)\s+(?:(?:a|à|to)\s+)?(?:au\s+)?(?:niveau|level)\s+(0(?:[.,]\d+)?|1(?:[.,]0+)?)\s*$/iu,
+    );
+    if (normalizedTarget?.[1] && normalizedTarget[2]) {
+        const value = parseNormalizedLevel(normalizedTarget[2]);
+        if (value !== null) {
+            return { kind: "set_level", targetQuery: cleanTarget(normalizedTarget[1]), unit: "level", value };
+        }
+    }
+
     const channelNameMatch = text.match(
         /^\s*(?:(?:quel(?:le)?\s+est\s+)?(?:le\s+)?nom\s+(?:de\s+)?(?:la\s+)?(?:voie|tranche|canal|channel)\s+(\d+)|(?:channel|voie|tranche|canal)\s+(\d+)\s+(?:name|nom))\s*\??\s*$/iu,
     );
@@ -609,6 +818,23 @@ function parseIntent(raw: string): Intent | null {
 
     const flexibleTemporalIntent = parseFlexibleTemporalIntent(text);
     if (flexibleTemporalIntent) return flexibleTemporalIntent;
+
+    const channelToAuxNormalized = text.match(
+        /^\s*(?:mets|met|regle|règle|fixe|set)\s+(.+?)\s+(?:sur|vers|to)\s+(?:la\s+)?(?:sortie\s+aux|aux\s+output)\s+(\d+)\s+(?:(?:a|à|to)\s+)?(?:au\s+)?(?:niveau|level)\s+(0(?:[.,]\d+)?|1(?:[.,]0+)?)\s*$/iu,
+    );
+    if (channelToAuxNormalized?.[1] && channelToAuxNormalized[2] && channelToAuxNormalized[3]) {
+        const aux = Number(channelToAuxNormalized[2]);
+        const value = parseNormalizedLevel(channelToAuxNormalized[3]);
+        if (Number.isInteger(aux) && aux > 0 && value !== null) {
+            return {
+                kind: "send_to_aux_output",
+                sourceQuery: cleanTarget(channelToAuxNormalized[1]),
+                aux,
+                unit: "level",
+                value,
+            };
+        }
+    }
 
     const channelToAuxOutput = text.match(
         /^\s*(?:mets|met|regle|règle|fixe|set)\s+(.+?)\s+(?:sur|vers|to)\s+(?:la\s+)?(?:sortie\s+aux|aux\s+output)\s+(\d+)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
@@ -1270,6 +1496,40 @@ function normalizedStatusText(status: any): string {
 
 export class LocalMixerCommandGateway {
     private readonly store: TokenStore<LocalPlan, LocalContinuation>;
+    private lastReferenceIntent: Intent | null = null;
+    private lastReferenceText = "";
+
+    private rewriteCrossTurnAnaphora(text: string): string {
+        if (!this.lastReferenceIntent) return text;
+        const hasExplicitReference =
+            /\b(?:idem|pareil|same|m[eê]me\s+cible|m[eê]me\s+(?:retour|bus)|lui|elle|celui-ci|celle-ci)\b/iu.test(text) ||
+            /^(?:remonte|rebaisse|mute|coupe|unmute|rallume|reactive|réactive|remets)(?:-|\s)*(?:la|le)\b/iu.test(text);
+        if (!hasExplicitReference) return text;
+        return rewriteSequenceAnaphora(text, this.lastReferenceIntent, this.lastReferenceText);
+    }
+
+    private rememberReference(intent: Intent, text: string): void {
+        if (intent.kind === "sequence") {
+            const last = intent.clauses[intent.clauses.length - 1];
+            if (!last) return;
+            const parsed = parseIntent(last.text, false);
+            if (parsed && parsed.kind !== "sequence") {
+                this.lastReferenceIntent = parsed;
+                this.lastReferenceText = last.text;
+            }
+            return;
+        }
+        if (
+            intent.kind === "status" ||
+            intent.kind === "automation_list" ||
+            intent.kind === "automation_cancel" ||
+            intent.kind === "read_channel_name"
+        ) {
+            return;
+        }
+        this.lastReferenceIntent = intent;
+        this.lastReferenceText = text;
+    }
 
     private async expandSpeakerContext(
         text: string,
@@ -1381,7 +1641,8 @@ export class LocalMixerCommandGateway {
             return await this.continueIntent(input.text, input.continuationToken);
         }
 
-        const expanded = await this.expandSpeakerContext(input.text, input.context);
+        const referencedText = this.rewriteCrossTurnAnaphora(input.text);
+        const expanded = await this.expandSpeakerContext(referencedText, input.context);
         if (expanded.clarification) {
             const stored = this.store.createContinuation({
                 kind: "speaker_context",
@@ -1398,6 +1659,9 @@ export class LocalMixerCommandGateway {
         }
 
         const intent = parseIntent(expanded.text);
+        if (intent) {
+            this.rememberReference(intent, expanded.text);
+        }
         if (!intent) {
             return {
                 protocol: GATEWAY_PROTOCOL,
@@ -1405,6 +1669,10 @@ export class LocalMixerCommandGateway {
                 status: "unrecognized",
                 effect: "none",
             };
+        }
+
+        if (intent.kind === "sequence") {
+            return await this.planSequenceIntent(intent);
         }
 
         if (intent.kind === "status" || intent.kind === "automation_list" || intent.kind === "read_channel_name") {
@@ -1453,30 +1721,7 @@ export class LocalMixerCommandGateway {
         }
 
         if (intent.kind === "send_to_aux_output") {
-            const sourceMatches = await this.adapter.resolve(intent.sourceQuery, ["channel"]);
-            const source = safeUnique(sourceMatches);
-            if (!source || source.matchType === "fuzzy") {
-                const stored = this.store.createContinuation({ intent, candidates: sourceMatches.slice(0, 8) });
-                return {
-                    protocol: GATEWAY_PROTOCOL,
-                    recognized: true,
-                    status: "clarification",
-                    effect: "none",
-                    continuationToken: stored.token,
-                    expiresInMs: stored.expiresInMs,
-                    responseText: `Source « ${intent.sourceQuery} » ambiguë ou introuvable. Reformule avec le nom exact de la voie.`,
-                };
-            }
-            const stored = this.store.createPlan({ ...intent, source }, "write");
-            return {
-                protocol: GATEWAY_PROTOCOL,
-                recognized: true,
-                status: "ready",
-                effect: "write",
-                planToken: stored.token,
-                expiresInMs: stored.expiresInMs,
-                responseText: null,
-            };
+            return await this.planAuxOutputIntent(intent);
         }
 
         if (
@@ -1580,6 +1825,16 @@ export class LocalMixerCommandGateway {
                     protocol: GATEWAY_PROTOCOL,
                     ok: true,
                     responseText: `Automation ${job.id} : ${job.status}.`,
+                };
+            }
+
+            if (plan.kind === "sequence") {
+                const actions = await this.sequenceActions(plan.steps);
+                const jobId = await this.adapter.startSequence(actions);
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    ok: true,
+                    responseText: `Automation ${jobId} démarrée : séquence de ${plan.steps.length} action(s).`,
                 };
             }
 
@@ -1975,6 +2230,313 @@ export class LocalMixerCommandGateway {
         }
     }
 
+    private async planAuxOutputIntent(
+        intent: Extract<Intent, { kind: "send_to_aux_output" }>,
+    ): Promise<AnalyzeCommandResult> {
+        const sourceMatches = await this.adapter.resolve(intent.sourceQuery, ["channel"]);
+        const source = safeUnique(sourceMatches);
+        if (!source || source.matchType === "fuzzy") {
+            const stored = this.store.createContinuation({ intent, candidates: sourceMatches.slice(0, 8) });
+            return {
+                protocol: GATEWAY_PROTOCOL,
+                recognized: true,
+                status: "clarification",
+                effect: "none",
+                continuationToken: stored.token,
+                expiresInMs: stored.expiresInMs,
+                responseText: `Source « ${intent.sourceQuery} » ambiguë ou introuvable. Reformule avec le nom exact de la voie.`,
+            };
+        }
+        const stored = this.store.createPlan({ ...intent, source }, "write");
+        return {
+            protocol: GATEWAY_PROTOCOL,
+            recognized: true,
+            status: "ready",
+            effect: "write",
+            planToken: stored.token,
+            expiresInMs: stored.expiresInMs,
+            responseText: null,
+        };
+    }
+
+    private sequenceClarification(message: string): AnalyzeCommandResult {
+        const stored = this.store.createContinuation({ kind: "sequence_context" });
+        return {
+            protocol: GATEWAY_PROTOCOL,
+            recognized: true,
+            status: "clarification",
+            effect: "none",
+            continuationToken: stored.token,
+            expiresInMs: stored.expiresInMs,
+            responseText: message,
+        };
+    }
+
+    private async planAtomicForSequence(
+        intent: Intent,
+    ): Promise<{ plan?: LocalPlan; errorText?: string }> {
+        if (
+            intent.kind === "sequence" ||
+            intent.kind === "status" ||
+            intent.kind === "read_level" ||
+            intent.kind === "read_mute" ||
+            intent.kind === "read_effect_on" ||
+            intent.kind === "read_channel_name" ||
+            intent.kind === "automation_list" ||
+            intent.kind === "automation_cancel" ||
+            intent.kind === "send_read_level"
+        ) {
+            return { errorText: "Une macro déterministe ne peut contenir que des actions mixeur, pas des lectures ou commandes de statut." };
+        }
+
+        let result: AnalyzeCommandResult;
+        if (intent.kind === "bulk_channel_mute" || intent.kind === "bulk_bus_mute" || intent.kind === "bulk_send_db") {
+            result = await this.planBulkIntent(intent);
+        } else if (intent.kind === "send_to_aux_output") {
+            result = await this.planAuxOutputIntent(intent);
+        } else if (
+            intent.kind === "send_set_level" ||
+            intent.kind === "send_adjust_level" ||
+            intent.kind === "send_adjust_level_qualitative" ||
+            intent.kind === "send_mute" ||
+            intent.kind === "send_ramp_level" ||
+            intent.kind === "send_delayed_ramp_level" ||
+            intent.kind === "send_ramp_level_qualitative" ||
+            intent.kind === "send_delay_level" ||
+            intent.kind === "send_delay_mute"
+        ) {
+            result = await this.planSendIntent(intent);
+        } else {
+            result = await this.planTargetIntent(intent);
+        }
+
+        const payload = result as AnalyzeCommandResult & {
+            planToken?: string;
+            continuationToken?: string;
+            responseText?: string | null;
+        };
+        if (payload.status !== "ready" || payload.effect !== "write" || !payload.planToken) {
+            if (payload.continuationToken) this.store.takeContinuation(payload.continuationToken);
+            return {
+                errorText: payload.responseText || "Une étape de la macro est ambiguë ou incomplète.",
+            };
+        }
+
+        const taken = this.store.takePlan(payload.planToken);
+        if (!taken.ok) {
+            return { errorText: "Impossible de figer une étape de la macro." };
+        }
+        return { plan: taken.value };
+    }
+
+    private async planSequenceIntent(
+        intent: Extract<Intent, { kind: "sequence" }>,
+    ): Promise<AnalyzeCommandResult> {
+        const steps: Array<{ waitBeforeSeconds: number; plan: LocalPlan }> = [];
+        for (let index = 0; index < intent.clauses.length; index += 1) {
+            const clause = intent.clauses[index];
+            const parsed = parseIntent(clause.text, false);
+            if (!parsed || parsed.kind === "sequence") {
+                return this.sequenceClarification(
+                    `Étape ${index + 1} non reconnue. Reformule toute la séquence avec des commandes complètes.`,
+                );
+            }
+            const planned = await this.planAtomicForSequence(parsed);
+            if (!planned.plan) {
+                return this.sequenceClarification(
+                    `Étape ${index + 1} : ${planned.errorText || "commande non résolue"} Reformule toute la séquence.`,
+                );
+            }
+            steps.push({ waitBeforeSeconds: clause.waitBeforeSeconds, plan: planned.plan });
+        }
+
+        const stored = this.store.createPlan({ kind: "sequence", steps }, "write");
+        return {
+            protocol: GATEWAY_PROTOCOL,
+            recognized: true,
+            status: "ready",
+            effect: "write",
+            planToken: stored.token,
+            expiresInMs: stored.expiresInMs,
+            responseText: null,
+        };
+    }
+
+    private async sequenceActions(
+        steps: Array<{ waitBeforeSeconds: number; plan: LocalPlan }>,
+    ): Promise<LocalSequenceAction[]> {
+        const actions: LocalSequenceAction[] = [];
+        const wait = (seconds: number, description?: string) => {
+            if (seconds > 0) actions.push({ type: "wait", durationSeconds: seconds, description });
+        };
+        const run = (description: string, fn: () => Promise<void>) => {
+            actions.push({ type: "run", description, run: fn });
+        };
+
+        for (const item of steps) {
+            wait(item.waitBeforeSeconds, item.waitBeforeSeconds > 0 ? `attendre ${item.waitBeforeSeconds} s` : undefined);
+            const plan = item.plan;
+
+            if (plan.kind === "sequence" || plan.kind === "status" || plan.kind === "automation_list" || plan.kind === "automation_cancel" || plan.kind === "read_level" || plan.kind === "read_mute" || plan.kind === "read_effect_on" || plan.kind === "read_channel_name" || plan.kind === "send_read_level") {
+                throw new Error("Une macro contient une étape non exécutable.");
+            }
+
+            if (plan.kind === "bulk_channel_mute") {
+                const channels = plan.mode === "all" ? [] : await this.revalidateChannelTargets(plan.channelQueries, plan.channels);
+                run("mute groupé des voies", async () => {
+                    if (plan.mode === "all") await this.adapter.muteAllChannels(plan.mute);
+                    else if (plan.mode === "all_except") await this.adapter.muteAllChannels(plan.mute, channels);
+                    else await this.adapter.muteChannelBatch(channels, plan.mute);
+                });
+                continue;
+            }
+
+            if (plan.kind === "bulk_bus_mute") {
+                const buses = plan.mode === "all" ? [] : await this.revalidateBusTargets(plan.busQueries, plan.buses);
+                run("mute groupé des bus", async () => {
+                    if (plan.mode === "all") await this.adapter.muteAllBuses(plan.mute);
+                    else if (plan.mode === "all_except") await this.adapter.muteAllBuses(plan.mute, buses);
+                    else await this.adapter.muteBusBatch(buses, plan.mute);
+                });
+                continue;
+            }
+
+            if (plan.kind === "bulk_send_db") {
+                const source = await this.revalidateScopedTarget(plan.sourceQuery, plan.source, ["channel"]);
+                const buses = plan.mode === "all" ? [] : await this.revalidateBusTargets(plan.busQueries, plan.buses);
+                run("niveau groupé vers bus", async () => {
+                    if (plan.mode === "all") await this.adapter.writeSendAllBusesDb(source, plan.db, plan.includeMain);
+                    else await this.adapter.writeSendBatchDb(source, buses, plan.db, plan.includeMain);
+                });
+                continue;
+            }
+
+            if (plan.kind === "send_to_aux_output") {
+                const source = await this.revalidateScopedTarget(plan.sourceQuery, plan.source, ["channel"]);
+                const converted = levelToNormalized(plan.unit, plan.value);
+                run(`${displayName(source)} vers sortie AUX ${plan.aux}`, () => this.adapter.writeChannelToAux(source, plan.aux, converted.level));
+                continue;
+            }
+
+            if (
+                plan.kind === "send_set_level" ||
+                plan.kind === "send_adjust_level" ||
+                plan.kind === "send_adjust_level_qualitative" ||
+                plan.kind === "send_mute" ||
+                plan.kind === "send_ramp_level" ||
+                plan.kind === "send_delayed_ramp_level" ||
+                plan.kind === "send_ramp_level_qualitative" ||
+                plan.kind === "send_delay_level" ||
+                plan.kind === "send_delay_mute"
+            ) {
+                const source = await this.revalidateScopedTarget(plan.sourceQuery, plan.source, SEND_SOURCE_FAMILIES);
+                const destination = await this.revalidateScopedTarget(plan.destinationQuery, plan.destination, ["bus"]);
+
+                if (plan.kind === "send_set_level") {
+                    const converted = levelToNormalized(plan.unit, plan.value);
+                    run(`${displayName(source)} vers ${displayName(destination)}`, () => this.adapter.writeSendLevel(source, destination, converted.level));
+                } else if (plan.kind === "send_adjust_level") {
+                    run(`ajuster ${displayName(source)} vers ${displayName(destination)}`, async () => {
+                        const current = await this.adapter.readSendLevel(source, destination);
+                        const adjusted = adjustedLevel(current, plan.unit, plan.delta);
+                        await this.adapter.writeSendLevel(source, destination, adjusted.level);
+                    });
+                } else if (plan.kind === "send_adjust_level_qualitative") {
+                    run(`ajuster ${displayName(source)} vers ${displayName(destination)}`, async () => {
+                        await this.adapter.adjustQualitativeSend(source, destination, plan.direction, plan.amount);
+                    });
+                } else if (plan.kind === "send_mute") {
+                    run(`${plan.mute ? "mute" : "unmute"} ${displayName(source)} vers ${displayName(destination)}`, () => this.adapter.setSendMute(source, destination, plan.mute));
+                } else if (plan.kind === "send_delay_level") {
+                    wait(plan.delaySeconds, `attendre ${plan.delaySeconds} s`);
+                    const converted = levelToNormalized(plan.value.unit, plan.value.value);
+                    run(`${displayName(source)} vers ${displayName(destination)}`, () => this.adapter.writeSendLevel(source, destination, converted.level));
+                } else if (plan.kind === "send_delay_mute") {
+                    wait(plan.delaySeconds, `attendre ${plan.delaySeconds} s`);
+                    run(`${plan.mute ? "mute" : "unmute"} ${displayName(source)} vers ${displayName(destination)}`, () => this.adapter.setSendMute(source, destination, plan.mute));
+                } else {
+                    if (plan.kind === "send_delayed_ramp_level") {
+                        wait(plan.delaySeconds, `attendre ${plan.delaySeconds} s`);
+                    }
+                    const from = "from" in plan && plan.from ? levelToNormalized(plan.from.unit, plan.from.value).level : undefined;
+                    let to: number | (() => Promise<number>);
+                    if (plan.kind === "send_ramp_level_qualitative") {
+                        to = async () => (await this.adapter.previewQualitativeSend(source, destination, plan.direction, plan.amount)).targetLevel;
+                    } else if (plan.delta) {
+                        to = async () => {
+                            const current = await this.adapter.readSendLevel(source, destination);
+                            return adjustedLevel(current, plan.delta!.unit, plan.delta!.value).level;
+                        };
+                    } else {
+                        to = levelToNormalized(plan.to!.unit, plan.to!.value).level;
+                    }
+                    actions.push({
+                        type: "ramp",
+                        description: `rampe ${displayName(source)} vers ${displayName(destination)}`,
+                        from,
+                        to,
+                        durationSeconds: plan.durationSeconds,
+                        read: () => this.adapter.readSendLevel(source, destination),
+                        write: (value) => this.adapter.writeSendLevel(source, destination, value),
+                    });
+                }
+                continue;
+            }
+
+            const target = await this.revalidateTarget(plan.targetQuery, plan.target, true);
+            if (plan.kind === "set_level") {
+                const converted = levelToNormalized(plan.unit, plan.value);
+                run(`régler ${displayName(target)}`, () => this.adapter.writeLevel(target, converted.level));
+            } else if (plan.kind === "adjust_level") {
+                run(`ajuster ${displayName(target)}`, async () => {
+                    const current = await this.adapter.readLevel(target);
+                    const adjusted = adjustedLevel(current, plan.unit, plan.delta);
+                    await this.adapter.writeLevel(target, adjusted.level);
+                });
+            } else if (plan.kind === "adjust_level_qualitative") {
+                run(`ajuster ${displayName(target)}`, async () => {
+                    await this.adapter.adjustQualitativeLevel(target, plan.direction, plan.amount);
+                });
+            } else if (plan.kind === "mute") {
+                run(`${plan.mute ? "mute" : "unmute"} ${displayName(target)}`, () => this.adapter.setMute(target, plan.mute));
+            } else if (plan.kind === "delay_level") {
+                wait(plan.delaySeconds, `attendre ${plan.delaySeconds} s`);
+                const converted = levelToNormalized(plan.value.unit, plan.value.value);
+                run(`régler ${displayName(target)}`, () => this.adapter.writeLevel(target, converted.level));
+            } else if (plan.kind === "delay_mute") {
+                wait(plan.delaySeconds, `attendre ${plan.delaySeconds} s`);
+                run(`${plan.mute ? "mute" : "unmute"} ${displayName(target)}`, () => this.adapter.setMute(target, plan.mute));
+            } else {
+                if (plan.kind === "delayed_ramp_level") {
+                    wait(plan.delaySeconds, `attendre ${plan.delaySeconds} s`);
+                }
+                const from = "from" in plan && plan.from ? levelToNormalized(plan.from.unit, plan.from.value).level : undefined;
+                let to: number | (() => Promise<number>);
+                if (plan.kind === "ramp_level_qualitative") {
+                    to = async () => (await this.adapter.previewQualitativeLevel(target, plan.direction, plan.amount)).targetLevel;
+                } else if (plan.delta) {
+                    to = async () => {
+                        const current = await this.adapter.readLevel(target);
+                        return adjustedLevel(current, plan.delta!.unit, plan.delta!.value).level;
+                    };
+                } else {
+                    to = levelToNormalized(plan.to!.unit, plan.to!.value).level;
+                }
+                actions.push({
+                    type: "ramp",
+                    description: `rampe ${displayName(target)}`,
+                    from,
+                    to,
+                    durationSeconds: plan.durationSeconds,
+                    read: () => this.adapter.readLevel(target),
+                    write: (value) => this.adapter.writeLevel(target, value),
+                });
+            }
+        }
+
+        return actions;
+    }
+
     private async planSendIntent(
         intent: SendIntent,
     ): Promise<AnalyzeCommandResult> {
@@ -2311,12 +2873,15 @@ export class LocalMixerCommandGateway {
         }
 
         if (!("intent" in continuation.value)) {
+            const isSequence = continuation.value.kind === "sequence_context";
             return {
                 protocol: GATEWAY_PROTOCOL,
                 recognized: false,
                 status: "unrecognized",
                 effect: "none",
-                responseText: "Reformule la commande complète en précisant le retour, le bus ou la voie.",
+                responseText: isSequence
+                    ? "Reformule toute la séquence avec les cibles et actions complètes."
+                    : "Reformule la commande complète en précisant le retour, le bus ou la voie.",
             };
         }
 
