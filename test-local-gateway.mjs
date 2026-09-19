@@ -334,6 +334,46 @@ async function ready(text) {
     assert.equal(writes[0].target.family, "main");
 }
 
+// Explicit normalized fader levels are accepted without stealing dB syntax.
+{
+    writes = [];
+    const analyzed = await ready("mets Voix au niveau 0.75");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(writes.length, 1);
+    assert.equal(writes[0].target.name, "Voix");
+    assert.equal(writes[0].level, 0.75);
+}
+
+// Normalized source -> bus values use the same strict level unit.
+{
+    sendWrites = [];
+    const analyzed = await ready("mets Batterie sur Anthony au niveau 0.5");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(sendWrites[0].level, 0.5);
+}
+
+// Normalized progressive target remains an MCP-owned ramp.
+{
+    automationCalls = [];
+    const analyzed = await ready("monte progressivement Voix au niveau 0.8 en 2 secondes");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(automationCalls[0].kind, "ramp");
+    assert.equal(automationCalls[0].toLevel, 0.8);
+    assert.equal(automationCalls[0].durationSeconds, 2);
+}
+
 // Absolute dB write
 {
     writes = [];
