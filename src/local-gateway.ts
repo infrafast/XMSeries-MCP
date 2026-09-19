@@ -1661,6 +1661,16 @@ export class LocalMixerCommandGateway {
                 };
             }
 
+            if (plan.kind === "sequence") {
+                const actions = await this.sequenceActions(plan.steps);
+                const jobId = await this.adapter.startSequence(actions);
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    ok: true,
+                    responseText: `Automation ${jobId} démarrée : séquence de ${plan.steps.length} action(s).`,
+                };
+            }
+
             if (plan.kind === "bulk_channel_mute") {
                 if (plan.mode === "all") {
                     await this.adapter.muteAllChannels(plan.mute);
@@ -2696,12 +2706,15 @@ export class LocalMixerCommandGateway {
         }
 
         if (!("intent" in continuation.value)) {
+            const isSequence = continuation.value.kind === "sequence_context";
             return {
                 protocol: GATEWAY_PROTOCOL,
                 recognized: false,
                 status: "unrecognized",
                 effect: "none",
-                responseText: "Reformule la commande complète en précisant le retour, le bus ou la voie.",
+                responseText: isSequence
+                    ? "Reformule toute la séquence avec les cibles et actions complètes."
+                    : "Reformule la commande complète en précisant le retour, le bus ou la voie.",
             };
         }
 
