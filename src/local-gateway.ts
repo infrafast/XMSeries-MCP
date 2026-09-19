@@ -762,12 +762,14 @@ function parseIntent(raw: string, allowSequence = true): Intent | null {
         /^\s*(?:mets|met|regle|règle|fixe|set|monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:(?:a|à|to)\s+)?(?:au\s+)?(?:niveau|level)\s+(0(?:[.,]\d+)?|1(?:[.,]0+)?)\s*$/iu,
     );
     if (normalizedSend?.[1] && normalizedSend[2] && normalizedSend[3]) {
+        const destinationQuery = cleanTarget(normalizedSend[2]);
+        const typedAuxOutput = /^(?:la\s+)?(?:sortie\s+aux|aux\s+output)\s+\d+$/iu.test(destinationQuery);
         const value = parseNormalizedLevel(normalizedSend[3]);
-        if (value !== null) {
+        if (!typedAuxOutput && value !== null) {
             return {
                 kind: "send_set_level",
                 sourceQuery: cleanTarget(normalizedSend[1]),
-                destinationQuery: cleanTarget(normalizedSend[2]),
+                destinationQuery,
                 unit: "level",
                 value,
             };
