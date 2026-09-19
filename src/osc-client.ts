@@ -1313,6 +1313,16 @@ export class OSCClient {
         return result;
     }
 
+    async setDcaFader(dca: number, level: number): Promise<void> {
+        const path = `/dca/${dca}/fader`;
+        await this.writeLevelAndVerify(path, level, { label: `DCA ${dca} fader` });
+    }
+
+    async muteDca(dca: number, mute: boolean): Promise<void> {
+        const path = `/dca/${dca}/on`;
+        await this.writeAndVerify(path, [mute ? 0 : 1], { tolerance: 0, label: `DCA ${dca} mute` });
+    }
+
     async getDCA(dca: number): Promise<any> {
         const path = `/dca/${dca}`;
         const result: any = { dca };

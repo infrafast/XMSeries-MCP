@@ -16,6 +16,7 @@ const targets = {
     laurent: { family: "bus", index: 8, name: "Laurent", matchType: "exact" },
     hallfx: { family: "fxreturn", index: 2, name: "Hall FX", matchType: "exact" },
     playback: { family: "aux", index: 1, name: "Playback", matchType: "exact" },
+    band: { family: "dca", index: 1, name: "Band", matchType: "exact" },
 };
 
 let level = 0.75;
@@ -59,6 +60,7 @@ const adapter = {
         if (q === "laurent") return [targets.laurent];
         if (q === "hall fx") return [targets.hallfx];
         if (q === "playback") return [targets.playback];
+        if (q === "band") return [targets.band];
         return [];
     },
     async status() {
@@ -573,6 +575,45 @@ async function ready(text) {
     assert.equal(auxOutputWrites[0].source.name, "Voix");
     assert.equal(auxOutputWrites[0].aux, 3);
     assert.ok(auxOutputWrites[0].level >= 0 && auxOutputWrites[0].level <= 1);
+}
+
+// DCA targets use the same deterministic level/mute semantics.
+{
+    writes = [];
+    const analyzed = await ready("mets Band à -6 dB");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(writes[0].target.family, "dca");
+    assert.equal(writes[0].target.name, "Band");
+}
+
+// DCA mute is a real mute, not a fader approximation.
+{
+    muteWrites = [];
+    const analyzed = await ready("mute Band");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(muteWrites[0].target.family, "dca");
+    assert.equal(muteWrites[0].mute, true);
+}
+
+// DCA ramps remain MCP-owned automations.
+{
+    automationCalls = [];
+    const analyzed = await ready("baisse progressivement Band à -20 dB en 2 secondes");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(automationCalls[0].kind, "ramp");
+    assert.equal(automationCalls[0].target.family, "dca");
 }
 
 // Route mute is distinct from whole-source mute.
