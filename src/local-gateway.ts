@@ -49,6 +49,7 @@ export interface LocalMixerGatewayAdapter {
     setMute(target: LocalMixerTarget, mute: boolean): Promise<void>;
     readSendLevel(source: LocalMixerTarget, destination: LocalMixerTarget): Promise<number>;
     writeSendLevel(source: LocalMixerTarget, destination: LocalMixerTarget, level: number): Promise<void>;
+    writeChannelToAux(source: LocalMixerTarget, aux: number, level: number): Promise<void>;
     setSendMute(source: LocalMixerTarget, destination: LocalMixerTarget, mute: boolean): Promise<void>;
     startLevelRamp(target: LocalMixerTarget, toLevel: number, durationSeconds: number, fromLevel?: number): Promise<string>;
     startSendRamp(source: LocalMixerTarget, destination: LocalMixerTarget, toLevel: number, durationSeconds: number, fromLevel?: number): Promise<string>;
@@ -106,6 +107,7 @@ type Intent =
     | { kind: "send_adjust_level"; sourceQuery: string; destinationQuery: string; unit: LevelUnit; delta: number }
     | { kind: "send_adjust_level_qualitative"; sourceQuery: string; destinationQuery: string; direction: LocalRelativeDirection; amount: LocalRelativeAmount }
     | { kind: "send_mute"; sourceQuery: string; destinationQuery: string; mute: boolean }
+    | { kind: "send_to_aux_output"; sourceQuery: string; aux: number; unit: LevelUnit; value: number }
     | { kind: "ramp_level"; targetQuery: string; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
     | { kind: "ramp_level_qualitative"; targetQuery: string; direction: LocalRelativeDirection; amount: LocalRelativeAmount; durationSeconds: number }
     | { kind: "send_ramp_level"; sourceQuery: string; destinationQuery: string; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
@@ -139,6 +141,7 @@ type LocalPlan =
     | { kind: "send_adjust_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; unit: LevelUnit; delta: number }
     | { kind: "send_adjust_level_qualitative"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; direction: LocalRelativeDirection; amount: LocalRelativeAmount }
     | { kind: "send_mute"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; mute: boolean }
+    | { kind: "send_to_aux_output"; sourceQuery: string; source: LocalMixerTarget; aux: number; unit: LevelUnit; value: number }
     | { kind: "ramp_level"; targetQuery: string; target: LocalMixerTarget; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
     | { kind: "ramp_level_qualitative"; targetQuery: string; target: LocalMixerTarget; direction: LocalRelativeDirection; amount: LocalRelativeAmount; durationSeconds: number }
     | { kind: "send_ramp_level"; sourceQuery: string; destinationQuery: string; source: LocalMixerTarget; destination: LocalMixerTarget; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
@@ -570,6 +573,23 @@ function parseIntent(raw: string): Intent | null {
 
     const flexibleTemporalIntent = parseFlexibleTemporalIntent(text);
     if (flexibleTemporalIntent) return flexibleTemporalIntent;
+
+    const channelToAuxOutput = text.match(
+        /^\s*(?:mets|met|regle|règle|fixe|set)\s+(.+?)\s+(?:sur|vers|to)\s+(?:la\s+)?(?:sortie\s+aux|aux\s+output)\s+(\d+)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
+    );
+    if (channelToAuxOutput?.[1] && channelToAuxOutput[2] && channelToAuxOutput[3] && channelToAuxOutput[4]) {
+        const aux = Number(channelToAuxOutput[2]);
+        const value = parseLevelValue(channelToAuxOutput[3], channelToAuxOutput[4]);
+        if (Number.isInteger(aux) && aux > 0 && value) {
+            return {
+                kind: "send_to_aux_output",
+                sourceQuery: cleanTarget(channelToAuxOutput[1]),
+                aux,
+                unit: value.unit,
+                value: value.value,
+            };
+        }
+    }
 
     const delayedSendMuteMatch = text.match(
         /^\s*(?:(?:dans\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*[,;:]?\s*)(mute|coupe|couper|desactive|désactive|eteins|éteins|unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\s+(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)|(mute|coupe|couper|desactive|désactive|eteins|éteins|unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\s+(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+dans\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?))\s*$/iu,
@@ -1396,6 +1416,33 @@ export class LocalMixerCommandGateway {
             return await this.planBulkIntent(intent);
         }
 
+        if (intent.kind === "send_to_aux_output") {
+            const sourceMatches = await this.adapter.resolve(intent.sourceQuery, ["channel"]);
+            const source = safeUnique(sourceMatches);
+            if (!source || source.matchType === "fuzzy") {
+                const stored = this.store.createContinuation({ intent, candidates: sourceMatches.slice(0, 8) });
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    recognized: true,
+                    status: "clarification",
+                    effect: "none",
+                    continuationToken: stored.token,
+                    expiresInMs: stored.expiresInMs,
+                    responseText: `Source « ${intent.sourceQuery} » ambiguë ou introuvable. Reformule avec le nom exact de la voie.`,
+                };
+            }
+            const stored = this.store.createPlan({ ...intent, source }, "write");
+            return {
+                protocol: GATEWAY_PROTOCOL,
+                recognized: true,
+                status: "ready",
+                effect: "write",
+                planToken: stored.token,
+                expiresInMs: stored.expiresInMs,
+                responseText: null,
+            };
+        }
+
         if (
             intent.kind === "send_read_level" ||
             intent.kind === "send_set_level" ||
@@ -1548,6 +1595,17 @@ export class LocalMixerCommandGateway {
                     protocol: GATEWAY_PROTOCOL,
                     ok: true,
                     responseText: `${buses.map(displayName).join(", ")} : ${plan.mute ? "coupés" : "réactivés"}.`,
+                };
+            }
+
+            if (plan.kind === "send_to_aux_output") {
+                const source = await this.revalidateScopedTarget(plan.sourceQuery, plan.source, ["channel"]);
+                const converted = levelToNormalized(plan.unit, plan.value);
+                await this.adapter.writeChannelToAux(source, plan.aux, converted.level);
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    ok: true,
+                    responseText: `${displayName(source)} → sortie AUX ${plan.aux} réglé à ${converted.label}.`,
                 };
             }
 
