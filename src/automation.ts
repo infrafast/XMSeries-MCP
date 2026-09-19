@@ -4,7 +4,7 @@ export interface AutomationRampAction {
     type: "ramp";
     description?: string;
     from?: number;
-    to: number;
+    to: number | (() => Promise<number>);
     durationSeconds: number;
     stepMs?: number;
     curve?: AutomationCurve;
@@ -132,7 +132,7 @@ export class AutomationEngine {
         const durationMs = Math.max(0, action.durationSeconds * 1000);
         const stepMs = Math.max(20, action.stepMs ?? 100);
         const from = action.from ?? await action.read();
-        const to = action.to;
+        const to = typeof action.to === "function" ? await action.to() : action.to;
 
         const steps = Math.max(1, Math.ceil(durationMs / stepMs));
         for (let i = 1; i <= steps; i++) {
