@@ -523,6 +523,7 @@ The parser is intentionally bounded and deterministic. Prefer the canonical form
 | Mixer status | `statut mixeur` |
 | Read a level | `niveau de batterie` · `donne le niveau de batterie` |
 | Mute / unmute | `mute batterie` · `éteins batterie` · `unmute batterie` · `rallume batterie` |
+| DCA level / mute | `mets Band à -6 dB` · `mute Band` · `baisse progressivement Band à -20 dB en 2 secondes` |
 | Absolute dB | `mets batterie à -30 dB` · `mets le niveau de batterie à -30 dB` |
 | Relative dB | `monte batterie de 3 dB` · `baisse batterie de 3 dB` |
 | Qualitative relative | `monte un peu le niveau de batterie` · `baisse beaucoup batterie` · `monte le volume` · `monte le son` · `baisse un peu le volume` (Main LR) · `un peu plus fort batterie` · `batterie moins fort` |
