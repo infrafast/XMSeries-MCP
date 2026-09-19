@@ -631,6 +631,27 @@ const localCommandGateway = new LocalMixerCommandGateway({
     },
     listAutomations: async () => automation.list(),
     cancelAutomation: async (id) => automation.cancel(id),
+    muteChannelBatch: async (targets, mute) => {
+        const channels = targets.map((target) => {
+            if (target.family !== "channel") throw new Error("Local bulk mute requires channel targets.");
+            return target.index;
+        });
+        const result = await muteChannelBatch(channels, mute);
+        if (result.failures.length > 0) {
+            throw new Error(`Certaines commandes channel ont échoué : ${result.failures.join(" | ")}`);
+        }
+    },
+    muteAllChannels: async (mute, except = []) => {
+        const excluded = new Set(except.map((target) => {
+            if (target.family !== "channel") throw new Error("Local bulk mute exception must be a channel.");
+            return target.index;
+        }));
+        const channels = namedTargetRange("channel").filter((channel) => !excluded.has(channel));
+        const result = await muteChannelBatch(channels, mute);
+        if (result.failures.length > 0) {
+            throw new Error(`Certaines commandes channel ont échoué : ${result.failures.join(" | ")}`);
+        }
+    },
     muteBusBatch: async (targets, mute) => {
         const buses = targets.map((target) => {
             if (target.family !== "bus") throw new Error("Local bulk mute requires bus targets.");
@@ -1438,6 +1459,26 @@ async function setChannelSendBatchDb(
     };
 }
 
+async function muteChannelBatch(channels: number[], mute: boolean): Promise<{ changed: number[]; failures: string[] }> {
+    const changed: number[] = [];
+    const failures: string[] = [];
+
+    for (const channel of channels) {
+        try {
+            await osc.muteChannel(channel, mute);
+            changed.push(channel);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            failures.push(`channel ${channel}: ${message}`);
+            if (message.toLowerCase().includes("deconnecte") || message.toLowerCase().includes("timeout")) {
+                break;
+            }
+        }
+    }
+
+    return { changed, failures };
+}
+
 async function muteBusBatch(buses: number[], mute: boolean): Promise<{ changed: number[]; failures: string[] }> {
     const changed: number[] = [];
     const failures: string[] = [];
@@ -1815,6 +1856,53 @@ export const TOOLS: Tool[] = [
                 },
             },
             required: ["channel", "mute"],
+        },
+    },
+    {
+        name: "osc_mute_channels",
+        description: "Mute or unmute a selected list of input channels in one batch. Use for commands like 'mute les voies Batterie et Guitare'. Resolve names first. Do not use for all channels; use osc_mute_all_channels.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                channels: {
+                    type: "array",
+                    description: "Selected input channel numbers within the current runtime channelCount.",
+                    items: { type: "number", minimum: 1 },
+                    minItems: 1,
+                    uniqueItems: true,
+                },
+                mute: { type: "boolean", description: "True to mute, false to unmute" },
+            },
+            required: ["channels", "mute"],
+        },
+    },
+    {
+        name: "osc_mute_all_channels",
+        description: "Mute or unmute every configured input channel in one batch. Use only when the user explicitly asks for all channels/voies/tranches and gives no exception.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                mute: { type: "boolean", description: "True to mute all channels, false to unmute all channels" },
+            },
+            required: ["mute"],
+        },
+    },
+    {
+        name: "osc_mute_all_channels_except",
+        description: "Mute or unmute every configured input channel except the listed channel numbers. Use for commands like 'mute toutes les voies sauf Kick et Snare' after resolving each exception to a channel.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                exceptChannels: {
+                    type: "array",
+                    description: "Configured input channels to leave unchanged, within the current runtime channelCount.",
+                    items: { type: "number", minimum: 1 },
+                    minItems: 1,
+                    uniqueItems: true,
+                },
+                mute: { type: "boolean", description: "True to mute all other channels, false to unmute all other channels" },
+            },
+            required: ["exceptChannels", "mute"],
         },
     },
     {
@@ -2643,6 +2731,50 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                         },
                     ],
                 };
+            }
+
+            case "osc_mute_channels": {
+                const { channels, mute } = args as { channels: number[]; mute: boolean };
+                const uniqueChannels = Array.from(new Set(channels));
+                const invalidChannels = uniqueChannels.filter((channel) => !Number.isInteger(channel) || channel < 1 || channel > oscRuntimeConfig.channelCount);
+                if (invalidChannels.length > 0) {
+                    throw new Error(`Invalid channel number(s): ${invalidChannels.join(", ")}. Configured channel range is 1 to ${oscRuntimeConfig.channelCount}.`);
+                }
+                if (uniqueChannels.length === 0) {
+                    throw new Error(`At least one channel number from 1 to ${oscRuntimeConfig.channelCount} is required`);
+                }
+                const { changed, failures } = await muteChannelBatch(uniqueChannels, mute);
+                if (failures.length > 0) {
+                    throw new Error(`Certaines commandes channel ont mal ete executees. Reussies: ${changed.join(", ") || "aucune"}. Echecs: ${failures.join(" | ")}`);
+                }
+                return { content: [{ type: "text", text: `Channels ${changed.join(", ")} ${mute ? "muted" : "unmuted"} and verified` }] };
+            }
+
+            case "osc_mute_all_channels": {
+                const { mute } = args as { mute: boolean };
+                const channels = namedTargetRange("channel");
+                const { changed, failures } = await muteChannelBatch(channels, mute);
+                if (failures.length > 0) {
+                    throw new Error(`Certaines commandes channel ont mal ete executees. Reussies: ${changed.join(", ") || "aucune"}. Echecs: ${failures.join(" | ")}`);
+                }
+                return { content: [{ type: "text", text: `All ${changed.length} channels ${mute ? "muted" : "unmuted"} and verified` }] };
+            }
+
+            case "osc_mute_all_channels_except": {
+                const { exceptChannels, mute } = args as { exceptChannels: number[]; mute: boolean };
+                const uniqueExceptChannels = Array.from(new Set(exceptChannels));
+                const invalidChannels = uniqueExceptChannels.filter((channel) => !Number.isInteger(channel) || channel < 1 || channel > oscRuntimeConfig.channelCount);
+                if (invalidChannels.length > 0) {
+                    throw new Error(`Invalid exception channel number(s): ${invalidChannels.join(", ")}. Configured channel range is 1 to ${oscRuntimeConfig.channelCount}.`);
+                }
+                const protectedChannels = new Set(uniqueExceptChannels);
+                const channels = namedTargetRange("channel").filter((channel) => !protectedChannels.has(channel));
+                if (channels.length === 0) throw new Error("No channels left to change after applying exceptions.");
+                const { changed, failures } = await muteChannelBatch(channels, mute);
+                if (failures.length > 0) {
+                    throw new Error(`Certaines commandes channel ont mal ete executees. Reussies: ${changed.join(", ") || "aucune"}. Echecs: ${failures.join(" | ")}`);
+                }
+                return { content: [{ type: "text", text: `Channels ${changed.join(", ")} ${mute ? "muted" : "unmuted"} and verified; left unchanged: ${uniqueExceptChannels.join(", ")}` }] };
             }
 
             case "osc_get_mute": {
