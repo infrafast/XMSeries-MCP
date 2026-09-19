@@ -2053,6 +2053,313 @@ export class LocalMixerCommandGateway {
         }
     }
 
+    private async planAuxOutputIntent(
+        intent: Extract<Intent, { kind: "send_to_aux_output" }>,
+    ): Promise<AnalyzeCommandResult> {
+        const sourceMatches = await this.adapter.resolve(intent.sourceQuery, ["channel"]);
+        const source = safeUnique(sourceMatches);
+        if (!source || source.matchType === "fuzzy") {
+            const stored = this.store.createContinuation({ intent, candidates: sourceMatches.slice(0, 8) });
+            return {
+                protocol: GATEWAY_PROTOCOL,
+                recognized: true,
+                status: "clarification",
+                effect: "none",
+                continuationToken: stored.token,
+                expiresInMs: stored.expiresInMs,
+                responseText: `Source « ${intent.sourceQuery} » ambiguë ou introuvable. Reformule avec le nom exact de la voie.`,
+            };
+        }
+        const stored = this.store.createPlan({ ...intent, source }, "write");
+        return {
+            protocol: GATEWAY_PROTOCOL,
+            recognized: true,
+            status: "ready",
+            effect: "write",
+            planToken: stored.token,
+            expiresInMs: stored.expiresInMs,
+            responseText: null,
+        };
+    }
+
+    private sequenceClarification(message: string): AnalyzeCommandResult {
+        const stored = this.store.createContinuation({ kind: "sequence_context" });
+        return {
+            protocol: GATEWAY_PROTOCOL,
+            recognized: true,
+            status: "clarification",
+            effect: "none",
+            continuationToken: stored.token,
+            expiresInMs: stored.expiresInMs,
+            responseText: message,
+        };
+    }
+
+    private async planAtomicForSequence(
+        intent: Intent,
+    ): Promise<{ plan?: LocalPlan; errorText?: string }> {
+        if (
+            intent.kind === "sequence" ||
+            intent.kind === "status" ||
+            intent.kind === "read_level" ||
+            intent.kind === "read_mute" ||
+            intent.kind === "read_effect_on" ||
+            intent.kind === "read_channel_name" ||
+            intent.kind === "automation_list" ||
+            intent.kind === "automation_cancel" ||
+            intent.kind === "send_read_level"
+        ) {
+            return { errorText: "Une macro déterministe ne peut contenir que des actions mixeur, pas des lectures ou commandes de statut." };
+        }
+
+        let result: AnalyzeCommandResult;
+        if (intent.kind === "bulk_channel_mute" || intent.kind === "bulk_bus_mute" || intent.kind === "bulk_send_db") {
+            result = await this.planBulkIntent(intent);
+        } else if (intent.kind === "send_to_aux_output") {
+            result = await this.planAuxOutputIntent(intent);
+        } else if (
+            intent.kind === "send_set_level" ||
+            intent.kind === "send_adjust_level" ||
+            intent.kind === "send_adjust_level_qualitative" ||
+            intent.kind === "send_mute" ||
+            intent.kind === "send_ramp_level" ||
+            intent.kind === "send_delayed_ramp_level" ||
+            intent.kind === "send_ramp_level_qualitative" ||
+            intent.kind === "send_delay_level" ||
+            intent.kind === "send_delay_mute"
+        ) {
+            result = await this.planSendIntent(intent);
+        } else {
+            result = await this.planTargetIntent(intent);
+        }
+
+        const payload = result as AnalyzeCommandResult & {
+            planToken?: string;
+            continuationToken?: string;
+            responseText?: string | null;
+        };
+        if (payload.status !== "ready" || payload.effect !== "write" || !payload.planToken) {
+            if (payload.continuationToken) this.store.takeContinuation(payload.continuationToken);
+            return {
+                errorText: payload.responseText || "Une étape de la macro est ambiguë ou incomplète.",
+            };
+        }
+
+        const taken = this.store.takePlan(payload.planToken);
+        if (!taken.ok) {
+            return { errorText: "Impossible de figer une étape de la macro." };
+        }
+        return { plan: taken.value };
+    }
+
+    private async planSequenceIntent(
+        intent: Extract<Intent, { kind: "sequence" }>,
+    ): Promise<AnalyzeCommandResult> {
+        const steps: Array<{ waitBeforeSeconds: number; plan: LocalPlan }> = [];
+        for (let index = 0; index < intent.clauses.length; index += 1) {
+            const clause = intent.clauses[index];
+            const parsed = parseIntent(clause.text, false);
+            if (!parsed || parsed.kind === "sequence") {
+                return this.sequenceClarification(
+                    `Étape ${index + 1} non reconnue. Reformule toute la séquence avec des commandes complètes.`,
+                );
+            }
+            const planned = await this.planAtomicForSequence(parsed);
+            if (!planned.plan) {
+                return this.sequenceClarification(
+                    `Étape ${index + 1} : ${planned.errorText || "commande non résolue"} Reformule toute la séquence.`,
+                );
+            }
+            steps.push({ waitBeforeSeconds: clause.waitBeforeSeconds, plan: planned.plan });
+        }
+
+        const stored = this.store.createPlan({ kind: "sequence", steps }, "write");
+        return {
+            protocol: GATEWAY_PROTOCOL,
+            recognized: true,
+            status: "ready",
+            effect: "write",
+            planToken: stored.token,
+            expiresInMs: stored.expiresInMs,
+            responseText: null,
+        };
+    }
+
+    private async sequenceActions(
+        steps: Array<{ waitBeforeSeconds: number; plan: LocalPlan }>,
+    ): Promise<LocalSequenceAction[]> {
+        const actions: LocalSequenceAction[] = [];
+        const wait = (seconds: number, description?: string) => {
+            if (seconds > 0) actions.push({ type: "wait", durationSeconds: seconds, description });
+        };
+        const run = (description: string, fn: () => Promise<void>) => {
+            actions.push({ type: "run", description, run: fn });
+        };
+
+        for (const item of steps) {
+            wait(item.waitBeforeSeconds, item.waitBeforeSeconds > 0 ? `attendre ${item.waitBeforeSeconds} s` : undefined);
+            const plan = item.plan;
+
+            if (plan.kind === "sequence" || plan.kind === "status" || plan.kind === "automation_list" || plan.kind === "automation_cancel" || plan.kind === "read_level" || plan.kind === "read_mute" || plan.kind === "read_effect_on" || plan.kind === "read_channel_name" || plan.kind === "send_read_level") {
+                throw new Error("Une macro contient une étape non exécutable.");
+            }
+
+            if (plan.kind === "bulk_channel_mute") {
+                const channels = plan.mode === "all" ? [] : await this.revalidateChannelTargets(plan.channelQueries, plan.channels);
+                run("mute groupé des voies", async () => {
+                    if (plan.mode === "all") await this.adapter.muteAllChannels(plan.mute);
+                    else if (plan.mode === "all_except") await this.adapter.muteAllChannels(plan.mute, channels);
+                    else await this.adapter.muteChannelBatch(channels, plan.mute);
+                });
+                continue;
+            }
+
+            if (plan.kind === "bulk_bus_mute") {
+                const buses = plan.mode === "all" ? [] : await this.revalidateBusTargets(plan.busQueries, plan.buses);
+                run("mute groupé des bus", async () => {
+                    if (plan.mode === "all") await this.adapter.muteAllBuses(plan.mute);
+                    else if (plan.mode === "all_except") await this.adapter.muteAllBuses(plan.mute, buses);
+                    else await this.adapter.muteBusBatch(buses, plan.mute);
+                });
+                continue;
+            }
+
+            if (plan.kind === "bulk_send_db") {
+                const source = await this.revalidateScopedTarget(plan.sourceQuery, plan.source, ["channel"]);
+                const buses = plan.mode === "all" ? [] : await this.revalidateBusTargets(plan.busQueries, plan.buses);
+                run("niveau groupé vers bus", async () => {
+                    if (plan.mode === "all") await this.adapter.writeSendAllBusesDb(source, plan.db, plan.includeMain);
+                    else await this.adapter.writeSendBatchDb(source, buses, plan.db, plan.includeMain);
+                });
+                continue;
+            }
+
+            if (plan.kind === "send_to_aux_output") {
+                const source = await this.revalidateScopedTarget(plan.sourceQuery, plan.source, ["channel"]);
+                const converted = levelToNormalized(plan.unit, plan.value);
+                run(`${displayName(source)} vers sortie AUX ${plan.aux}`, () => this.adapter.writeChannelToAux(source, plan.aux, converted.level));
+                continue;
+            }
+
+            if (
+                plan.kind === "send_set_level" ||
+                plan.kind === "send_adjust_level" ||
+                plan.kind === "send_adjust_level_qualitative" ||
+                plan.kind === "send_mute" ||
+                plan.kind === "send_ramp_level" ||
+                plan.kind === "send_delayed_ramp_level" ||
+                plan.kind === "send_ramp_level_qualitative" ||
+                plan.kind === "send_delay_level" ||
+                plan.kind === "send_delay_mute"
+            ) {
+                const source = await this.revalidateScopedTarget(plan.sourceQuery, plan.source, SEND_SOURCE_FAMILIES);
+                const destination = await this.revalidateScopedTarget(plan.destinationQuery, plan.destination, ["bus"]);
+
+                if (plan.kind === "send_set_level") {
+                    const converted = levelToNormalized(plan.unit, plan.value);
+                    run(`${displayName(source)} vers ${displayName(destination)}`, () => this.adapter.writeSendLevel(source, destination, converted.level));
+                } else if (plan.kind === "send_adjust_level") {
+                    run(`ajuster ${displayName(source)} vers ${displayName(destination)}`, async () => {
+                        const current = await this.adapter.readSendLevel(source, destination);
+                        const adjusted = adjustedLevel(current, plan.unit, plan.delta);
+                        await this.adapter.writeSendLevel(source, destination, adjusted.level);
+                    });
+                } else if (plan.kind === "send_adjust_level_qualitative") {
+                    run(`ajuster ${displayName(source)} vers ${displayName(destination)}`, async () => {
+                        await this.adapter.adjustQualitativeSend(source, destination, plan.direction, plan.amount);
+                    });
+                } else if (plan.kind === "send_mute") {
+                    run(`${plan.mute ? "mute" : "unmute"} ${displayName(source)} vers ${displayName(destination)}`, () => this.adapter.setSendMute(source, destination, plan.mute));
+                } else if (plan.kind === "send_delay_level") {
+                    wait(plan.delaySeconds, `attendre ${plan.delaySeconds} s`);
+                    const converted = levelToNormalized(plan.value.unit, plan.value.value);
+                    run(`${displayName(source)} vers ${displayName(destination)}`, () => this.adapter.writeSendLevel(source, destination, converted.level));
+                } else if (plan.kind === "send_delay_mute") {
+                    wait(plan.delaySeconds, `attendre ${plan.delaySeconds} s`);
+                    run(`${plan.mute ? "mute" : "unmute"} ${displayName(source)} vers ${displayName(destination)}`, () => this.adapter.setSendMute(source, destination, plan.mute));
+                } else {
+                    if (plan.kind === "send_delayed_ramp_level") {
+                        wait(plan.delaySeconds, `attendre ${plan.delaySeconds} s`);
+                    }
+                    const from = "from" in plan && plan.from ? levelToNormalized(plan.from.unit, plan.from.value).level : undefined;
+                    let to: number | (() => Promise<number>);
+                    if (plan.kind === "send_ramp_level_qualitative") {
+                        to = async () => (await this.adapter.previewQualitativeSend(source, destination, plan.direction, plan.amount)).targetLevel;
+                    } else if (plan.delta) {
+                        to = async () => {
+                            const current = await this.adapter.readSendLevel(source, destination);
+                            return adjustedLevel(current, plan.delta!.unit, plan.delta!.value).level;
+                        };
+                    } else {
+                        to = levelToNormalized(plan.to!.unit, plan.to!.value).level;
+                    }
+                    actions.push({
+                        type: "ramp",
+                        description: `rampe ${displayName(source)} vers ${displayName(destination)}`,
+                        from,
+                        to,
+                        durationSeconds: plan.durationSeconds,
+                        read: () => this.adapter.readSendLevel(source, destination),
+                        write: (value) => this.adapter.writeSendLevel(source, destination, value),
+                    });
+                }
+                continue;
+            }
+
+            const target = await this.revalidateTarget(plan.targetQuery, plan.target, true);
+            if (plan.kind === "set_level") {
+                const converted = levelToNormalized(plan.unit, plan.value);
+                run(`régler ${displayName(target)}`, () => this.adapter.writeLevel(target, converted.level));
+            } else if (plan.kind === "adjust_level") {
+                run(`ajuster ${displayName(target)}`, async () => {
+                    const current = await this.adapter.readLevel(target);
+                    const adjusted = adjustedLevel(current, plan.unit, plan.delta);
+                    await this.adapter.writeLevel(target, adjusted.level);
+                });
+            } else if (plan.kind === "adjust_level_qualitative") {
+                run(`ajuster ${displayName(target)}`, async () => {
+                    await this.adapter.adjustQualitativeLevel(target, plan.direction, plan.amount);
+                });
+            } else if (plan.kind === "mute") {
+                run(`${plan.mute ? "mute" : "unmute"} ${displayName(target)}`, () => this.adapter.setMute(target, plan.mute));
+            } else if (plan.kind === "delay_level") {
+                wait(plan.delaySeconds, `attendre ${plan.delaySeconds} s`);
+                const converted = levelToNormalized(plan.value.unit, plan.value.value);
+                run(`régler ${displayName(target)}`, () => this.adapter.writeLevel(target, converted.level));
+            } else if (plan.kind === "delay_mute") {
+                wait(plan.delaySeconds, `attendre ${plan.delaySeconds} s`);
+                run(`${plan.mute ? "mute" : "unmute"} ${displayName(target)}`, () => this.adapter.setMute(target, plan.mute));
+            } else {
+                if (plan.kind === "delayed_ramp_level") {
+                    wait(plan.delaySeconds, `attendre ${plan.delaySeconds} s`);
+                }
+                const from = "from" in plan && plan.from ? levelToNormalized(plan.from.unit, plan.from.value).level : undefined;
+                let to: number | (() => Promise<number>);
+                if (plan.kind === "ramp_level_qualitative") {
+                    to = async () => (await this.adapter.previewQualitativeLevel(target, plan.direction, plan.amount)).targetLevel;
+                } else if (plan.delta) {
+                    to = async () => {
+                        const current = await this.adapter.readLevel(target);
+                        return adjustedLevel(current, plan.delta!.unit, plan.delta!.value).level;
+                    };
+                } else {
+                    to = levelToNormalized(plan.to!.unit, plan.to!.value).level;
+                }
+                actions.push({
+                    type: "ramp",
+                    description: `rampe ${displayName(target)}`,
+                    from,
+                    to,
+                    durationSeconds: plan.durationSeconds,
+                    read: () => this.adapter.readLevel(target),
+                    write: (value) => this.adapter.writeLevel(target, value),
+                });
+            }
+        }
+
+        return actions;
+    }
+
     private async planSendIntent(
         intent: SendIntent,
     ): Promise<AnalyzeCommandResult> {
