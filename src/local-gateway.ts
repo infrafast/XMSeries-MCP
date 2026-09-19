@@ -546,19 +546,25 @@ function parseIntent(raw: string): Intent | null {
         }
     }
 
-    const muteStateMatch = text.match(
-        /^\s*(?:(?:etat|état|statut)\s+(?:du\s+)?mute\s+(?:de\s+|du\s+|de la\s+)?(.+?)|(?:est[-\s]?ce\s+que\s+)?(.+?)\s+(?:est[-\s]?(?:il|elle)\s+)?(?:mute|muté|mutée|coupe|coupé|coupée))\s*\??\s*$/iu,
+    const muteStatePrefix = text.match(
+        /^\s*(?:etat|état|statut)\s+(?:du\s+)?mute\s+(?:de\s+|du\s+|de la\s+)?(.+?)\s*\??\s*$/iu,
     );
-    if (muteStateMatch) {
-        const targetQuery = cleanTarget(muteStateMatch[1] || muteStateMatch[2] || "");
+    const muteStateQuestion = text.match(
+        /^\s*(?:est[-\s]?ce\s+que\s+)?(.+?)\s+(?:est\s+(?:mute|muté|mutée|coupe|coupé|coupée)|est[-\s]?(?:il|elle)\s+(?:mute|muté|mutée|coupe|coupé|coupée))\s*\??\s*$/iu,
+    );
+    if (muteStatePrefix || muteStateQuestion) {
+        const targetQuery = cleanTarget(muteStatePrefix?.[1] || muteStateQuestion?.[1] || "");
         if (targetQuery) return { kind: "read_mute", targetQuery };
     }
 
-    const effectStateMatch = text.match(
-        /^\s*(?:(?:est[-\s]?ce\s+que\s+)?(.+?)\s+(?:est[-\s]?(?:il|elle)\s+)?(?:actif|active|allume|allumé|allumée|on)|(?:etat|état|statut)\s+(?:de\s+)?(?:l['’]?effet|fx)\s+(.+?))\s*\??\s*$/iu,
+    const effectStatePrefix = text.match(
+        /^\s*(?:etat|état|statut)\s+(?:de\s+)?(?:l['’]?effet|fx)\s+(.+?)\s*\??\s*$/iu,
     );
-    if (effectStateMatch) {
-        const targetQuery = cleanTarget(effectStateMatch[1] || effectStateMatch[2] || "");
+    const effectStateQuestion = text.match(
+        /^\s*(?:est[-\s]?ce\s+que\s+)?(.+?)\s+(?:est\s+(?:actif|active|allume|allumé|allumée|on)|est[-\s]?(?:il|elle)\s+(?:actif|active|allume|allumé|allumée|on))\s*\??\s*$/iu,
+    );
+    if (effectStatePrefix || effectStateQuestion) {
+        const targetQuery = cleanTarget(effectStatePrefix?.[1] || effectStateQuestion?.[1] || "");
         if (targetQuery) return { kind: "read_effect_on", targetQuery };
     }
 
