@@ -758,6 +758,23 @@ function parseIntent(raw: string, allowSequence = true): Intent | null {
         }
     }
 
+    const earlyChannelToAuxNormalized = text.match(
+        /^\s*(?:mets|met|regle|règle|fixe|set)\s+(.+?)\s+(?:sur|vers|to)\s+(?:la\s+)?(?:sortie\s+aux|aux\s+output)\s+(\d+)\s+(?:(?:a|à|to)\s+)?(?:au\s+)?(?:niveau|level)\s+(0(?:[.,]\d+)?|1(?:[.,]0+)?)\s*$/iu,
+    );
+    if (earlyChannelToAuxNormalized?.[1] && earlyChannelToAuxNormalized[2] && earlyChannelToAuxNormalized[3]) {
+        const aux = Number(earlyChannelToAuxNormalized[2]);
+        const value = parseNormalizedLevel(earlyChannelToAuxNormalized[3]);
+        if (Number.isInteger(aux) && aux > 0 && value !== null) {
+            return {
+                kind: "send_to_aux_output",
+                sourceQuery: cleanTarget(earlyChannelToAuxNormalized[1]),
+                aux,
+                unit: "level",
+                value,
+            };
+        }
+    }
+
     const normalizedSend = text.match(
         /^\s*(?:mets|met|regle|règle|fixe|set|monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:(?:a|à|to)\s+)?(?:au\s+)?(?:niveau|level)\s+(0(?:[.,]\d+)?|1(?:[.,]0+)?)\s*$/iu,
     );
