@@ -106,7 +106,7 @@ export interface LocalMixerGatewayAdapter {
     ): Promise<{ beforeDb: number; targetDb: number; targetLevel: number }>;
 }
 
-type LevelUnit = "db" | "percent";
+type LevelUnit = "db" | "percent" | "level";
 type LevelValue = { unit: LevelUnit; value: number };
 
 type Intent =
@@ -258,7 +258,16 @@ function parsePercent(value: string): number | null {
     return number !== null && Number.isFinite(number) ? number : null;
 }
 
+function parseNormalizedLevel(value: string): number | null {
+    const number = parseDb(value);
+    return number !== null && number >= 0 && number <= 1 ? number : null;
+}
+
 function levelToNormalized(unit: LevelUnit, value: number): { level: number; label: string } {
+    if (unit === "level") {
+        const level = Math.min(1, Math.max(0, value));
+        return { level, label: `niveau ${level.toFixed(4)}` };
+    }
     if (unit === "percent") {
         const level = Math.min(1, Math.max(0, value / 100));
         return { level, label: `${(level * 100).toFixed(1)}%` };
@@ -271,6 +280,14 @@ function levelToNormalized(unit: LevelUnit, value: number): { level: number; lab
 }
 
 function adjustedLevel(currentLevel: number, unit: LevelUnit, delta: number): { level: number; beforeLabel: string; afterLabel: string } {
+    if (unit === "level") {
+        const next = Math.min(1, Math.max(0, currentLevel + delta));
+        return {
+            level: next,
+            beforeLabel: `niveau ${currentLevel.toFixed(4)}`,
+            afterLabel: `niveau ${next.toFixed(4)}`,
+        };
+    }
     if (unit === "percent") {
         const next = Math.min(1, Math.max(0, currentLevel + delta / 100));
         return {
@@ -293,8 +310,13 @@ function adjustedLevel(currentLevel: number, unit: LevelUnit, delta: number): { 
 
 
 function parseTemporalLevelValue(rawValue: string, rawUnit: string): LevelValue | null {
-    const unit: LevelUnit = rawUnit === "%" ? "percent" : "db";
-    const value = unit === "percent" ? parsePercent(rawValue) : parseDb(rawValue);
+    const normalizedUnit = simplify(rawUnit);
+    const unit: LevelUnit = rawUnit === "%" ? "percent" : normalizedUnit === "level" || normalizedUnit === "niveau" ? "level" : "db";
+    const value = unit === "percent"
+        ? parsePercent(rawValue)
+        : unit === "level"
+          ? parseNormalizedLevel(rawValue)
+          : parseDb(rawValue);
     return value === null ? null : { unit, value };
 }
 
