@@ -725,6 +725,65 @@ function parseIntent(raw: string, allowSequence = true): Intent | null {
     const parseLevelValue = (rawValue: string, rawUnit: string): LevelValue | null =>
         parseTemporalLevelValue(rawValue, rawUnit);
 
+    const normalizedSendRamp = text.match(
+        /^\s*(?:monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+progressivement\s+(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:(?:a|à|to)\s+)?(?:au\s+)?(?:niveau|level)\s+(0(?:[.,]\d+)?|1(?:[.,]0+)?)\s+en\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
+    );
+    if (normalizedSendRamp?.[1] && normalizedSendRamp[2] && normalizedSendRamp[3] && normalizedSendRamp[4]) {
+        const value = parseNormalizedLevel(normalizedSendRamp[3]);
+        const durationSeconds = Number(normalizedSendRamp[4].replace(",", "."));
+        if (value !== null && Number.isFinite(durationSeconds) && durationSeconds > 0) {
+            return {
+                kind: "send_ramp_level",
+                sourceQuery: cleanTarget(normalizedSendRamp[1]),
+                destinationQuery: cleanTarget(normalizedSendRamp[2]),
+                to: { unit: "level", value },
+                durationSeconds,
+            };
+        }
+    }
+
+    const normalizedTargetRamp = text.match(
+        /^\s*(?:monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+progressivement\s+(.+?)\s+(?:(?:a|à|to)\s+)?(?:au\s+)?(?:niveau|level)\s+(0(?:[.,]\d+)?|1(?:[.,]0+)?)\s+en\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
+    );
+    if (normalizedTargetRamp?.[1] && normalizedTargetRamp[2] && normalizedTargetRamp[3]) {
+        const value = parseNormalizedLevel(normalizedTargetRamp[2]);
+        const durationSeconds = Number(normalizedTargetRamp[3].replace(",", "."));
+        if (value !== null && Number.isFinite(durationSeconds) && durationSeconds > 0) {
+            return {
+                kind: "ramp_level",
+                targetQuery: cleanTarget(normalizedTargetRamp[1]),
+                to: { unit: "level", value },
+                durationSeconds,
+            };
+        }
+    }
+
+    const normalizedSend = text.match(
+        /^\s*(?:mets|met|regle|règle|fixe|set|monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:(?:a|à|to)\s+)?(?:au\s+)?(?:niveau|level)\s+(0(?:[.,]\d+)?|1(?:[.,]0+)?)\s*$/iu,
+    );
+    if (normalizedSend?.[1] && normalizedSend[2] && normalizedSend[3]) {
+        const value = parseNormalizedLevel(normalizedSend[3]);
+        if (value !== null) {
+            return {
+                kind: "send_set_level",
+                sourceQuery: cleanTarget(normalizedSend[1]),
+                destinationQuery: cleanTarget(normalizedSend[2]),
+                unit: "level",
+                value,
+            };
+        }
+    }
+
+    const normalizedTarget = text.match(
+        /^\s*(?:mets|met|regle|règle|fixe|set|monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:(?:le\s+)?(?:niveau|volume|fader|son)\s+(?:de\s+)?)?(.+?)\s+(?:(?:a|à|to)\s+)?(?:au\s+)?(?:niveau|level)\s+(0(?:[.,]\d+)?|1(?:[.,]0+)?)\s*$/iu,
+    );
+    if (normalizedTarget?.[1] && normalizedTarget[2]) {
+        const value = parseNormalizedLevel(normalizedTarget[2]);
+        if (value !== null) {
+            return { kind: "set_level", targetQuery: cleanTarget(normalizedTarget[1]), unit: "level", value };
+        }
+    }
+
     const channelNameMatch = text.match(
         /^\s*(?:(?:quel(?:le)?\s+est\s+)?(?:le\s+)?nom\s+(?:de\s+)?(?:la\s+)?(?:voie|tranche|canal|channel)\s+(\d+)|(?:channel|voie|tranche|canal)\s+(\d+)\s+(?:name|nom))\s*\??\s*$/iu,
     );
@@ -759,6 +818,23 @@ function parseIntent(raw: string, allowSequence = true): Intent | null {
 
     const flexibleTemporalIntent = parseFlexibleTemporalIntent(text);
     if (flexibleTemporalIntent) return flexibleTemporalIntent;
+
+    const channelToAuxNormalized = text.match(
+        /^\s*(?:mets|met|regle|règle|fixe|set)\s+(.+?)\s+(?:sur|vers|to)\s+(?:la\s+)?(?:sortie\s+aux|aux\s+output)\s+(\d+)\s+(?:(?:a|à|to)\s+)?(?:au\s+)?(?:niveau|level)\s+(0(?:[.,]\d+)?|1(?:[.,]0+)?)\s*$/iu,
+    );
+    if (channelToAuxNormalized?.[1] && channelToAuxNormalized[2] && channelToAuxNormalized[3]) {
+        const aux = Number(channelToAuxNormalized[2]);
+        const value = parseNormalizedLevel(channelToAuxNormalized[3]);
+        if (Number.isInteger(aux) && aux > 0 && value !== null) {
+            return {
+                kind: "send_to_aux_output",
+                sourceQuery: cleanTarget(channelToAuxNormalized[1]),
+                aux,
+                unit: "level",
+                value,
+            };
+        }
+    }
 
     const channelToAuxOutput = text.match(
         /^\s*(?:mets|met|regle|règle|fixe|set)\s+(.+?)\s+(?:sur|vers|to)\s+(?:la\s+)?(?:sortie\s+aux|aux\s+output)\s+(\d+)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
