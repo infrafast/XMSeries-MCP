@@ -640,6 +640,35 @@ const localCommandGateway = new LocalMixerCommandGateway({
         });
         return automation.start(ramp.description || "Local delayed send ramp", [wait, ramp]).id;
     },
+    startSequence: async (steps) => {
+        const actions: AutomationAction[] = steps.map((step) => {
+            if (step.type === "wait") {
+                return {
+                    type: "wait",
+                    durationSeconds: step.durationSeconds,
+                    description: step.description,
+                };
+            }
+            if (step.type === "run") {
+                return {
+                    type: "delay",
+                    delaySeconds: 0,
+                    description: step.description,
+                    run: step.run,
+                };
+            }
+            return {
+                type: "ramp",
+                description: step.description,
+                from: step.from,
+                to: step.to,
+                durationSeconds: step.durationSeconds,
+                read: step.read,
+                write: step.write,
+            };
+        });
+        return automation.start("Local deterministic sequence", actions).id;
+    },
     scheduleLevel: async (target, toLevel, delaySeconds) => {
         const action = delayedStructuredLevelAction({
             target: localGatewayAutomationTarget(target),
