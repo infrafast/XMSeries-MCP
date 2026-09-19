@@ -186,6 +186,9 @@ type LocalContinuation =
       }
     | {
           kind: "speaker_context";
+      }
+    | {
+          kind: "sequence_context";
       };
 
 const SEND_SOURCE_FAMILIES: LocalMixerTargetFamily[] = ["channel", "fxreturn", "aux"];
@@ -1499,6 +1502,10 @@ export class LocalMixerCommandGateway {
                 status: "unrecognized",
                 effect: "none",
             };
+        }
+
+        if (intent.kind === "sequence") {
+            return await this.planSequenceIntent(intent);
         }
 
         if (intent.kind === "status" || intent.kind === "automation_list" || intent.kind === "read_channel_name") {
