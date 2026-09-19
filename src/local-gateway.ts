@@ -42,6 +42,9 @@ export interface LocalMixerGatewayAdapter {
     resolve(query: string, families?: LocalMixerTargetFamily[]): Promise<LocalMixerTarget[]>;
     status(): Promise<any>;
     readLevel(target: LocalMixerTarget): Promise<number>;
+    readChannelMute(target: LocalMixerTarget): Promise<boolean>;
+    readEffectOn(target: LocalMixerTarget): Promise<boolean>;
+    readChannelName(channel: number): Promise<string>;
     writeLevel(target: LocalMixerTarget, level: number): Promise<void>;
     setMute(target: LocalMixerTarget, mute: boolean): Promise<void>;
     readSendLevel(source: LocalMixerTarget, destination: LocalMixerTarget): Promise<number>;
@@ -92,6 +95,9 @@ type LevelValue = { unit: LevelUnit; value: number };
 type Intent =
     | { kind: "status" }
     | { kind: "read_level"; targetQuery: string }
+    | { kind: "read_mute"; targetQuery: string }
+    | { kind: "read_effect_on"; targetQuery: string }
+    | { kind: "read_channel_name"; channel: number }
     | { kind: "set_level"; targetQuery: string; unit: LevelUnit; value: number }
     | { kind: "adjust_level"; targetQuery: string; unit: LevelUnit; delta: number }
     | { kind: "adjust_level_qualitative"; targetQuery: string; direction: LocalRelativeDirection; amount: LocalRelativeAmount }
@@ -122,6 +128,9 @@ type BulkIntent = Extract<Intent, { kind: "bulk_channel_mute" | "bulk_bus_mute" 
 type LocalPlan =
     | { kind: "status" }
     | { kind: "read_level"; targetQuery: string; target: LocalMixerTarget }
+    | { kind: "read_mute"; targetQuery: string; target: LocalMixerTarget }
+    | { kind: "read_effect_on"; targetQuery: string; target: LocalMixerTarget }
+    | { kind: "read_channel_name"; channel: number }
     | { kind: "set_level"; targetQuery: string; target: LocalMixerTarget; unit: LevelUnit; value: number }
     | { kind: "adjust_level"; targetQuery: string; target: LocalMixerTarget; unit: LevelUnit; delta: number }
     | { kind: "adjust_level_qualitative"; targetQuery: string; target: LocalMixerTarget; direction: LocalRelativeDirection; amount: LocalRelativeAmount }
@@ -526,6 +535,32 @@ function parseIntent(raw: string): Intent | null {
 
     const parseLevelValue = (rawValue: string, rawUnit: string): LevelValue | null =>
         parseTemporalLevelValue(rawValue, rawUnit);
+
+    const channelNameMatch = text.match(
+        /^\s*(?:(?:quel(?:le)?\s+est\s+)?(?:le\s+)?nom\s+(?:de\s+)?(?:la\s+)?(?:voie|tranche|canal|channel)\s+(\d+)|(?:channel|voie|tranche|canal)\s+(\d+)\s+(?:name|nom))\s*\??\s*$/iu,
+    );
+    if (channelNameMatch) {
+        const channel = Number(channelNameMatch[1] || channelNameMatch[2]);
+        if (Number.isInteger(channel) && channel > 0) {
+            return { kind: "read_channel_name", channel };
+        }
+    }
+
+    const muteStateMatch = text.match(
+        /^\s*(?:(?:etat|état|statut)\s+(?:du\s+)?mute\s+(?:de\s+|du\s+|de la\s+)?(.+?)|(?:est[-\s]?ce\s+que\s+)?(.+?)\s+(?:est[-\s]?(?:il|elle)\s+)?(?:mute|muté|mutée|coupe|coupé|coupée))\s*\??\s*$/iu,
+    );
+    if (muteStateMatch) {
+        const targetQuery = cleanTarget(muteStateMatch[1] || muteStateMatch[2] || "");
+        if (targetQuery) return { kind: "read_mute", targetQuery };
+    }
+
+    const effectStateMatch = text.match(
+        /^\s*(?:(?:est[-\s]?ce\s+que\s+)?(.+?)\s+(?:est[-\s]?(?:il|elle)\s+)?(?:actif|active|allume|allumé|allumée|on)|(?:etat|état|statut)\s+(?:de\s+)?(?:l['’]?effet|fx)\s+(.+?))\s*\??\s*$/iu,
+    );
+    if (effectStateMatch) {
+        const targetQuery = cleanTarget(effectStateMatch[1] || effectStateMatch[2] || "");
+        if (targetQuery) return { kind: "read_effect_on", targetQuery };
+    }
 
     const flexibleTemporalIntent = parseFlexibleTemporalIntent(text);
     if (flexibleTemporalIntent) return flexibleTemporalIntent;
@@ -1310,8 +1345,8 @@ export class LocalMixerCommandGateway {
             };
         }
 
-        if (intent.kind === "status" || intent.kind === "automation_list") {
-            const stored = this.store.createPlan({ kind: intent.kind }, "read");
+        if (intent.kind === "status" || intent.kind === "automation_list" || intent.kind === "read_channel_name") {
+            const stored = this.store.createPlan(intent.kind === "read_channel_name" ? intent : { kind: intent.kind }, "read");
             return {
                 protocol: GATEWAY_PROTOCOL,
                 recognized: true,
@@ -1369,6 +1404,13 @@ export class LocalMixerCommandGateway {
             return await this.planSendIntent(intent);
         }
 
+        if (intent.kind === "read_mute") {
+            return await this.planScopedTargetIntent(intent, ["channel"]);
+        }
+        if (intent.kind === "read_effect_on") {
+            return await this.planScopedTargetIntent(intent, ["fxreturn"]);
+        }
+
         return await this.planTargetIntent(intent);
     }
 
@@ -1406,6 +1448,15 @@ export class LocalMixerCommandGateway {
                     protocol: GATEWAY_PROTOCOL,
                     ok: true,
                     responseText: normalizedStatusText(await this.adapter.status()),
+                };
+            }
+
+            if (plan.kind === "read_channel_name") {
+                const name = await this.adapter.readChannelName(plan.channel);
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    ok: true,
+                    responseText: `Voie ${plan.channel} : ${name || "(sans nom)"}.`,
                 };
             }
 
@@ -1510,6 +1561,26 @@ export class LocalMixerCommandGateway {
                     protocol: GATEWAY_PROTOCOL,
                     ok: true,
                     responseText: `${displayName(source)} réglé à ${formatDb(dbToFaderLevel(plan.db).db)} sur ${buses.map(displayName).join(", ")}${plan.includeMain ? " et Main LR" : ""}.`,
+                };
+            }
+
+            if (plan.kind === "read_mute") {
+                const liveTarget = await this.revalidateScopedTarget(plan.targetQuery, plan.target, ["channel"]);
+                const muted = await this.adapter.readChannelMute(liveTarget);
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    ok: true,
+                    responseText: `${displayName(liveTarget)} est ${muted ? "mutée" : "active"}.`,
+                };
+            }
+
+            if (plan.kind === "read_effect_on") {
+                const liveTarget = await this.revalidateScopedTarget(plan.targetQuery, plan.target, ["fxreturn"]);
+                const on = await this.adapter.readEffectOn(liveTarget);
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    ok: true,
+                    responseText: `${displayName(liveTarget)} est ${on ? "actif" : "coupé"}.`,
                 };
             }
 
@@ -1989,6 +2060,39 @@ export class LocalMixerCommandGateway {
             planToken: stored.token,
             expiresInMs: stored.expiresInMs,
             responseText: null,
+        };
+    }
+
+    private async planScopedTargetIntent(
+        intent: Extract<Intent, { kind: "read_mute" | "read_effect_on" }>,
+        families: LocalMixerTargetFamily[],
+    ): Promise<AnalyzeCommandResult> {
+        const matches = await this.adapter.resolve(intent.targetQuery, families);
+        const resolved = safeUnique(matches);
+        if (resolved && resolved.matchType !== "fuzzy") {
+            const stored = this.store.createPlan({ ...intent, target: resolved }, "read");
+            return {
+                protocol: GATEWAY_PROTOCOL,
+                recognized: true,
+                status: "ready",
+                effect: "read",
+                planToken: stored.token,
+                expiresInMs: stored.expiresInMs,
+                responseText: null,
+            };
+        }
+
+        const stored = this.store.createContinuation({ intent, candidates: matches.slice(0, 8) });
+        return {
+            protocol: GATEWAY_PROTOCOL,
+            recognized: true,
+            status: "clarification",
+            effect: "none",
+            continuationToken: stored.token,
+            expiresInMs: stored.expiresInMs,
+            responseText: matches.length === 0
+                ? `Je ne trouve aucune cible correspondant à « ${intent.targetQuery} ».`
+                : `La cible « ${intent.targetQuery} » est ambiguë : ${summarizeCandidates(matches)}.`,
         };
     }
 
