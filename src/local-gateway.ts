@@ -542,9 +542,87 @@ function normalizeLikelyFrenchSttDirection(raw: string): string {
     return text;
 }
 
-function parseIntent(raw: string): Intent | null {
+function sequencePrimaryTarget(intent: Intent): string | null {
+    if ("targetQuery" in intent && typeof intent.targetQuery === "string") return intent.targetQuery;
+    return null;
+}
+
+function sequenceDestination(intent: Intent): string | null {
+    if ("destinationQuery" in intent && typeof intent.destinationQuery === "string") return intent.destinationQuery;
+    return null;
+}
+
+function rewriteSequenceAnaphora(clause: string, previousIntent: Intent | null, previousText: string): string {
+    let text = clause.trim();
+    if (/^(?:idem|pareil|same)$/iu.test(text)) return previousText;
+
+    const target = previousIntent ? sequencePrimaryTarget(previousIntent) : null;
+    const destination = previousIntent ? sequenceDestination(previousIntent) : null;
+
+    if (target) {
+        const simple = [
+            [/^remonte(?:-|\s)*(?:la|le)$/iu, `monte ${target}`],
+            [/^rebaisse(?:-|\s)*(?:la|le)$/iu, `baisse ${target}`],
+            [/^(?:mute|coupe)(?:-|\s)*(?:la|le)$/iu, `mute ${target}`],
+            [/^(?:unmute|rallume|reactive|réactive|remets)(?:-|\s)*(?:la|le)$/iu, `unmute ${target}`],
+        ] as const;
+        for (const [pattern, replacement] of simple) {
+            if (pattern.test(text)) return replacement;
+        }
+        text = text.replace(/\b(?:la\s+)?m[eê]me\s+cible\b/giu, target);
+        text = text.replace(/\b(?:lui|elle|celui-ci|celle-ci)\b/giu, target);
+    }
+
+    if (destination) {
+        text = text
+            .replace(/\b(?:le\s+)?m[eê]me\s+(?:retour|bus)\b/giu, destination)
+            .replace(/\bsur\s+le\s+m[eê]me\s+retour\b/giu, `sur ${destination}`);
+    }
+    return text;
+}
+
+function parseSequenceIntent(raw: string): Intent | null {
+    const parts = raw.split(/\s+(?:puis|ensuite|then)\s+/iu).map((part) => part.trim()).filter(Boolean);
+    if (parts.length < 2) return null;
+
+    const clauses: Array<{ text: string; waitBeforeSeconds: number }> = [];
+    let previousIntent: Intent | null = null;
+    let previousText = "";
+
+    for (let index = 0; index < parts.length; index += 1) {
+        let clause = parts[index];
+        let waitBeforeSeconds = 0;
+        if (index > 0) {
+            const waitMatch = clause.match(
+                /(?:^|\s)(?:apres|après|after)\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\b/iu,
+            );
+            if (waitMatch?.[1]) {
+                waitBeforeSeconds = Number(waitMatch[1].replace(",", "."));
+                if (!Number.isFinite(waitBeforeSeconds) || waitBeforeSeconds < 0) return null;
+                clause = clause.replace(waitMatch[0], " ").replace(/\s+/gu, " ").trim();
+            }
+        }
+
+        clause = rewriteSequenceAnaphora(clause, previousIntent, previousText);
+        const parsed = parseIntent(clause, false);
+        if (!parsed || parsed.kind === "sequence") return null;
+
+        clauses.push({ text: clause, waitBeforeSeconds });
+        previousIntent = parsed;
+        previousText = clause;
+    }
+
+    return { kind: "sequence", clauses };
+}
+
+function parseIntent(raw: string, allowSequence = true): Intent | null {
     const text = normalizeLikelyFrenchSttDirection(raw);
     const normalized = simplify(text);
+
+    if (allowSequence) {
+        const sequence = parseSequenceIntent(text);
+        if (sequence) return sequence;
+    }
 
     if (
         [
