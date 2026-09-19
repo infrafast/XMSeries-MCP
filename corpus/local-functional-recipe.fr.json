@@ -122,6 +122,133 @@
     },
     {
       "category": "level",
+      "name": "bus-read",
+      "utterance": "niveau de Anthony",
+      "expected": {
+        "status": "ready",
+        "effect": "read"
+      }
+    },
+    {
+      "category": "level",
+      "name": "bus-level",
+      "utterance": "mets Anthony à -8 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "bus-mute",
+      "utterance": "mute Anthony",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "fx-return-read",
+      "utterance": "niveau de Hall FX",
+      "expected": {
+        "status": "ready",
+        "effect": "read"
+      }
+    },
+    {
+      "category": "level",
+      "name": "fx-return-level",
+      "utterance": "mets Hall FX à -10 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "fx-return-mute",
+      "utterance": "mute Hall FX",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "aux-return-read",
+      "utterance": "niveau de Playback",
+      "expected": {
+        "status": "ready",
+        "effect": "read"
+      }
+    },
+    {
+      "category": "level",
+      "name": "aux-return-level",
+      "utterance": "mets Playback à -12 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "aux-return-mute",
+      "utterance": "mute Playback",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "main-read",
+      "utterance": "niveau de façade",
+      "expected": {
+        "status": "ready",
+        "effect": "read"
+      }
+    },
+    {
+      "category": "level",
+      "name": "main-mute",
+      "utterance": "mute le main LR",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "main-unmute",
+      "utterance": "rallume la façade",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "dca-read",
+      "utterance": "niveau de Band",
+      "expected": {
+        "status": "ready",
+        "effect": "read"
+      }
+    },
+    {
+      "category": "level",
+      "name": "matrix-read-x32",
+      "utterance": "niveau de Matrix Vox",
+      "expected": {
+        "status": "ready",
+        "effect": "read"
+      },
+      "liveNote": "X32/M32 only; OSCXR must return unsupported at execution."
+    },
+    {
+      "category": "level",
       "name": "dca-level",
       "utterance": "mets Band à -6 dB",
       "expected": {
