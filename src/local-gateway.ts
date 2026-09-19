@@ -1554,30 +1554,7 @@ export class LocalMixerCommandGateway {
         }
 
         if (intent.kind === "send_to_aux_output") {
-            const sourceMatches = await this.adapter.resolve(intent.sourceQuery, ["channel"]);
-            const source = safeUnique(sourceMatches);
-            if (!source || source.matchType === "fuzzy") {
-                const stored = this.store.createContinuation({ intent, candidates: sourceMatches.slice(0, 8) });
-                return {
-                    protocol: GATEWAY_PROTOCOL,
-                    recognized: true,
-                    status: "clarification",
-                    effect: "none",
-                    continuationToken: stored.token,
-                    expiresInMs: stored.expiresInMs,
-                    responseText: `Source « ${intent.sourceQuery} » ambiguë ou introuvable. Reformule avec le nom exact de la voie.`,
-                };
-            }
-            const stored = this.store.createPlan({ ...intent, source }, "write");
-            return {
-                protocol: GATEWAY_PROTOCOL,
-                recognized: true,
-                status: "ready",
-                effect: "write",
-                planToken: stored.token,
-                expiresInMs: stored.expiresInMs,
-                responseText: null,
-            };
+            return await this.planAuxOutputIntent(intent);
         }
 
         if (
