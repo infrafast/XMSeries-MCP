@@ -34,6 +34,7 @@ let automationCalls = [];
 let delayedMuteCalls = [];
 let delayedSendMuteCalls = [];
 let automationJobs = [];
+let sequenceCalls = [];
 let bulkMuteCalls = [];
 let bulkChannelMuteCalls = [];
 let bulkSendCalls = [];
@@ -122,6 +123,10 @@ const adapter = {
     async startDelayedSendRamp(source, destination, toLevel, durationSeconds, delaySeconds, fromLevel) {
         automationCalls.push({ kind: "delayed-send-ramp", source, destination, toLevel, durationSeconds, delaySeconds, fromLevel });
         return "auto-delayed-send-ramp";
+    },
+    async startSequence(actions) {
+        sequenceCalls.push(actions);
+        return "auto-sequence";
     },
     async scheduleLevel(target, toLevel, delaySeconds) {
         automationCalls.push({ kind: "delay", target, toLevel, delaySeconds });
@@ -1211,6 +1216,68 @@ async function ready(text) {
     assert.equal(automationCalls[0].kind, "delayed-ramp");
     assert.equal(automationCalls[0].delaySeconds, 3);
     assert.equal(automationCalls[0].durationSeconds, 2);
+}
+
+// Multi-action macro: explicit anaphora stays on the first target.
+{
+    sequenceCalls = [];
+    const analyzed = await ready("baisse la façade puis remonte-la après 5 secondes");
+    assert.equal(analyzed.effect, "write");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(sequenceCalls.length, 1);
+    assert.equal(sequenceCalls[0].length, 3);
+    assert.equal(sequenceCalls[0][0].type, "run");
+    assert.equal(sequenceCalls[0][1].type, "wait");
+    assert.equal(sequenceCalls[0][1].durationSeconds, 5);
+    assert.equal(sequenceCalls[0][2].type, "run");
+}
+
+// A delayed action inside a sequence is flattened into the same automation job.
+{
+    sequenceCalls = [];
+    const analyzed = await ready("mute Batterie puis dans 2 secondes unmute Batterie");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(sequenceCalls[0].length, 3);
+    assert.equal(sequenceCalls[0][0].type, "run");
+    assert.equal(sequenceCalls[0][1].type, "wait");
+    assert.equal(sequenceCalls[0][1].durationSeconds, 2);
+    assert.equal(sequenceCalls[0][2].type, "run");
+}
+
+// Relative ramps in a sequence compute their destination at ramp start.
+{
+    sequenceCalls = [];
+    const analyzed = await ready("mets Batterie à -20 dB puis monte progressivement Batterie de 3 dB en 2 secondes");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(sequenceCalls[0].length, 2);
+    assert.equal(sequenceCalls[0][0].type, "run");
+    assert.equal(sequenceCalls[0][1].type, "ramp");
+    assert.equal(typeof sequenceCalls[0][1].to, "function");
+    assert.equal(sequenceCalls[0][1].durationSeconds, 2);
+}
+
+// All names must resolve before the macro can start.
+{
+    sequenceCalls = [];
+    const analyzed = await gateway.analyze({
+        protocol: GATEWAY_PROTOCOL,
+        text: "mute Batterie puis mute Inconnue",
+    });
+    assert.equal(analyzed.status, "clarification");
+    assert.equal(sequenceCalls.length, 0);
+    assert.match(analyzed.responseText, /Étape 2/);
 }
 
 // OR4B4 delayed level uses "dans" as a delay, not a ramp.
