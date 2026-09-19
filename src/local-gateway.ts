@@ -2094,7 +2094,7 @@ export class LocalMixerCommandGateway {
         }
 
         const active = continuation.value;
-        if ("busQueries" in active.intent || "sourceQuery" in active.intent) {
+        if ("channelQueries" in active.intent || "busQueries" in active.intent || "sourceQuery" in active.intent) {
             const stored = this.store.createContinuation({
                 intent: active.intent,
                 candidates: [],
