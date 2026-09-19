@@ -159,7 +159,7 @@ type LocalPlan =
 
 type LocalContinuation =
     | {
-          intent: TargetIntent | SendIntent | BulkIntent;
+          intent: TargetIntent | SendIntent | BulkIntent | Extract<Intent, { kind: "send_to_aux_output" }>;
           candidates: LocalMixerTarget[];
       }
     | {
@@ -2274,7 +2274,9 @@ export class LocalMixerCommandGateway {
                 effect: "none",
                 continuationToken: stored.token,
                 expiresInMs: stored.expiresInMs,
-                responseText: "Reformule la commande complète avec la source et le bus de destination exacts.",
+                responseText: active.intent.kind === "send_to_aux_output"
+                    ? "Reformule la commande complète avec la voie source exacte et la sortie AUX."
+                    : "Reformule la commande complète avec la source et le bus de destination exacts.",
             };
         }
 
