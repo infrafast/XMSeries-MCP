@@ -1251,6 +1251,29 @@ async function ready(text) {
     assert.equal(automationCalls[0].toLevel, 0.6);
 }
 
+// User-facing durations are expanded for Local TTS, including singular/plural.
+{
+    automationCalls = [];
+    let analyzed = await ready("baisse progressivement Batterie à -30 dB en 1 seconde");
+    let result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.match(result.responseText, /sur 1 seconde\./);
+    assert.doesNotMatch(result.responseText, /\b1 s\b/);
+
+    automationCalls = [];
+    analyzed = await ready("baisse progressivement Batterie à -30 dB en 2 secondes");
+    result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.match(result.responseText, /sur 2 secondes\./);
+    assert.doesNotMatch(result.responseText, /\b2 s\b/);
+}
+
 // Delayed ramp is one deterministic macro: wait, then ramp.
 {
     automationCalls = [];
@@ -1266,7 +1289,7 @@ async function ready(text) {
     assert.equal(automationCalls[0].target.name, "Batterie");
     assert.equal(automationCalls[0].delaySeconds, 3);
     assert.equal(automationCalls[0].durationSeconds, 2);
-    assert.match(result.responseText, /dans 3 s sur 2 s/);
+    assert.match(result.responseText, /dans 3 secondes sur 2 secondes/);
 }
 
 // Delayed route ramp preserves source and destination.
