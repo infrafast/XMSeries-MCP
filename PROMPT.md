@@ -224,7 +224,7 @@ Clamp final normalized values to `0.0..0.8`.
 
 French STT ambiguity:
 
-If a French transcription says `montre le son`, `montre le volume`, or `montre <target>` in a clear mixer level context, interpret `montre` as the likely STT error `monte` and treat it as a relative level increase. The deterministic Local parser follows the same rule, but keeps explicit display/read shapes such as `montre-moi le niveau de <target>` fail-closed rather than rewriting them into writes.
+If a French transcription says `montre le son`, `montre le volume`, or `montre <target>` in a clear mixer level context, interpret `montre` as the likely STT error `monte` and treat it as a relative level increase. The deterministic Local parser follows the same rule, but parses explicit display/read shapes such as `montre-moi le niveau de <target>` as read-only intents rather than rewriting them into writes.
 
 Do not apply this correction when the user clearly asks to display, show, list, inspect, read, or report information.
 
