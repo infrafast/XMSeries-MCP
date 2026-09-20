@@ -222,6 +222,13 @@ function displayName(target: LocalMixerTarget): string {
     return target.family === "main" ? "Main LR" : target.name;
 }
 
+function formatSeconds(value: number): string {
+    const normalized = Number.isInteger(value)
+        ? String(value)
+        : String(value).replace(".", ",");
+    return `${normalized} ${value === 1 ? "seconde" : "secondes"}`;
+}
+
 function mainTarget(query: string): LocalMixerTarget | null {
     const normalized = simplify(cleanTarget(query));
     if (!MAIN_ALIASES.has(normalized)) return null;
@@ -1878,7 +1885,7 @@ export class LocalMixerCommandGateway {
                 return {
                     protocol: GATEWAY_PROTOCOL,
                     ok: true,
-                    responseText: `Automation ${jobId} démarrée : séquence de ${plan.steps.length} action(s).`,
+                    responseText: `Automation ${jobId} démarrée : séquence de ${plan.steps.length} ${plan.steps.length === 1 ? "action" : "actions"}.`,
                 };
             }
 
@@ -2070,7 +2077,7 @@ export class LocalMixerCommandGateway {
                     return {
                         protocol: GATEWAY_PROTOCOL,
                         ok: true,
-                        responseText: `Action programmée ${jobId} : ${displayName(source)} → ${displayName(destination)} ${plan.mute ? "sera coupé" : "sera réactivé"} dans ${plan.delaySeconds} s.`,
+                        responseText: `Action programmée ${jobId} : ${displayName(source)} → ${displayName(destination)} ${plan.mute ? "sera coupé" : "sera réactivé"} dans ${formatSeconds(plan.delaySeconds)}.`,
                     };
                 }
 
@@ -2080,7 +2087,7 @@ export class LocalMixerCommandGateway {
                     return {
                         protocol: GATEWAY_PROTOCOL,
                         ok: true,
-                        responseText: `Action programmée ${jobId} : ${displayName(source)} → ${displayName(destination)} à ${converted.label} dans ${plan.delaySeconds} s.`,
+                        responseText: `Action programmée ${jobId} : ${displayName(source)} → ${displayName(destination)} à ${converted.label} dans ${formatSeconds(plan.delaySeconds)}.`,
                     };
                 }
 
@@ -2100,7 +2107,7 @@ export class LocalMixerCommandGateway {
                     return {
                         protocol: GATEWAY_PROTOCOL,
                         ok: true,
-                        responseText: `Automation ${jobId} démarrée : ${displayName(source)} → ${displayName(destination)} de ${formatDb(preview.beforeDb)} vers ${formatDb(preview.targetDb)} sur ${plan.durationSeconds} s.`,
+                        responseText: `Automation ${jobId} démarrée : ${displayName(source)} → ${displayName(destination)} de ${formatDb(preview.beforeDb)} vers ${formatDb(preview.targetDb)} sur ${formatSeconds(plan.durationSeconds)}.`,
                     };
                 }
 
@@ -2121,7 +2128,7 @@ export class LocalMixerCommandGateway {
                     return {
                         protocol: GATEWAY_PROTOCOL,
                         ok: true,
-                        responseText: `Automation ${jobId} programmée : ${displayName(source)} → ${displayName(destination)} dans ${plan.delaySeconds} s sur ${plan.durationSeconds} s.`,
+                        responseText: `Automation ${jobId} programmée : ${displayName(source)} → ${displayName(destination)} dans ${formatSeconds(plan.delaySeconds)} sur ${formatSeconds(plan.durationSeconds)}.`,
                     };
                 }
 
@@ -2134,7 +2141,7 @@ export class LocalMixerCommandGateway {
                 return {
                     protocol: GATEWAY_PROTOCOL,
                     ok: true,
-                    responseText: `Automation ${jobId} démarrée : ${displayName(source)} → ${displayName(destination)} sur ${plan.durationSeconds} s.`,
+                    responseText: `Automation ${jobId} démarrée : ${displayName(source)} → ${displayName(destination)} sur ${formatSeconds(plan.durationSeconds)}.`,
                 };
             }
 
@@ -2149,7 +2156,7 @@ export class LocalMixerCommandGateway {
                 return {
                     protocol: GATEWAY_PROTOCOL,
                     ok: true,
-                    responseText: `Action programmée ${jobId} : ${displayName(liveTarget)} ${plan.mute ? "sera coupé" : "sera réactivé"} dans ${plan.delaySeconds} s.`,
+                    responseText: `Action programmée ${jobId} : ${displayName(liveTarget)} ${plan.mute ? "sera coupé" : "sera réactivé"} dans ${formatSeconds(plan.delaySeconds)}.`,
                 };
             }
 
@@ -2159,7 +2166,7 @@ export class LocalMixerCommandGateway {
                 return {
                     protocol: GATEWAY_PROTOCOL,
                     ok: true,
-                    responseText: `Action programmée ${jobId} : ${displayName(liveTarget)} à ${converted.label} dans ${plan.delaySeconds} s.`,
+                    responseText: `Action programmée ${jobId} : ${displayName(liveTarget)} à ${converted.label} dans ${formatSeconds(plan.delaySeconds)}.`,
                 };
             }
 
@@ -2177,7 +2184,7 @@ export class LocalMixerCommandGateway {
                 return {
                     protocol: GATEWAY_PROTOCOL,
                     ok: true,
-                    responseText: `Automation ${jobId} démarrée : ${displayName(liveTarget)} de ${formatDb(preview.beforeDb)} vers ${formatDb(preview.targetDb)} sur ${plan.durationSeconds} s.`,
+                    responseText: `Automation ${jobId} démarrée : ${displayName(liveTarget)} de ${formatDb(preview.beforeDb)} vers ${formatDb(preview.targetDb)} sur ${formatSeconds(plan.durationSeconds)}.`,
                 };
             }
 
@@ -2197,7 +2204,7 @@ export class LocalMixerCommandGateway {
                 return {
                     protocol: GATEWAY_PROTOCOL,
                     ok: true,
-                    responseText: `Automation ${jobId} programmée : ${displayName(liveTarget)} dans ${plan.delaySeconds} s sur ${plan.durationSeconds} s.`,
+                    responseText: `Automation ${jobId} programmée : ${displayName(liveTarget)} dans ${formatSeconds(plan.delaySeconds)} sur ${formatSeconds(plan.durationSeconds)}.`,
                 };
             }
 
@@ -2211,7 +2218,7 @@ export class LocalMixerCommandGateway {
                 return {
                     protocol: GATEWAY_PROTOCOL,
                     ok: true,
-                    responseText: `Automation ${jobId} démarrée : ${displayName(liveTarget)} sur ${plan.durationSeconds} s.`,
+                    responseText: `Automation ${jobId} démarrée : ${displayName(liveTarget)} sur ${formatSeconds(plan.durationSeconds)}.`,
                 };
             }
 
@@ -2492,15 +2499,15 @@ export class LocalMixerCommandGateway {
                 } else if (plan.kind === "send_mute") {
                     run(`${plan.mute ? "mute" : "unmute"} ${displayName(source)} vers ${displayName(destination)}`, () => this.adapter.setSendMute(source, destination, plan.mute));
                 } else if (plan.kind === "send_delay_level") {
-                    wait(plan.delaySeconds, `attendre ${plan.delaySeconds} s`);
+                    wait(plan.delaySeconds, `attendre ${formatSeconds(plan.delaySeconds)}`);
                     const converted = levelToNormalized(plan.value.unit, plan.value.value);
                     run(`${displayName(source)} vers ${displayName(destination)}`, () => this.adapter.writeSendLevel(source, destination, converted.level));
                 } else if (plan.kind === "send_delay_mute") {
-                    wait(plan.delaySeconds, `attendre ${plan.delaySeconds} s`);
+                    wait(plan.delaySeconds, `attendre ${formatSeconds(plan.delaySeconds)}`);
                     run(`${plan.mute ? "mute" : "unmute"} ${displayName(source)} vers ${displayName(destination)}`, () => this.adapter.setSendMute(source, destination, plan.mute));
                 } else {
                     if (plan.kind === "send_delayed_ramp_level") {
-                        wait(plan.delaySeconds, `attendre ${plan.delaySeconds} s`);
+                        wait(plan.delaySeconds, `attendre ${formatSeconds(plan.delaySeconds)}`);
                     }
                     const from = "from" in plan && plan.from ? levelToNormalized(plan.from.unit, plan.from.value).level : undefined;
                     let to: number | (() => Promise<number>);
@@ -2544,15 +2551,15 @@ export class LocalMixerCommandGateway {
             } else if (plan.kind === "mute") {
                 run(`${plan.mute ? "mute" : "unmute"} ${displayName(target)}`, () => this.adapter.setMute(target, plan.mute));
             } else if (plan.kind === "delay_level") {
-                wait(plan.delaySeconds, `attendre ${plan.delaySeconds} s`);
+                wait(plan.delaySeconds, `attendre ${formatSeconds(plan.delaySeconds)}`);
                 const converted = levelToNormalized(plan.value.unit, plan.value.value);
                 run(`régler ${displayName(target)}`, () => this.adapter.writeLevel(target, converted.level));
             } else if (plan.kind === "delay_mute") {
-                wait(plan.delaySeconds, `attendre ${plan.delaySeconds} s`);
+                wait(plan.delaySeconds, `attendre ${formatSeconds(plan.delaySeconds)}`);
                 run(`${plan.mute ? "mute" : "unmute"} ${displayName(target)}`, () => this.adapter.setMute(target, plan.mute));
             } else {
                 if (plan.kind === "delayed_ramp_level") {
-                    wait(plan.delaySeconds, `attendre ${plan.delaySeconds} s`);
+                    wait(plan.delaySeconds, `attendre ${formatSeconds(plan.delaySeconds)}`);
                 }
                 const from = "from" in plan && plan.from ? levelToNormalized(plan.from.unit, plan.from.value).level : undefined;
                 let to: number | (() => Promise<number>);
