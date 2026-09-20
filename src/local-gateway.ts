@@ -7,6 +7,7 @@ import {
 } from "@infrafast/stage-command-core";
 import { dbToFaderLevel, faderLevelToDb, formatDb } from "./level-table.js";
 import { isLocalGatewayEnabled } from "@infrafast/stage-command-core";
+import { canonicalizeNaturalFrenchCommand, isMixerStatusUtterance } from "./local-language.js";
 
 export type LocalMixerTargetFamily =
     | "channel"
@@ -672,7 +673,7 @@ function parseSequenceIntent(raw: string): Intent | null {
 }
 
 function parseIntent(raw: string, allowSequence = true): Intent | null {
-    const text = normalizeLikelyFrenchSttDirection(raw);
+    const text = canonicalizeNaturalFrenchCommand(normalizeLikelyFrenchSttDirection(raw));
     const normalized = simplify(text);
 
     if (allowSequence) {
@@ -689,7 +690,8 @@ function parseIntent(raw: string, allowSequence = true): Intent | null {
             "mixer status",
             "status mixer",
             "mixeur status",
-        ].includes(normalized)
+        ].includes(normalized) ||
+        isMixerStatusUtterance(text)
     ) {
         return { kind: "status" };
     }
