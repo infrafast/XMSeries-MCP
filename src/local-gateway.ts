@@ -7,7 +7,7 @@ import {
 } from "@infrafast/stage-command-core";
 import { dbToFaderLevel, faderLevelToDb, formatDb } from "./level-table.js";
 import { isLocalGatewayEnabled } from "@infrafast/stage-command-core";
-import { canonicalizeNaturalFrenchCommand, isMainLevelReadUtterance, isMixerStatusUtterance } from "./local-language.js";
+import { canonicalizeNaturalFrenchCommand, isAutomationStatusUtterance, isMainLevelReadUtterance, isMixerStatusUtterance } from "./local-language.js";
 
 export type LocalMixerTargetFamily =
     | "channel"
@@ -707,7 +707,8 @@ function parseIntent(raw: string, allowSequence = true): Intent | null {
             "etat des automations",
             "automation status",
             "list automations",
-        ].includes(normalized)
+        ].includes(normalized) ||
+        isAutomationStatusUtterance(text)
     ) {
         return { kind: "automation_list" };
     }
