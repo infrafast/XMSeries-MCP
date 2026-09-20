@@ -1840,6 +1840,24 @@ async function ready(text) {
     assert.equal(writes.length, 0);
 }
 
+// Whisper may wrap an otherwise correct command in French quotation marks.
+{
+    assert.equal(
+        canonicalizeNaturalFrenchCommand("« mets Batterie sur Anthony à moins dix dB »."),
+        "mets Batterie sur Anthony à -10 dB",
+    );
+
+    sendWrites = [];
+    const analyzed = await ready("« mets Batterie sur Anthony à moins dix dB ».");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(sendWrites.at(-1).source.name, "Batterie");
+    assert.equal(sendWrites.at(-1).destination.name, "Anthony");
+}
+
 // Spoken French dB values and the common Whisper "mets" -> "mais" homophone
 // are normalized only in an otherwise explicit mixer write structure.
 {
