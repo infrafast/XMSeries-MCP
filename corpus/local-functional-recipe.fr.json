@@ -1296,6 +1296,96 @@
         "status": "ready",
         "effect": "read"
       }
+    },
+    {
+      "category": "status",
+      "name": "mixer-version-natural-question",
+      "utterance": "quelle est la version du mixeur ?",
+      "expected": {
+        "status": "ready",
+        "effect": "read",
+        "operation": {
+          "kind": "status"
+        }
+      }
+    },
+    {
+      "category": "status",
+      "name": "mixer-firmware-natural-question",
+      "utterance": "quel est le firmware du mixeur ?",
+      "expected": {
+        "status": "ready",
+        "effect": "read",
+        "operation": {
+          "kind": "status"
+        }
+      }
+    },
+    {
+      "category": "status",
+      "name": "mixer-model-natural-question",
+      "utterance": "quel est le modèle du mixeur ?",
+      "expected": {
+        "status": "ready",
+        "effect": "read",
+        "operation": {
+          "kind": "status"
+        }
+      }
+    },
+    {
+      "category": "automation",
+      "name": "automation-list-natural-running",
+      "utterance": "quelles sont les automations en cours ?",
+      "expected": {
+        "status": "ready",
+        "effect": "read"
+      }
+    },
+    {
+      "category": "automation",
+      "name": "automation-list-natural-active",
+      "utterance": "montre-moi les automations actives",
+      "expected": {
+        "status": "ready",
+        "effect": "read"
+      }
+    },
+    {
+      "category": "sequence",
+      "name": "sequence-et-puis-delay",
+      "utterance": "mute Batterie et puis dans 2 secondes unmute Batterie",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "sequence",
+          "count": 3,
+          "actionTypes": [
+            "run",
+            "wait",
+            "run"
+          ]
+        }
+      }
+    },
+    {
+      "category": "sequence",
+      "name": "sequence-et-ensuite-anaphora",
+      "utterance": "baisse la façade et ensuite remonte-la après 3 secondes",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "sequence",
+          "count": 3,
+          "actionTypes": [
+            "run",
+            "wait",
+            "run"
+          ]
+        }
+      }
     }
   ]
 }
