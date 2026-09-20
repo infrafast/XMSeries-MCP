@@ -519,7 +519,7 @@ The gateway uses `lsa-command-gateway/v1`. Write plans are short-lived and one-s
 
 The parser is intentionally bounded and deterministic. Prefer the canonical formulations below when using speech recognition or typing directly into a deterministic client. Mixer names such as `batterie`, `Anthony`, or `Laurent` are examples: replace them with the actual labels configured on your mixer.
 
-Natural-language variants are normalized before structural parsing. The French Local layer canonicalizes a bounded vocabulary of safe synonyms (for example `couper/désactiver/éteindre -> mute`, `réactiver/rallumer -> unmute`, `augmenter -> monter`, `diminuer/descendre -> baisser`) while the grammar still determines source, destination, value, duration and delay. Context-sensitive words are not blindly replaced: `remets Batterie` means unmute, while `remets Batterie à -10 dB` means set the fader. Natural mixer-status questions such as `quel est le statut du mixeur ?`, `est-ce que le mixeur est connecté ?` and `donne-moi le statut du mixeur` converge to the same read-only status intent. Name resolution and writes remain fail-closed after normalization.
+Natural-language variants are normalized before structural parsing. The French Local layer canonicalizes a bounded vocabulary of safe synonyms (for example `couper/désactiver/éteindre -> mute`, `réactiver/rallumer -> unmute`, `augmenter -> monter`, `diminuer/descendre -> baisser`) while the grammar still determines source, destination, value, duration and delay. Context-sensitive words are not blindly replaced: `remets Batterie` means unmute, while `remets Batterie à -10 dB` means set the fader. Natural mixer-status questions such as `quel est le statut du mixeur ?`, `est-ce que le mixeur est connecté ?`, `quelle est la version du mixeur ?`, `quel est le firmware du mixeur ?` and `donne-moi le statut du mixeur` converge to the same read-only status intent. Name resolution and writes remain fail-closed after normalization.
 
 | Intent | Canonical examples |
 |---|---|
@@ -570,7 +570,7 @@ The deterministic Local milestone has an executable acceptance corpus in `corpus
 npm run test:local-recipe
 ```
 
-This recipe covers the user-facing command families documented above and the canonical behaviors required by `PROMPT.md`: reads, absolute/relative/qualitative levels, mutes, source-to-bus routes, grouped operations, normalized values, DCA, X32 matrices, channel-to-AUX output, ramps/fades/delays, automation status/cancel, multi-action sequences, explicit anaphora, speaker context, and fail-closed ambiguity handling.
+This recipe covers the user-facing command families documented above and the canonical behaviors required by `PROMPT.md`: reads, absolute/relative/qualitative levels, mutes, source-to-bus routes, grouped operations, normalized values, DCA, X32 matrices, channel-to-AUX output, ramps/fades/delays, automation status/cancel, multi-action sequences, explicit anaphora, speaker context, and fail-closed ambiguity handling. Critical cases also assert the exact planned/executed operation, and safety cases assert that no side effect occurred.
 
 For a Raspberry Pi live recipe, update/build the MCP first:
 
@@ -603,7 +603,7 @@ Recommended live acceptance order:
 
 Protocol-specific expected behavior:
 
-- **OSCXR:** channel/bus/Main/FX/aux mapped level operations, reads, ramps, fades, delays and sequences are valid. Bus-specific source mute such as `mute Batterie sur Anthony` is expected to return an explicit unsupported error; it must never mute Batterie globally. Matrix controls and X32 channel-to-AUX-output commands are also expected to report unsupported.
+- **OSCXR:** channel/bus/Main/FX/aux mapped level operations, reads, ramps, fades, delays and sequences are valid. CI also directly verifies that unsupported route-mutes, matrices and channel-to-AUX-output calls throw before any OSC write. Bus-specific source mute such as `mute Batterie sur Anthony` is expected to return an explicit unsupported error; it must never mute Batterie globally. Matrix controls and X32 channel-to-AUX-output commands are also expected to report unsupported.
 - **X32/M32:** route mutes, matrices and channel-to-AUX-output commands are expected to execute normally when the resolved targets exist.
 - A clarification or explicit unsupported response is a valid safe outcome where documented. `Commande non reconnue.` is not a valid substitute for mixer/protocol/configuration failures.
 
@@ -618,7 +618,7 @@ Important syntax rules:
 - **`dans N secondes` means delayed execution**: the requested one-shot action stays pending until the delay expires. This applies to level writes, single-target mute/unmute, and source→bus mute/unmute. `dans` is never reinterpreted as a ramp duration. For route mutes the parser binds the source and bus first, then the delay, so `mute Batterie sur Anthony dans 5 secondes` and `dans 5 secondes, mute Batterie sur Anthony` are equivalent.
 - Percent values use the normalized fader range. An absolute `100%` means the top of the normalized fader range; a relative `+10%` means ten percentage points on that normalized range.
 - Explicit normalized values use `niveau 0.0..1.0` / `level 0.0..1.0`, for example `mets Batterie au niveau 0.75`. This explicit wording prevents a unitless dB-looking number from being reinterpreted as a normalized fader value.
-- Multi-action phrases separated by `puis`, `ensuite`, or `then` are resolved completely before one MCP-owned automation starts. `après N secondes` adds a wait between steps. If any step is ambiguous, the whole sequence remains fail-closed.
+- Multi-action phrases separated by `puis`, `ensuite`, `et puis`, `et ensuite`, or `then` are resolved completely before one MCP-owned automation starts. `après N secondes` adds a wait between steps. If any step is ambiguous, the whole sequence remains fail-closed.
 - Cross-turn context is never inherited implicitly. Explicit anaphora such as `remonte-la`, `même cible`, `même bus`, `sur le même retour`, `lui`, or `elle` may refer to the preceding deterministic command.
 - `fade in` / `fade out` without an explicit target defaults to **Main LR / façade**.
 - Main aliases currently include `main`, `main lr`, `lr`, `façade`, `front`, `principal`, `master`, `master lr`, and `mix principal`. `son` is accepted as an explicit synonym for `volume`/`niveau` in level phrases such as `monte le son` or `mets le son à -10 dB`.
