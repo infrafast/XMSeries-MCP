@@ -58,6 +58,9 @@ export function canonicalizeNaturalFrenchCommand(raw: string): string {
 
 export function isMixerStatusUtterance(raw: string): boolean {
     let text = simplifyForMatch(raw)
+        .replace(/-/gu, " ")
+        .replace(/\s+/gu, " ")
+        .trim()
         .replace(/^(?:stp|s il te plait|s il vous plait)\s+/u, "")
         .replace(/^(?:peux tu|pourrais tu|tu peux)(?: me)?(?: dire)?\s+/u, "");
 
