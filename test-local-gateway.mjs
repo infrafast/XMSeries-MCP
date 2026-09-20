@@ -546,14 +546,55 @@ async function ready(text) {
     assert.equal(qualitativeCalls[0].direction, "up");
 }
 
-// Explicit display/read-like "montre-moi" is never rewritten as a write.
+// Explicit display/read-like "montre-moi" is a read and is never rewritten as a write.
 {
-    const analyzed = await gateway.analyze({
+    writes = [];
+    const analyzed = await ready("montre-moi le niveau de Batterie");
+    assert.equal(analyzed.effect, "read");
+    const result = await gateway.execute({
         protocol: GATEWAY_PROTOCOL,
-        text: "montre-moi le niveau de Batterie",
+        planToken: analyzed.planToken,
     });
-    assert.notEqual(analyzed.status, "ready");
-    assert.equal(analyzed.effect, "none");
+    assert.equal(result.ok, true);
+    assert.match(result.responseText, /Batterie/i);
+    assert.equal(writes.length, 0);
+}
+
+// Explicit display route reads preserve source/destination and remain read-only.
+{
+    sendReadCalls = [];
+    sendWrites = [];
+    const analyzed = await ready("affiche le niveau de Batterie sur Anthony");
+    assert.equal(analyzed.effect, "read");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(sendReadCalls.at(-1).source.name, "Batterie");
+    assert.equal(sendReadCalls.at(-1).destination.name, "Anthony");
+    assert.equal(sendWrites.length, 0);
+}
+
+// Natural "où est le fader" forms are explicit reads.
+{
+    let analyzed = await ready("où est le fader ?");
+    assert.equal(analyzed.effect, "read");
+    let result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.match(result.responseText, /Main LR/i);
+
+    analyzed = await ready("où est le fader de Batterie ?");
+    assert.equal(analyzed.effect, "read");
+    result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.match(result.responseText, /Batterie/i);
 }
 
 // Natural plus/moins fort aliases use the same qualitative adapter.
