@@ -519,6 +519,8 @@ The gateway uses `lsa-command-gateway/v1`. Write plans are short-lived and one-s
 
 The parser is intentionally bounded and deterministic. Prefer the canonical formulations below when using speech recognition or typing directly into a deterministic client. Mixer names such as `batterie`, `Anthony`, or `Laurent` are examples: replace them with the actual labels configured on your mixer.
 
+Natural-language variants are normalized before structural parsing. The French Local layer canonicalizes a bounded vocabulary of safe synonyms (for example `couper/désactiver/éteindre -> mute`, `réactiver/rallumer -> unmute`, `augmenter -> monter`, `diminuer/descendre -> baisser`) while the grammar still determines source, destination, value, duration and delay. Context-sensitive words are not blindly replaced: `remets Batterie` means unmute, while `remets Batterie à -10 dB` means set the fader. Natural mixer-status questions such as `quel est le statut du mixeur ?`, `est-ce que le mixeur est connecté ?` and `donne-moi le statut du mixeur` converge to the same read-only status intent. Name resolution and writes remain fail-closed after normalization.
+
 | Intent | Canonical examples |
 |---|---|
 | Mixer status | `statut mixeur` |
