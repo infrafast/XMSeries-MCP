@@ -2101,6 +2101,57 @@
           }
         }
       }
+    },
+    {
+      "category": "stt",
+      "name": "stt-spoken-negative-db-send",
+      "utterance": "Mets Batterie sur Anthony à moins dix décibels.",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "write_send",
+          "source": {
+            "name": "Batterie"
+          },
+          "destination": {
+            "name": "Anthony"
+          }
+        }
+      }
+    },
+    {
+      "category": "stt",
+      "name": "stt-mais-mets-homophone-send",
+      "utterance": "Mais, Batterie sur Anthony à moins dix décibels.",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "write_send",
+          "source": {
+            "name": "Batterie"
+          },
+          "destination": {
+            "name": "Anthony"
+          }
+        }
+      }
+    },
+    {
+      "category": "stt",
+      "name": "stt-spoken-positive-db-level",
+      "utterance": "Mets Batterie à plus trois décibels.",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "target": {
+            "name": "Batterie"
+          }
+        }
+      }
     }
   ]
 }
