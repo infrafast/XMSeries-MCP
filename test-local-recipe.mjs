@@ -110,7 +110,11 @@ function makeHarness() {
             return "auto-delayed-send-ramp";
         },
         async startSequence(actions) {
-            operations.push({ kind: "sequence", actions });
+            operations.push({
+                kind: "sequence",
+                count: actions.length,
+                actionTypes: actions.map((action) => action.type),
+            });
             return "auto-sequence";
         },
         async scheduleLevel(target, toLevel, delaySeconds) {
@@ -193,13 +197,20 @@ function makeHarness() {
     return { gateway: new LocalMixerCommandGateway(adapter), operations };
 }
 
+function matchesOperation(actual, expected) {
+    for (const [key, value] of Object.entries(expected)) {
+        assert.deepEqual(actual?.[key], value, `operation field ${key}`);
+    }
+}
+
 const sessions = new Map();
 let passed = 0;
 
 for (const [index, item] of recipe.cases.entries()) {
     const sessionKey = item.session || `case-${index}`;
     if (!sessions.has(sessionKey)) sessions.set(sessionKey, makeHarness());
-    const { gateway } = sessions.get(sessionKey);
+    const { gateway, operations } = sessions.get(sessionKey);
+    const operationStart = operations.length;
 
     const analyzed = await gateway.analyze({
         protocol: GATEWAY_PROTOCOL,
@@ -219,6 +230,19 @@ for (const [index, item] of recipe.cases.entries()) {
                 planToken: analyzed.planToken,
             });
             assert.equal(executed.ok, true, executed.responseText || executed.errorCode);
+        }
+
+        const caseOperations = operations.slice(operationStart);
+        if (item.expected.operation) {
+            const operation = caseOperations.find((entry) => entry.kind === item.expected.operation.kind);
+            assert.ok(
+                operation,
+                `operation ${item.expected.operation.kind} not observed; got ${JSON.stringify(caseOperations)}`,
+            );
+            matchesOperation(operation, item.expected.operation);
+        }
+        if (item.expected.noOperations) {
+            assert.deepEqual(caseOperations, [], `expected no side effect; got ${JSON.stringify(caseOperations)}`);
         }
 
         passed += 1;
