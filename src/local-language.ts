@@ -111,3 +111,19 @@ export function isMainLevelReadUtterance(raw: string): boolean {
         /^(?:c est quoi|combien vaut)\s+(?:le\s+)?(?:niveau|volume|fader|son)(?:\s+(?:general|principal|master))?$/u.test(text)
     );
 }
+
+
+export function isAutomationStatusUtterance(raw: string): boolean {
+    let text = simplifyForMatch(raw)
+        .replace(/-/gu, " ")
+        .replace(/\s+/gu, " ")
+        .trim()
+        .replace(/^(?:stp|s il te plait|s il vous plait)\s+/u, "")
+        .replace(/^(?:peux tu|pourrais tu|tu peux)(?: me)?(?: dire|montrer|donner)?\s+/u, "");
+
+    return (
+        /^(?:quelles?\s+sont\s+)?(?:les\s+)?(?:automations|automatisations|fades|rampes)(?:\s+(?:en cours|actives))?$/u.test(text) ||
+        /^(?:liste|affiche|montre moi|donne moi)\s+(?:les\s+)?(?:automations|automatisations)(?:\s+(?:en cours|actives))?$/u.test(text) ||
+        /^(?:quel est|quelle est)\s+(?:le\s+|la\s+)?(?:statut|etat)\s+(?:des\s+)?(?:automations|automatisations)$/u.test(text)
+    );
+}
