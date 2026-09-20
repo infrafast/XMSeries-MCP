@@ -1785,6 +1785,10 @@ async function ready(text) {
         "donne-moi le statut du mixeur",
         "comment va le mixeur ?",
         "peux-tu me dire quel est le status du mixeur ?",
+        "quelle est la version du mixeur ?",
+        "quel est le firmware du mixeur ?",
+        "quel est le modèle du mixeur ?",
+        "quel mixeur est connecté ?",
     ];
     for (const utterance of variants) {
         const analyzed = await ready(utterance);
@@ -1811,6 +1815,45 @@ async function ready(text) {
         assert.equal(result.ok, true, utterance);
         assert.match(result.responseText, /Main LR/i, utterance);
     }
+}
+
+// Natural automation status questions stay read-only.
+{
+    const variants = [
+        "quelles sont les automations en cours ?",
+        "liste les automations en cours",
+        "montre-moi les automations actives",
+        "quel est le statut des automatisations ?",
+    ];
+    for (const utterance of variants) {
+        const analyzed = await ready(utterance);
+        assert.equal(analyzed.effect, "read", utterance);
+    }
+}
+
+// Natural sequence connectors "et puis" / "et ensuite" compile to one sequence.
+{
+    sequenceCalls = [];
+    let analyzed = await ready("mute Batterie et puis dans 2 secondes unmute Batterie");
+    let result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(sequenceCalls.at(-1).length, 3);
+    assert.equal(sequenceCalls.at(-1)[1].type, "wait");
+    assert.equal(sequenceCalls.at(-1)[1].durationSeconds, 2);
+
+    sequenceCalls = [];
+    analyzed = await ready("baisse la façade et ensuite remonte-la après 3 secondes");
+    result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(sequenceCalls.at(-1).length, 3);
+    assert.equal(sequenceCalls.at(-1)[1].type, "wait");
+    assert.equal(sequenceCalls.at(-1)[1].durationSeconds, 3);
 }
 
 // OR4B13 safe lexical synonyms converge before structural parsing.
