@@ -1858,6 +1858,18 @@ async function ready(text) {
     assert.equal(sendWrites.at(-1).destination.name, "Anthony");
 }
 
+// A fuzzy-only route endpoint stays fail-closed and the clarification identifies it.
+{
+    const analyzed = await gateway.analyze({
+        protocol: GATEWAY_PROTOCOL,
+        text: "mets Guitr sur Anthony à -10 dB",
+    });
+    assert.equal(analyzed.status, "clarification");
+    assert.equal(analyzed.effect, "none");
+    assert.match(analyzed.responseText, /correspondance approximative/i);
+    assert.match(analyzed.responseText, /Anthony/i);
+}
+
 // Spoken French dB values and the common Whisper "mets" -> "mais" homophone
 // are normalized only in an otherwise explicit mixer write structure.
 {
