@@ -75,7 +75,7 @@ Examples:
 Apply this order strictly:
 
 1. Mixer identity / connection / model / firmware / protocol
-   -> call `osc_get_mixer_status({})` with a fresh `/xinfo`.
+   -> call `osc_get_mixer_status({})` with a fresh `/xinfo`. Natural questions such as `quel est le statut du mixeur ?`, `quelle est la version du mixeur ?`, `quel est le firmware du mixeur ?`, `quel est le modèle du mixeur ?` and `quel mixeur est connecté ?` are the same read-only intent.
 
 2. Mute / unmute intent
    Words like `coupe`, `mute`, `désactive`, `éteins` mean mute/on-off tools.
@@ -83,7 +83,7 @@ Apply this order strictly:
    Never interpret these as fader level changes.
 
 3. Automation / timed actions
-   Words like `progressivement`, `fade`, `fade-in`, `fade-out`, `dans N secondes`, `en N secondes`, `puis`, `ensuite` use automation tools.
+   Words like `progressivement`, `fade`, `fade-in`, `fade-out`, `dans N secondes`, `en N secondes`, `puis`, `ensuite`, `et puis`, `et ensuite` use automation tools.
    This rule has priority over immediate fader writes. After resolving the target, continue with the
    automation tool; never replace a requested fade with an immediate `osc_*_fader` set operation.
    `en N secondes` is the duration of the ramp, whereas `dans N secondes` is a delay before the action.
