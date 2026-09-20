@@ -4,6 +4,7 @@ import {
     LocalMixerCommandGateway,
     withLocalGatewayTools,
 } from "./dist/local-gateway.js";
+import { canonicalizeNaturalFrenchCommand } from "./dist/local-language.js";
 
 const targets = {
     voix: { family: "channel", index: 1, name: "Voix", matchType: "exact" },
@@ -1837,6 +1838,40 @@ async function ready(text) {
     assert.equal(continued.status, "unrecognized");
     assert.equal(continued.effect, "none");
     assert.equal(writes.length, 0);
+}
+
+// Spoken French dB values and the common Whisper "mets" -> "mais" homophone
+// are normalized only in an otherwise explicit mixer write structure.
+{
+    assert.equal(
+        canonicalizeNaturalFrenchCommand("Mets Batterie sur Anthony à moins dix décibels."),
+        "Mets Batterie sur Anthony à -10 dB",
+    );
+    assert.equal(
+        canonicalizeNaturalFrenchCommand("Mais, Batterie sur Anthony à moins dix décibels."),
+        "mets Batterie sur Anthony à -10 dB",
+    );
+    assert.equal(
+        canonicalizeNaturalFrenchCommand("Mets Batterie à plus trois décibels."),
+        "Mets Batterie à +3 dB",
+    );
+    assert.equal(
+        canonicalizeNaturalFrenchCommand("mais je voulais simplement vérifier"),
+        "mais je voulais simplement vérifier",
+    );
+}
+
+// End-to-end: the Whisper-like transcription must execute the intended send write.
+{
+    sendWrites = [];
+    const analyzed = await ready("Mais, Batterie sur Anthony à moins dix décibels.");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(sendWrites.at(-1).source.name, "Batterie");
+    assert.equal(sendWrites.at(-1).destination.name, "Anthony");
 }
 
 // OR4B13 natural-language status variants converge to the same read intent.
