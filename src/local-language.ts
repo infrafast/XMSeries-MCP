@@ -26,6 +26,89 @@ const SAFE_CANONICAL_VERBS: Array<[RegExp, string]> = [
     [/\b(?:regle|règle|fixe|met)\b/giu, "mets"],
 ];
 
+const FRENCH_NUMBER_UNITS: Record<string, number> = {
+    zero: 0, un: 1, une: 1, deux: 2, trois: 3, quatre: 4,
+    cinq: 5, six: 6, sept: 7, huit: 8, neuf: 9,
+    dix: 10, onze: 11, douze: 12, treize: 13, quatorze: 14,
+    quinze: 15, seize: 16,
+};
+
+const FRENCH_NUMBER_TENS: Record<string, number> = {
+    vingt: 20, trente: 30, quarante: 40, cinquante: 50, soixante: 60,
+};
+
+function parseFrenchIntegerWords(raw: string): number | null {
+    const normalized = simplifyForMatch(raw)
+        .replace(/-/gu, " ")
+        .replace(/\bet\b/gu, " ")
+        .replace(/\s+/gu, " ")
+        .trim();
+    if (!normalized) return null;
+    const tokens = normalized.split(" ");
+
+    if (tokens.length === 1 && FRENCH_NUMBER_UNITS[tokens[0]] !== undefined) {
+        return FRENCH_NUMBER_UNITS[tokens[0]];
+    }
+
+    if (tokens[0] === "dix" && tokens.length === 2 && FRENCH_NUMBER_UNITS[tokens[1]] !== undefined) {
+        const unit = FRENCH_NUMBER_UNITS[tokens[1]];
+        return unit >= 7 && unit <= 9 ? 10 + unit : null;
+    }
+
+    if (tokens[0] === "quatre" && tokens[1] === "vingt") {
+        if (tokens.length === 2) return 80;
+        if (tokens[2] === "dix") {
+            if (tokens.length === 3) return 90;
+            const tail = parseFrenchIntegerWords(tokens.slice(2).join(" "));
+            return tail !== null && tail >= 10 && tail <= 19 ? 80 + tail : null;
+        }
+        const unit = FRENCH_NUMBER_UNITS[tokens[2]];
+        return tokens.length === 3 && unit >= 1 && unit <= 9 ? 80 + unit : null;
+    }
+
+    const tens = FRENCH_NUMBER_TENS[tokens[0]];
+    if (tens !== undefined) {
+        if (tokens.length === 1) return tens;
+        if (tokens[0] === "soixante") {
+            const tail = parseFrenchIntegerWords(tokens.slice(1).join(" "));
+            if (tail !== null && tail >= 10 && tail <= 19) return 60 + tail;
+        }
+        const unit = FRENCH_NUMBER_UNITS[tokens[1]];
+        return tokens.length === 2 && unit >= 1 && unit <= 9 ? tens + unit : null;
+    }
+
+    return null;
+}
+
+function normalizeSpokenFrenchLevels(raw: string): string {
+    let text = raw.replace(/\b(?:d[ée]cibels?|decibels?|ddb)\b/giu, "dB");
+
+    text = text.replace(
+        /\b(moins|plus)\s+((?:[\p{L}-]+\s*){1,5})\s+dB\b/giu,
+        (full, signRaw: string, wordsRaw: string) => {
+            const value = parseFrenchIntegerWords(wordsRaw);
+            if (value === null) return full;
+            const sign = simplifyForMatch(signRaw) === "moins" ? "-" : "+";
+            return sign + value + " dB";
+        },
+    );
+
+    return text;
+}
+
+function normalizeLikelyFrenchSttSetVerb(raw: string): string {
+    // Whisper can transcribe imperative "mets" as discourse "mais". Only repair
+    // it when the rest of the utterance already has an explicit mixer-route
+    // structure and an absolute numeric level, so ordinary "mais ..." speech is
+    // never promoted to a write.
+    if (
+        /^\s*mais[,;:]?\s+/iu.test(raw) &&
+        /\s+(?:sur|vers|dans|chez|to|in)\s+.+?\s+(?:a|à|to)\s+[+-]?\d+(?:[.,]\d+)?\s*(?:d[bB]|%)\b/iu.test(raw)
+    ) {
+        return raw.replace(/^\s*mais[,;:]?\s+/iu, "mets ");
+    }
+    return raw;
+}
 function remetsMeansSet(text: string): boolean {
     return (
         /\bremets?\b[\s\S]*?(?:\ba|à|au\s+niveau|\bniveau)\s*[+-]?\d/iu.test(text) ||
@@ -36,6 +119,9 @@ function remetsMeansSet(text: string): boolean {
 export function canonicalizeNaturalFrenchCommand(raw: string): string {
     let text = raw.trim();
     if (!text) return text;
+
+    text = normalizeSpokenFrenchLevels(text);
+    text = normalizeLikelyFrenchSttSetVerb(text);
 
     // "remets" is deliberately contextual: without a value it means reactivate;
     // with an explicit level it means set the level again.
