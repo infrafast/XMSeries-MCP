@@ -2599,14 +2599,18 @@ export class LocalMixerCommandGateway {
         if (!source || !destination) {
             const sourceText = source
                 ? displayName(source)
-                : sourceMatches.length
-                  ? summarizeCandidates(sourceMatches)
-                  : `aucune source pour « ${intent.sourceQuery} »`;
+                : sourceMatches.length === 1 && sourceMatches[0].matchType === "fuzzy"
+                  ? `correspondance approximative « ${displayName(sourceMatches[0])} » pour « ${intent.sourceQuery} »`
+                  : sourceMatches.length
+                    ? summarizeCandidates(sourceMatches)
+                    : `aucune source pour « ${intent.sourceQuery} »`;
             const destinationText = destination
                 ? displayName(destination)
-                : destinationMatches.length
-                  ? summarizeCandidates(destinationMatches)
-                  : `aucun bus pour « ${intent.destinationQuery} »`;
+                : destinationMatches.length === 1 && destinationMatches[0].matchType === "fuzzy"
+                  ? `correspondance approximative « ${displayName(destinationMatches[0])} » pour « ${intent.destinationQuery} »`
+                  : destinationMatches.length
+                    ? summarizeCandidates(destinationMatches)
+                    : `aucun bus pour « ${intent.destinationQuery} »`;
             const stored = this.store.createContinuation({ intent, candidates: [] });
             return {
                 protocol: GATEWAY_PROTOCOL,
