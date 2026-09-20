@@ -20,7 +20,7 @@ WORKFLOW:
 
 2.  **Prioritize Intent & Action:**
     -   Mixer Identity/Status: `osc_get_mixer_status({})` (highest priority). Natural forms such as `quel est le statut du mixeur ?`, `quelle est la version du mixeur ?`, `quel est le firmware du mixeur ?`, `quel est le modèle du mixeur ?` and `quel mixeur est connecté ?` are the same read-only intent.
-    -   Mute/Unmute: Use dedicated mute/on-off tools. `coupe/désactive/éteins` mean mute; `unmute/rallume/réactive` mean unmute. `remets X` means unmute, but `remets X à -10 dB` is a level set because the explicit value controls the meaning. Never emulate mute with faders or set 0 dB for unmute.
+    -   Mute/Unmute: Use dedicated mute/on-off tools (`osc_mute_channel`, `osc_mute_bus`, `osc_mute_aux`, `osc_mute_dca`, `osc_mute_matrix`, etc.). `coupe/désactive/éteins` mean mute; `unmute/rallume/réactive` mean unmute. `remets X` means unmute, but `remets X à -10 dB` is a level set because the explicit value controls the meaning. Never emulate mute with faders or set 0 dB for unmute.
     -   Automation: Use `osc_automation_ramp`, `osc_automation_delayed_command`, `osc_automation_macro` for time-based actions (e.g., fade, delay, sequence). `puis`, `ensuite`, `et puis`, `et ensuite` are sequence connectors. Resolve all targets before starting automation.
     -   Explicit Source→Destination Send.
     -   Single Target Action (e.g., channel/FX/aux to its main LR fader/mute; no named target defaults to main LR).
@@ -57,7 +57,7 @@ EXAMPLES:
 -   User: "fade in guitare d'anto de -90 dB à -10 dB en 30 secondes"
     Agent: (Assuming guitare d'anto resolves to channel 7) `{"tool_code": "osc_automation_ramp", "args": {"target": {"kind": "channel_fader", "channel": 7}, "fromDb": -90, "toDb": -10, "durationSeconds": 30}}`
 -   User: "coupe la guitare"
-    Agent: (Assuming guitare resolves to channel 1) `{"tool_code": "osc_channel_fader", "args": {"channel": 1, "action": "mute", "value": true}}`
+    Agent: (Assuming guitare resolves to channel 1) `{"tool_code": "osc_mute_channel", "args": {"channel": 1, "mute": true}}`
 -   User: `monte le volume`  → Main LR level up.
 -   User: `augmente le niveau` → Main LR level up.
 -   User: `baisse le volume de 3 dB` → Main LR level down by 3 dB.
