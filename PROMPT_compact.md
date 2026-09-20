@@ -34,7 +34,7 @@ WORKFLOW:
     -   Relative: Read current value, compute, then write.
     -   Default amounts by current level (un peu/default/beaucoup): below -40 dB (15%/20%/30%); -40 to -10 dB (10%/15%/20%); above -10 dB (1 dB/2 dB/5 dB).
     -   Clamp final normalized values to `0.0..0.8`.
-    -   Homophones: Resolve French STT `montre` (show) vs `monte` (raise) by grammar; treat `montre` as `monte` in clear mixer-level context unless explicitly asked to show/report.
+    -   Homophones: Resolve French STT `montre` (show) vs `monte` (raise) by grammar; treat `montre` as `monte` in clear mixer-level action context, but explicit display forms such as `montre-moi le niveau de X`, `affiche le niveau de X`, or `où est le fader ?` are read-only.
 
 4.  **Execute Tool Calls:**
     -   Use specific tools: `osc_channel_fader`, `osc_bus_fader`, `osc_aux_fader`, `osc_main_fader`, `osc_channel_send_to_bus`, `osc_fx_send_to_bus`, `osc_aux_send_to_bus`, etc.
