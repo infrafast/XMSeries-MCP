@@ -134,6 +134,7 @@ function makeHarness() {
             return "auto-delay-send-mute";
         },
         async listAutomations() {
+            operations.push({ kind: "automation_list" });
             return [{ id: "auto-99", label: "recipe job", status: "running" }];
         },
         async cancelAutomation(id) {
