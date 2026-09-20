@@ -639,7 +639,7 @@ function rewriteSequenceAnaphora(clause: string, previousIntent: Intent | null, 
 }
 
 function parseSequenceIntent(raw: string): Intent | null {
-    const parts = raw.split(/\s+(?:puis|ensuite|then)\s+/iu).map((part) => part.trim()).filter(Boolean);
+    const parts = raw.split(/\s+(?:(?:et\s+)?(?:puis|ensuite)|then)\s+/iu).map((part) => part.trim()).filter(Boolean);
     if (parts.length < 2) return null;
 
     const clauses: Array<{ text: string; waitBeforeSeconds: number }> = [];
