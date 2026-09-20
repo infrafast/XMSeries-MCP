@@ -1,7 +1,7 @@
 {
   "version": 1,
   "locale": "fr-FR",
-  "description": "Canonical functional acceptance recipe for the deterministic Local mixer gateway. Each supported user intent family is represented; corpus/local-commands.fr.json retains broader grammatical permutations.",
+  "description": "Canonical functional acceptance recipe for the deterministic Local mixer gateway. Each supported user intent family is represented, including natural-language lexical and interrogative variants; corpus/local-commands.fr.json retains broader grammatical permutations.",
   "cases": [
     {
       "category": "status",
@@ -1025,6 +1025,96 @@
       "expected": {
         "status": "clarification",
         "effect": "none"
+      }
+    },
+    {
+      "category": "status",
+      "name": "mixer-status-natural-question",
+      "utterance": "quel est le statut du mixeur ?",
+      "expected": {
+        "status": "ready",
+        "effect": "read"
+      }
+    },
+    {
+      "category": "status",
+      "name": "mixer-status-connected-question",
+      "utterance": "est-ce que le mixeur est connecté ?",
+      "expected": {
+        "status": "ready",
+        "effect": "read"
+      }
+    },
+    {
+      "category": "status",
+      "name": "mixer-status-polite-question",
+      "utterance": "peux-tu me dire quel est le status du mixeur ?",
+      "expected": {
+        "status": "ready",
+        "effect": "read"
+      }
+    },
+    {
+      "category": "mute",
+      "name": "channel-mute-coupe",
+      "utterance": "coupe Batterie",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "mute",
+      "name": "channel-unmute-remets",
+      "utterance": "remets Batterie",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "mute",
+      "name": "channel-mute-sourdine",
+      "utterance": "mets en sourdine Batterie",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "mute",
+      "name": "channel-unmute-retire-mute",
+      "utterance": "retire le mute de Batterie",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "channel-remets-explicit-level",
+      "utterance": "remets Batterie à -10 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "channel-relative-augmente",
+      "utterance": "augmente Batterie de 3 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
+      }
+    },
+    {
+      "category": "level",
+      "name": "channel-relative-diminue",
+      "utterance": "diminue Batterie de 3 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write"
       }
     }
   ]
