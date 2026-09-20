@@ -1775,6 +1775,101 @@ async function ready(text) {
     assert.equal(writes.length, 0);
 }
 
+// OR4B13 natural-language status variants converge to the same read intent.
+{
+    const variants = [
+        "quel est le statut du mixeur ?",
+        "quel est l'état du mixeur ?",
+        "est-ce que le mixeur est connecté ?",
+        "le mixeur est-il connecté ?",
+        "donne-moi le statut du mixeur",
+        "comment va le mixeur ?",
+        "peux-tu me dire quel est le status du mixeur ?",
+    ];
+    for (const utterance of variants) {
+        const analyzed = await ready(utterance);
+        assert.equal(analyzed.effect, "read", utterance);
+    }
+}
+
+// OR4B13 safe lexical synonyms converge before structural parsing.
+{
+    muteWrites = [];
+    let analyzed = await ready("coupe Batterie");
+    let result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(muteWrites.at(-1).target.name, "Batterie");
+    assert.equal(muteWrites.at(-1).mute, true);
+
+    analyzed = await ready("remets Batterie");
+    result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(muteWrites.at(-1).target.name, "Batterie");
+    assert.equal(muteWrites.at(-1).mute, false);
+}
+
+// "remets" is contextual: an explicit value means set-level, not unmute.
+{
+    writes = [];
+    muteWrites = [];
+    const analyzed = await ready("remets Batterie à -10 dB");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(writes.length, 1);
+    assert.equal(writes[0].target.name, "Batterie");
+    assert.equal(muteWrites.length, 0);
+}
+
+// Directional synonyms keep absolute/relative semantics in the existing grammar.
+{
+    writes = [];
+    level = 0.5;
+    let analyzed = await ready("augmente Batterie de 3 dB");
+    let result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(writes.at(-1).target.name, "Batterie");
+
+    analyzed = await ready("diminue Batterie de 3 dB");
+    result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(writes.at(-1).target.name, "Batterie");
+}
+
+// Structural mute paraphrases are canonicalized without widening target scope.
+{
+    muteWrites = [];
+    let analyzed = await ready("mets en sourdine Batterie");
+    let result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(muteWrites.at(-1).mute, true);
+
+    analyzed = await ready("retire le mute de Batterie");
+    result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(muteWrites.at(-1).mute, false);
+}
+
 // Default/cloud inventory is unchanged; Local adds only two reserved tools.
 {
     const base = [
