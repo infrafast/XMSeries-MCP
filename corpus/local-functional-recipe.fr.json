@@ -1116,6 +1116,33 @@
         "status": "ready",
         "effect": "write"
       }
+    },
+    {
+      "category": "level",
+      "name": "main-read-natural-volume-question",
+      "utterance": "quel est le volume ?",
+      "expected": {
+        "status": "ready",
+        "effect": "read"
+      }
+    },
+    {
+      "category": "level",
+      "name": "main-read-natural-level-question",
+      "utterance": "quel est le niveau ?",
+      "expected": {
+        "status": "ready",
+        "effect": "read"
+      }
+    },
+    {
+      "category": "level",
+      "name": "main-read-natural-volume-request",
+      "utterance": "donne-moi le volume",
+      "expected": {
+        "status": "ready",
+        "effect": "read"
+      }
     }
   ]
 }
