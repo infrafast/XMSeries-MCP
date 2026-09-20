@@ -1193,7 +1193,7 @@ function parseIntent(raw: string, allowSequence = true): Intent | null {
 
     const sendReadPatterns = [
         /^\s*(?:quel(?:le)?\s+est\s+)?(?:le\s+)?(?:niveau|volume|fader|son)\s+(?:de\s+|du\s+|de la\s+|of\s+)(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s*\??\s*$/iu,
-        /^\s*(?:lis|donne|read|get)\s+(?:le\s+)?(?:niveau|volume|fader|son)\s+(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s*$/iu,
+        /^\s*(?:lis|donne|read|get|affiche|montre(?:-|\s)+moi)\s+(?:le\s+)?(?:niveau|volume|fader|son)\s+(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s*\??\s*$/iu,
     ];
     for (const re of sendReadPatterns) {
         const match = text.match(re);
@@ -1498,7 +1498,8 @@ function parseIntent(raw: string, allowSequence = true): Intent | null {
 
     const readPatterns = [
         /^\s*(?:quel(?:le)?\s+est\s+)?(?:le\s+)?(?:niveau|volume|fader|son)\s+(?:de\s+|du\s+|de la\s+|of\s+)(.+?)\s*\??\s*$/iu,
-        /^\s*(?:lis|donne|read|get)\s+(?:le\s+)?(?:niveau|volume|fader|son)\s+(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s*$/iu,
+        /^\s*(?:lis|donne|read|get|affiche|montre(?:-|\s)+moi)\s+(?:le\s+)?(?:niveau|volume|fader|son)\s+(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s*\??\s*$/iu,
+        /^\s*ou\s+est\s+(?:le\s+)?(?:niveau|volume|fader|son)\s+(?:de\s+|du\s+|de la\s+)?(.+?)\s*\??\s*$/iu,
         /^\s*(.+?)\s+(?:niveau|volume|fader|son)\s*\??\s*$/iu,
     ];
     for (const re of readPatterns) {
