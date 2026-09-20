@@ -1792,6 +1792,27 @@ async function ready(text) {
     }
 }
 
+// Targetless natural level questions read Main LR instead of inventing a target.
+{
+    const variants = [
+        "quel est le volume ?",
+        "quel est le niveau ?",
+        "donne-moi le volume",
+        "c'est quoi le volume ?",
+        "peux-tu me dire quel est le niveau ?",
+    ];
+    for (const utterance of variants) {
+        const analyzed = await ready(utterance);
+        assert.equal(analyzed.effect, "read", utterance);
+        const result = await gateway.execute({
+            protocol: GATEWAY_PROTOCOL,
+            planToken: analyzed.planToken,
+        });
+        assert.equal(result.ok, true, utterance);
+        assert.match(result.responseText, /Main LR/i, utterance);
+    }
+}
+
 // OR4B13 safe lexical synonyms converge before structural parsing.
 {
     muteWrites = [];
