@@ -1294,13 +1294,19 @@
       }
     },
     {
-      "category": "safety",
+      "category": "read",
       "name": "read-display-not-write",
       "utterance": "montre-moi le niveau de Batterie",
       "expected": {
-        "status": "unrecognized",
-        "effect": "none",
-        "noOperations": true
+        "status": "ready",
+        "effect": "read",
+        "operation": {
+          "kind": "read_level",
+          "target": {
+            "name": "Batterie",
+            "family": "channel"
+          }
+        }
       }
     },
     {
@@ -2045,6 +2051,54 @@
             "wait",
             "run"
           ]
+        }
+      }
+    },
+    {
+      "category": "read",
+      "name": "read-display-route",
+      "utterance": "affiche le niveau de Batterie sur Anthony",
+      "expected": {
+        "status": "ready",
+        "effect": "read",
+        "operation": {
+          "kind": "read_send",
+          "source": {
+            "name": "Batterie"
+          },
+          "destination": {
+            "name": "Anthony"
+          }
+        }
+      }
+    },
+    {
+      "category": "read",
+      "name": "main-read-ou-fader",
+      "utterance": "où est le fader ?",
+      "expected": {
+        "status": "ready",
+        "effect": "read",
+        "operation": {
+          "kind": "read_level",
+          "target": {
+            "family": "main"
+          }
+        }
+      }
+    },
+    {
+      "category": "read",
+      "name": "channel-read-ou-fader",
+      "utterance": "où est le fader de Batterie ?",
+      "expected": {
+        "status": "ready",
+        "effect": "read",
+        "operation": {
+          "kind": "read_level",
+          "target": {
+            "name": "Batterie"
+          }
         }
       }
     }
