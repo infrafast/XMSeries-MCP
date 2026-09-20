@@ -280,8 +280,13 @@
       "name": "stt-montre-moi-read-safe",
       "utterance": "montre-moi le niveau de Batterie",
       "expected": {
-        "status": "unrecognized",
-        "effect": "none"
+        "status": "ready",
+        "effect": "read",
+        "operation": {
+          "kind": "read_level",
+          "family": "channel",
+          "name": "Batterie"
+        }
       }
     },
     {
