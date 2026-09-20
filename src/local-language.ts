@@ -81,7 +81,7 @@ function parseFrenchIntegerWords(raw: string): number | null {
 }
 
 function normalizeSpokenFrenchLevels(raw: string): string {
-    let text = raw.replace(/\b(?:d[ée]cibels?|decibels?|ddb)\b/giu, "dB");
+    let text = raw.replace(/\b(?:d[ée]cibels?|decibels?)\b/giu, "dB");
 
     text = text.replace(
         /\b(moins|plus)\s+((?:[\p{L}-]+\s*){1,5})\s+dB\b/giu,
