@@ -67,7 +67,7 @@ export function isMixerStatusUtterance(raw: string): boolean {
     text = text.replace(/\bstatus\b/gu, "statut");
 
     if (
-        /^(?:(?:quel est|donne moi|affiche|montre moi)\s+)?(?:le\s+)?(?:statut|etat)(?:\s+actuel)?\s+(?:du|de)\s+(?:mixeur|mixer)$/u.test(text)
+        /^(?:(?:quel est|donne moi|affiche|montre moi)\s+)?(?:le\s+)?(?:l\s+)?(?:statut|etat)(?:\s+actuel)?\s+(?:du|de)\s+(?:mixeur|mixer)$/u.test(text)
     ) {
         return true;
     }
@@ -91,4 +91,19 @@ export function isMixerStatusUtterance(raw: string): boolean {
     }
 
     return /^(?:comment va|comment se porte)\s+(?:le\s+)?(?:mixeur|mixer)$/u.test(text);
+}
+
+
+export function isMainLevelReadUtterance(raw: string): boolean {
+    let text = simplifyForMatch(raw)
+        .replace(/-/gu, " ")
+        .replace(/\s+/gu, " ")
+        .trim()
+        .replace(/^(?:stp|s il te plait|s il vous plait)\s+/u, "")
+        .replace(/^(?:peux tu|pourrais tu|tu peux)(?: me)?(?: dire)?\s+/u, "");
+
+    return (
+        /^(?:quel est|quelle est|donne moi|affiche|montre moi)\s+(?:le\s+)?(?:niveau|volume|fader|son)(?:\s+(?:general|principal|master))?$/u.test(text) ||
+        /^(?:c est quoi|combien vaut)\s+(?:le\s+)?(?:niveau|volume|fader|son)(?:\s+(?:general|principal|master))?$/u.test(text)
+    );
 }
