@@ -7,7 +7,7 @@ import {
 } from "@infrafast/stage-command-core";
 import { dbToFaderLevel, faderLevelToDb, formatDb } from "./level-table.js";
 import { isLocalGatewayEnabled } from "@infrafast/stage-command-core";
-import { canonicalizeNaturalFrenchCommand, isMixerStatusUtterance } from "./local-language.js";
+import { canonicalizeNaturalFrenchCommand, isMainLevelReadUtterance, isMixerStatusUtterance } from "./local-language.js";
 
 export type LocalMixerTargetFamily =
     | "channel"
@@ -1489,6 +1489,10 @@ function parseIntent(raw: string, allowSequence = true): Intent | null {
                 return { kind: "set_level", targetQuery, unit, value };
             }
         }
+    }
+
+    if (isMainLevelReadUtterance(text)) {
+        return { kind: "read_level", targetQuery: "main" };
     }
 
     const readPatterns = [
