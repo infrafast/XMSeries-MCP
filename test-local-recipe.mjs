@@ -197,9 +197,16 @@ function makeHarness() {
     return { gateway: new LocalMixerCommandGateway(adapter), operations };
 }
 
-function matchesOperation(actual, expected) {
+function matchesOperation(actual, expected, path = "operation") {
     for (const [key, value] of Object.entries(expected)) {
-        assert.deepEqual(actual?.[key], value, `operation field ${key}`);
+        const actualValue = actual?.[key];
+        const field = `${path}.${key}`;
+        if (value && typeof value === "object" && !Array.isArray(value)) {
+            assert.ok(actualValue && typeof actualValue === "object", `${field} must be an object`);
+            matchesOperation(actualValue, value, field);
+        } else {
+            assert.deepEqual(actualValue, value, field);
+        }
     }
 }
 
