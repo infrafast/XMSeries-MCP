@@ -2152,6 +2152,24 @@
           }
         }
       }
+    },
+    {
+      "category": "stt",
+      "name": "stt-whisper-wrapped-french-quotes-send",
+      "utterance": "« mets Batterie sur Anthony à moins dix dB ».",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "write_send",
+          "source": {
+            "name": "Batterie"
+          },
+          "destination": {
+            "name": "Anthony"
+          }
+        }
+      }
     }
   ]
 }
