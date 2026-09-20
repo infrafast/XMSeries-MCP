@@ -67,7 +67,7 @@ export function isMixerStatusUtterance(raw: string): boolean {
     text = text.replace(/\bstatus\b/gu, "statut");
 
     if (
-        /^(?:(?:quel est|donne moi|affiche|montre moi)\s+)?(?:le\s+)?(?:l\s+)?(?:statut|etat)(?:\s+actuel)?\s+(?:du|de)\s+(?:mixeur|mixer)$/u.test(text)
+        /^(?:(?:quel est|quelle est|donne moi|affiche|montre moi)\s+)?(?:le\s+|la\s+|l\s+)?(?:statut|etat|version|firmware|modele)(?:\s+actuel)?\s+(?:du|de)\s+(?:mixeur|mixer)$/u.test(text)
     ) {
         return true;
     }
@@ -87,6 +87,10 @@ export function isMixerStatusUtterance(raw: string): boolean {
     if (
         /^(?:le\s+)?(?:mixeur|mixer)\s+est il\s+(?:connecte|en ligne|online|operationnel)$/u.test(text)
     ) {
+        return true;
+    }
+
+    if (/^(?:quel|quelle)\s+(?:mixeur|mixer)\s+est\s+(?:connecte|en ligne)$/u.test(text)) {
         return true;
     }
 
