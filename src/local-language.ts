@@ -108,7 +108,7 @@ export function isMainLevelReadUtterance(raw: string): boolean {
 
     return (
         /^(?:quel est|quelle est|donne moi|affiche|montre moi)\s+(?:le\s+)?(?:niveau|volume|fader|son)(?:\s+(?:general|principal|master))?$/u.test(text) ||
-        /^(?:c est quoi|combien vaut)\s+(?:le\s+)?(?:niveau|volume|fader|son)(?:\s+(?:general|principal|master))?$/u.test(text)
+        /^(?:c est quoi|combien vaut|ou est)\s+(?:le\s+)?(?:niveau|volume|fader|son)(?:\s+(?:general|principal|master))?$/u.test(text)
     );
 }
 
