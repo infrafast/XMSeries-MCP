@@ -37,7 +37,13 @@
       "utterance": "état du mute de Batterie",
       "expected": {
         "status": "ready",
-        "effect": "read"
+        "effect": "read",
+        "operation": {
+          "kind": "read_mute",
+          "target": {
+            "name": "Batterie"
+          }
+        }
       }
     },
     {
@@ -46,7 +52,13 @@
       "utterance": "Hall FX est-il actif ?",
       "expected": {
         "status": "ready",
-        "effect": "read"
+        "effect": "read",
+        "operation": {
+          "kind": "read_fx",
+          "target": {
+            "name": "Hall FX"
+          }
+        }
       }
     },
     {
@@ -55,7 +67,11 @@
       "utterance": "quel est le nom de la voie 6 ?",
       "expected": {
         "status": "ready",
-        "effect": "read"
+        "effect": "read",
+        "operation": {
+          "kind": "read_channel_name",
+          "channel": 6
+        }
       }
     },
     {
@@ -64,7 +80,14 @@
       "utterance": "monte le volume",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "qualitative",
+          "target": {
+            "family": "main"
+          },
+          "direction": "up"
+        }
       }
     },
     {
@@ -73,7 +96,13 @@
       "utterance": "mets le son à -10 dB",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "target": {
+            "family": "main"
+          }
+        }
       }
     },
     {
@@ -98,7 +127,13 @@
       "utterance": "mets Batterie à 50%",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "target": {
+            "name": "Batterie"
+          }
+        }
       }
     },
     {
@@ -107,7 +142,13 @@
       "utterance": "mets Batterie au niveau 0.75",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "target": {
+            "name": "Batterie"
+          }
+        }
       }
     },
     {
@@ -116,7 +157,13 @@
       "utterance": "monte Batterie de 3 dB",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "target": {
+            "name": "Batterie"
+          }
+        }
       }
     },
     {
@@ -125,7 +172,13 @@
       "utterance": "baisse Batterie de 10%",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "target": {
+            "name": "Batterie"
+          }
+        }
       }
     },
     {
@@ -134,7 +187,14 @@
       "utterance": "baisse un peu Batterie",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "qualitative",
+          "target": {
+            "name": "Batterie"
+          },
+          "direction": "down"
+        }
       }
     },
     {
@@ -143,7 +203,14 @@
       "utterance": "niveau de Anthony",
       "expected": {
         "status": "ready",
-        "effect": "read"
+        "effect": "read",
+        "operation": {
+          "kind": "read_level",
+          "target": {
+            "name": "Anthony",
+            "family": "bus"
+          }
+        }
       }
     },
     {
@@ -152,7 +219,14 @@
       "utterance": "mets Anthony à -8 dB",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "target": {
+            "name": "Anthony",
+            "family": "bus"
+          }
+        }
       }
     },
     {
@@ -161,7 +235,15 @@
       "utterance": "mute Anthony",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "mute",
+          "target": {
+            "name": "Anthony",
+            "family": "bus"
+          },
+          "mute": true
+        }
       }
     },
     {
@@ -170,7 +252,14 @@
       "utterance": "niveau de Hall FX",
       "expected": {
         "status": "ready",
-        "effect": "read"
+        "effect": "read",
+        "operation": {
+          "kind": "read_level",
+          "target": {
+            "name": "Hall FX",
+            "family": "fxreturn"
+          }
+        }
       }
     },
     {
@@ -179,7 +268,14 @@
       "utterance": "mets Hall FX à -10 dB",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "target": {
+            "name": "Hall FX",
+            "family": "fxreturn"
+          }
+        }
       }
     },
     {
@@ -188,7 +284,15 @@
       "utterance": "mute Hall FX",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "mute",
+          "target": {
+            "name": "Hall FX",
+            "family": "fxreturn"
+          },
+          "mute": true
+        }
       }
     },
     {
@@ -197,7 +301,14 @@
       "utterance": "niveau de Playback",
       "expected": {
         "status": "ready",
-        "effect": "read"
+        "effect": "read",
+        "operation": {
+          "kind": "read_level",
+          "target": {
+            "name": "Playback",
+            "family": "aux"
+          }
+        }
       }
     },
     {
@@ -206,7 +317,14 @@
       "utterance": "mets Playback à -12 dB",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "target": {
+            "name": "Playback",
+            "family": "aux"
+          }
+        }
       }
     },
     {
@@ -215,7 +333,15 @@
       "utterance": "mute Playback",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "mute",
+          "target": {
+            "name": "Playback",
+            "family": "aux"
+          },
+          "mute": true
+        }
       }
     },
     {
@@ -224,7 +350,13 @@
       "utterance": "niveau de façade",
       "expected": {
         "status": "ready",
-        "effect": "read"
+        "effect": "read",
+        "operation": {
+          "kind": "read_level",
+          "target": {
+            "family": "main"
+          }
+        }
       }
     },
     {
@@ -233,7 +365,14 @@
       "utterance": "mute le main LR",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "mute",
+          "target": {
+            "family": "main"
+          },
+          "mute": true
+        }
       }
     },
     {
@@ -242,7 +381,14 @@
       "utterance": "rallume la façade",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "mute",
+          "target": {
+            "family": "main"
+          },
+          "mute": false
+        }
       }
     },
     {
@@ -251,7 +397,14 @@
       "utterance": "niveau de Band",
       "expected": {
         "status": "ready",
-        "effect": "read"
+        "effect": "read",
+        "operation": {
+          "kind": "read_level",
+          "target": {
+            "name": "Band",
+            "family": "dca"
+          }
+        }
       }
     },
     {
@@ -260,7 +413,14 @@
       "utterance": "niveau de Matrix Vox",
       "expected": {
         "status": "ready",
-        "effect": "read"
+        "effect": "read",
+        "operation": {
+          "kind": "read_level",
+          "target": {
+            "name": "Matrix Vox",
+            "family": "matrix"
+          }
+        }
       },
       "liveNote": "X32/M32 only; OSCXR must return unsupported at execution."
     },
@@ -270,7 +430,14 @@
       "utterance": "mets Band à -6 dB",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "target": {
+            "name": "Band",
+            "family": "dca"
+          }
+        }
       }
     },
     {
@@ -279,7 +446,15 @@
       "utterance": "mute Band",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "mute",
+          "target": {
+            "name": "Band",
+            "family": "dca"
+          },
+          "mute": true
+        }
       }
     },
     {
@@ -288,7 +463,14 @@
       "utterance": "mets Matrix Vox à -12 dB",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "target": {
+            "name": "Matrix Vox",
+            "family": "matrix"
+          }
+        }
       },
       "liveNote": "X32/M32 only; OSCXR must return unsupported at execution."
     },
@@ -298,7 +480,15 @@
       "utterance": "mute Matrix Vox",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "mute",
+          "target": {
+            "name": "Matrix Vox",
+            "family": "matrix"
+          },
+          "mute": true
+        }
       },
       "liveNote": "X32/M32 only; OSCXR must return unsupported at execution."
     },
@@ -355,7 +545,11 @@
       "utterance": "mute toutes les voies",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "all_channels",
+          "mute": true
+        }
       }
     },
     {
@@ -390,7 +584,11 @@
       "utterance": "coupe tous les bus",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "all_buses",
+          "mute": true
+        }
       }
     },
     {
@@ -448,7 +646,16 @@
       "utterance": "mets Batterie sur Anthony au niveau 0.5",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "write_send",
+          "source": {
+            "name": "Batterie"
+          },
+          "destination": {
+            "name": "Anthony"
+          }
+        }
       }
     },
     {
@@ -457,7 +664,16 @@
       "utterance": "monte Batterie sur Anthony de 3 dB",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "write_send",
+          "source": {
+            "name": "Batterie"
+          },
+          "destination": {
+            "name": "Anthony"
+          }
+        }
       }
     },
     {
@@ -466,7 +682,17 @@
       "utterance": "baisse un peu Batterie dans Anthony",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "qualitative_send",
+          "source": {
+            "name": "Batterie"
+          },
+          "destination": {
+            "name": "Anthony"
+          },
+          "direction": "down"
+        }
       }
     },
     {
@@ -475,7 +701,16 @@
       "utterance": "mets Hall FX sur Anthony à -18 dB",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "write_send",
+          "source": {
+            "name": "Hall FX"
+          },
+          "destination": {
+            "name": "Anthony"
+          }
+        }
       }
     },
     {
@@ -484,7 +719,16 @@
       "utterance": "mets Playback sur Anthony à -20 dB",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "write_send",
+          "source": {
+            "name": "Playback"
+          },
+          "destination": {
+            "name": "Anthony"
+          }
+        }
       }
     },
     {
@@ -493,7 +737,17 @@
       "utterance": "mute Batterie sur Anthony",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "send_mute",
+          "source": {
+            "name": "Batterie"
+          },
+          "destination": {
+            "name": "Anthony"
+          },
+          "mute": true
+        }
       },
       "liveNote": "X32/M32: route mute. OSCXR: expected explicit unsupported; must never widen to whole-channel mute."
     },
@@ -503,7 +757,17 @@
       "utterance": "coupe Hall FX sur Anthony",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "send_mute",
+          "source": {
+            "name": "Hall FX"
+          },
+          "destination": {
+            "name": "Anthony"
+          },
+          "mute": true
+        }
       },
       "liveNote": "OSCXR expected unsupported for bus-specific source mute."
     },
@@ -513,7 +777,17 @@
       "utterance": "réactive Playback dans Anthony",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "send_mute",
+          "source": {
+            "name": "Playback"
+          },
+          "destination": {
+            "name": "Anthony"
+          },
+          "mute": false
+        }
       },
       "liveNote": "OSCXR expected unsupported for bus-specific source mute."
     },
@@ -573,7 +847,14 @@
       "utterance": "mets Batterie sur sortie aux 2 à 50%",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "aux_output",
+          "source": {
+            "name": "Batterie"
+          },
+          "aux": 2
+        }
       },
       "liveNote": "X32/M32 only; OSCXR expected unsupported."
     },
@@ -583,7 +864,14 @@
       "utterance": "mets Batterie sur sortie aux 2 au niveau 0.5",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "aux_output",
+          "source": {
+            "name": "Batterie"
+          },
+          "aux": 2
+        }
       },
       "liveNote": "X32/M32 only; OSCXR expected unsupported."
     },
@@ -609,7 +897,14 @@
       "utterance": "monte progressivement Batterie de 3 dB en 2 secondes",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "ramp",
+          "target": {
+            "name": "Batterie"
+          },
+          "durationSeconds": 2
+        }
       }
     },
     {
@@ -618,7 +913,14 @@
       "utterance": "baisse un peu progressivement Batterie en 2 secondes",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "ramp",
+          "target": {
+            "name": "Batterie"
+          },
+          "durationSeconds": 2
+        }
       }
     },
     {
@@ -627,7 +929,14 @@
       "utterance": "monte progressivement Batterie au niveau 0.8 en 2 secondes",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "ramp",
+          "target": {
+            "name": "Batterie"
+          },
+          "durationSeconds": 2
+        }
       }
     },
     {
@@ -655,7 +964,14 @@
       "utterance": "fade out Batterie en 5 secondes",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "ramp",
+          "target": {
+            "name": "Batterie"
+          },
+          "durationSeconds": 5
+        }
       }
     },
     {
@@ -664,7 +980,14 @@
       "utterance": "fade in en 5 secondes",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "ramp",
+          "target": {
+            "family": "main"
+          },
+          "durationSeconds": 5
+        }
       }
     },
     {
@@ -673,7 +996,14 @@
       "utterance": "fade Batterie de -40 dB à -10 dB en 5 secondes",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "ramp",
+          "target": {
+            "name": "Batterie"
+          },
+          "durationSeconds": 5
+        }
       }
     },
     {
@@ -682,7 +1012,14 @@
       "utterance": "mets Batterie à -27 dB dans 2 secondes",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "delay_level",
+          "target": {
+            "name": "Batterie"
+          },
+          "delaySeconds": 2
+        }
       }
     },
     {
@@ -691,7 +1028,15 @@
       "utterance": "dans 3 secondes rallume Batterie",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "delay_mute",
+          "target": {
+            "name": "Batterie"
+          },
+          "mute": false,
+          "delaySeconds": 3
+        }
       }
     },
     {
@@ -700,7 +1045,18 @@
       "utterance": "mute Batterie sur Anthony dans 5 secondes",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "delay_send_mute",
+          "source": {
+            "name": "Batterie"
+          },
+          "destination": {
+            "name": "Anthony"
+          },
+          "mute": true,
+          "delaySeconds": 5
+        }
       },
       "liveNote": "OSCXR planning is valid but execution must report route-mute unsupported safely."
     },
@@ -727,7 +1083,15 @@
       "utterance": "dans 5 secondes, fais un fade out de Voix",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "delayed_ramp",
+          "target": {
+            "name": "Voix"
+          },
+          "durationSeconds": 5,
+          "delaySeconds": 5
+        }
       }
     },
     {
@@ -736,7 +1100,10 @@
       "utterance": "statut des automations",
       "expected": {
         "status": "ready",
-        "effect": "read"
+        "effect": "read",
+        "operation": {
+          "kind": "automation_list"
+        }
       }
     },
     {
@@ -758,7 +1125,11 @@
       "utterance": "annule la dernière automation",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "cancel",
+          "id": "auto-99"
+        }
       }
     },
     {
@@ -803,7 +1174,15 @@
       "utterance": "mets Batterie à -20 dB puis monte progressivement Batterie de 3 dB en 2 secondes",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "sequence",
+          "count": 2,
+          "actionTypes": [
+            "run",
+            "ramp"
+          ]
+        }
       }
     },
     {
@@ -819,7 +1198,14 @@
       },
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "target": {
+            "name": "Anthony",
+            "family": "bus"
+          }
+        }
       }
     },
     {
@@ -835,7 +1221,14 @@
       },
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "target": {
+            "name": "Batterie",
+            "family": "channel"
+          }
+        }
       }
     },
     {
@@ -851,7 +1244,16 @@
       },
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "write_send",
+          "source": {
+            "name": "Batterie"
+          },
+          "destination": {
+            "name": "Anthony"
+          }
+        }
       }
     },
     {
@@ -918,7 +1320,13 @@
       "utterance": "baisse Voix",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "qualitative",
+          "target": {
+            "name": "Voix"
+          }
+        }
       }
     },
     {
@@ -928,7 +1336,13 @@
       "utterance": "remonte-la",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "qualitative",
+          "target": {
+            "name": "Voix"
+          }
+        }
       }
     },
     {
@@ -938,7 +1352,16 @@
       "utterance": "mets Batterie sur Anthony à -12 dB",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "write_send",
+          "source": {
+            "name": "Batterie"
+          },
+          "destination": {
+            "name": "Anthony"
+          }
+        }
       }
     },
     {
@@ -948,7 +1371,16 @@
       "utterance": "mets Voix sur le même retour à -8 dB",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "write_send",
+          "source": {
+            "name": "Voix"
+          },
+          "destination": {
+            "name": "Anthony"
+          }
+        }
       }
     },
     {
@@ -957,7 +1389,13 @@
       "utterance": "donne le niveau de Batterie",
       "expected": {
         "status": "ready",
-        "effect": "read"
+        "effect": "read",
+        "operation": {
+          "kind": "read_level",
+          "target": {
+            "name": "Batterie"
+          }
+        }
       }
     },
     {
@@ -966,7 +1404,14 @@
       "utterance": "éteins Batterie",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "mute",
+          "target": {
+            "name": "Batterie"
+          },
+          "mute": true
+        }
       }
     },
     {
@@ -975,7 +1420,14 @@
       "utterance": "unmute Batterie",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "mute",
+          "target": {
+            "name": "Batterie"
+          },
+          "mute": false
+        }
       }
     },
     {
@@ -984,7 +1436,14 @@
       "utterance": "monte un peu le niveau de Batterie",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "qualitative",
+          "target": {
+            "name": "Batterie"
+          },
+          "direction": "up"
+        }
       }
     },
     {
@@ -993,7 +1452,14 @@
       "utterance": "un peu plus fort Batterie",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "qualitative",
+          "target": {
+            "name": "Batterie"
+          },
+          "direction": "up"
+        }
       }
     },
     {
@@ -1002,7 +1468,14 @@
       "utterance": "Batterie moins fort",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "qualitative",
+          "target": {
+            "name": "Batterie"
+          },
+          "direction": "down"
+        }
       }
     },
     {
@@ -1011,7 +1484,13 @@
       "utterance": "monte le volume de 100%",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "target": {
+            "family": "main"
+          }
+        }
       }
     },
     {
@@ -1020,7 +1499,15 @@
       "utterance": "monte Anthony",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "qualitative",
+          "target": {
+            "name": "Anthony",
+            "family": "bus"
+          },
+          "direction": "up"
+        }
       }
     },
     {
@@ -1029,7 +1516,13 @@
       "utterance": "mets Batterie sur -5 dB",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "target": {
+            "name": "Batterie"
+          }
+        }
       }
     },
     {
@@ -1038,7 +1531,15 @@
       "utterance": "fais un fade-out de Claude en 10 secondes",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "ramp",
+          "target": {
+            "name": "Claude",
+            "family": "bus"
+          },
+          "durationSeconds": 10
+        }
       }
     },
     {
@@ -1047,7 +1548,15 @@
       "utterance": "fade in guitare de anto de -90 dB à -10 dB en 30 secondes",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "ramp",
+          "target": {
+            "name": "guitar-anto",
+            "family": "channel"
+          },
+          "durationSeconds": 30
+        }
       }
     },
     {
@@ -1056,7 +1565,14 @@
       "utterance": "mets la façade à 0 dB dans 5 secondes",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "delay_level",
+          "target": {
+            "family": "main"
+          },
+          "delaySeconds": 5
+        }
       }
     },
     {
@@ -1065,7 +1581,14 @@
       "utterance": "dans 5 secondes fais un fade out de la façade",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "delayed_ramp",
+          "target": {
+            "family": "main"
+          },
+          "delaySeconds": 5
+        }
       }
     },
     {
@@ -1074,7 +1597,14 @@
       "utterance": "en 2 secondes baisse progressivement Batterie à -30 dB",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "ramp",
+          "target": {
+            "name": "Batterie"
+          },
+          "durationSeconds": 2
+        }
       }
     },
     {
@@ -1083,7 +1613,14 @@
       "utterance": "baisse progressivement en 2 secondes Batterie à -30 dB",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "ramp",
+          "target": {
+            "name": "Batterie"
+          },
+          "durationSeconds": 2
+        }
       }
     },
     {
@@ -1092,7 +1629,15 @@
       "utterance": "baisse progressivement Batterie à -30 dB en 2 secondes dans 3 secondes",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "delayed_ramp",
+          "target": {
+            "name": "Batterie"
+          },
+          "durationSeconds": 2,
+          "delaySeconds": 3
+        }
       }
     },
     {
@@ -1101,7 +1646,16 @@
       "utterance": "mute Batterie ensuite dans 2 secondes rallume Batterie",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "sequence",
+          "count": 3,
+          "actionTypes": [
+            "run",
+            "wait",
+            "run"
+          ]
+        }
       }
     },
     {
@@ -1128,7 +1682,15 @@
       "utterance": "baisse Batterie puis mute la même cible",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "sequence",
+          "count": 2,
+          "actionTypes": [
+            "run",
+            "run"
+          ]
+        }
       }
     },
     {
@@ -1137,7 +1699,15 @@
       "utterance": "mets Batterie sur Anthony à -12 dB puis mets Voix sur le même retour à -8 dB",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "sequence",
+          "count": 2,
+          "actionTypes": [
+            "run",
+            "run"
+          ]
+        }
       }
     },
     {
@@ -1147,7 +1717,13 @@
       "utterance": "baisse Voix",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "qualitative",
+          "target": {
+            "name": "Voix"
+          }
+        }
       }
     },
     {
@@ -1157,7 +1733,13 @@
       "utterance": "monte le volume",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "qualitative",
+          "target": {
+            "family": "main"
+          }
+        }
       }
     },
     {
@@ -1186,7 +1768,10 @@
       "utterance": "quel est le statut du mixeur ?",
       "expected": {
         "status": "ready",
-        "effect": "read"
+        "effect": "read",
+        "operation": {
+          "kind": "status"
+        }
       }
     },
     {
@@ -1195,7 +1780,10 @@
       "utterance": "est-ce que le mixeur est connecté ?",
       "expected": {
         "status": "ready",
-        "effect": "read"
+        "effect": "read",
+        "operation": {
+          "kind": "status"
+        }
       }
     },
     {
@@ -1204,7 +1792,10 @@
       "utterance": "peux-tu me dire quel est le status du mixeur ?",
       "expected": {
         "status": "ready",
-        "effect": "read"
+        "effect": "read",
+        "operation": {
+          "kind": "status"
+        }
       }
     },
     {
@@ -1213,7 +1804,14 @@
       "utterance": "coupe Batterie",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "mute",
+          "target": {
+            "name": "Batterie"
+          },
+          "mute": true
+        }
       }
     },
     {
@@ -1222,7 +1820,14 @@
       "utterance": "remets Batterie",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "mute",
+          "target": {
+            "name": "Batterie"
+          },
+          "mute": false
+        }
       }
     },
     {
@@ -1231,7 +1836,14 @@
       "utterance": "mets en sourdine Batterie",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "mute",
+          "target": {
+            "name": "Batterie"
+          },
+          "mute": true
+        }
       }
     },
     {
@@ -1240,7 +1852,14 @@
       "utterance": "retire le mute de Batterie",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "mute",
+          "target": {
+            "name": "Batterie"
+          },
+          "mute": false
+        }
       }
     },
     {
@@ -1249,7 +1868,13 @@
       "utterance": "remets Batterie à -10 dB",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "target": {
+            "name": "Batterie"
+          }
+        }
       }
     },
     {
@@ -1258,7 +1883,13 @@
       "utterance": "augmente Batterie de 3 dB",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "target": {
+            "name": "Batterie"
+          }
+        }
       }
     },
     {
@@ -1267,7 +1898,13 @@
       "utterance": "diminue Batterie de 3 dB",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "target": {
+            "name": "Batterie"
+          }
+        }
       }
     },
     {
@@ -1276,7 +1913,13 @@
       "utterance": "quel est le volume ?",
       "expected": {
         "status": "ready",
-        "effect": "read"
+        "effect": "read",
+        "operation": {
+          "kind": "read_level",
+          "target": {
+            "family": "main"
+          }
+        }
       }
     },
     {
@@ -1285,7 +1928,13 @@
       "utterance": "quel est le niveau ?",
       "expected": {
         "status": "ready",
-        "effect": "read"
+        "effect": "read",
+        "operation": {
+          "kind": "read_level",
+          "target": {
+            "family": "main"
+          }
+        }
       }
     },
     {
@@ -1294,7 +1943,13 @@
       "utterance": "donne-moi le volume",
       "expected": {
         "status": "ready",
-        "effect": "read"
+        "effect": "read",
+        "operation": {
+          "kind": "read_level",
+          "target": {
+            "family": "main"
+          }
+        }
       }
     },
     {
@@ -1339,7 +1994,10 @@
       "utterance": "quelles sont les automations en cours ?",
       "expected": {
         "status": "ready",
-        "effect": "read"
+        "effect": "read",
+        "operation": {
+          "kind": "automation_list"
+        }
       }
     },
     {
@@ -1348,7 +2006,10 @@
       "utterance": "montre-moi les automations actives",
       "expected": {
         "status": "ready",
-        "effect": "read"
+        "effect": "read",
+        "operation": {
+          "kind": "automation_list"
+        }
       }
     },
     {
