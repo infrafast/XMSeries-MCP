@@ -9,7 +9,10 @@
       "utterance": "statut mixeur",
       "expected": {
         "status": "ready",
-        "effect": "read"
+        "effect": "read",
+        "operation": {
+          "kind": "status"
+        }
       }
     },
     {
@@ -18,7 +21,14 @@
       "utterance": "niveau de Batterie",
       "expected": {
         "status": "ready",
-        "effect": "read"
+        "effect": "read",
+        "operation": {
+          "kind": "read_level",
+          "target": {
+            "name": "Batterie",
+            "family": "channel"
+          }
+        }
       }
     },
     {
@@ -72,7 +82,14 @@
       "utterance": "mets Batterie à -30 dB",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "target": {
+            "name": "Batterie",
+            "family": "channel"
+          }
+        }
       }
     },
     {
@@ -291,7 +308,15 @@
       "utterance": "mute Batterie",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "mute",
+          "target": {
+            "name": "Batterie",
+            "family": "channel"
+          },
+          "mute": true
+        }
       }
     },
     {
@@ -300,7 +325,15 @@
       "utterance": "rallume Batterie",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "mute",
+          "target": {
+            "name": "Batterie",
+            "family": "channel"
+          },
+          "mute": false
+        }
       }
     },
     {
@@ -309,7 +342,11 @@
       "utterance": "mute les voies Voix et Batterie",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "bulk_channels",
+          "mute": true
+        }
       }
     },
     {
@@ -327,7 +364,11 @@
       "utterance": "mute toutes les voies sauf Voix",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "all_channels",
+          "mute": true
+        }
       }
     },
     {
@@ -336,7 +377,11 @@
       "utterance": "mute les bus Anthony et Laurent",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "bulk_buses",
+          "mute": true
+        }
       }
     },
     {
@@ -354,7 +399,11 @@
       "utterance": "coupe tous les bus sauf Anthony",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "all_buses",
+          "mute": true
+        }
       }
     },
     {
@@ -363,7 +412,16 @@
       "utterance": "niveau de Batterie sur Anthony",
       "expected": {
         "status": "ready",
-        "effect": "read"
+        "effect": "read",
+        "operation": {
+          "kind": "read_send",
+          "source": {
+            "name": "Batterie"
+          },
+          "destination": {
+            "name": "Anthony"
+          }
+        }
       }
     },
     {
@@ -372,7 +430,16 @@
       "utterance": "mets Batterie sur Anthony à -20 dB",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "write_send",
+          "source": {
+            "name": "Batterie"
+          },
+          "destination": {
+            "name": "Anthony"
+          }
+        }
       }
     },
     {
@@ -456,7 +523,16 @@
       "utterance": "mets la guitare de anto sur Claude à -5 dB",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "write_send",
+          "source": {
+            "name": "guitar-anto"
+          },
+          "destination": {
+            "name": "Claude"
+          }
+        }
       }
     },
     {
@@ -465,7 +541,14 @@
       "utterance": "mets Batterie à -20 dB sur les bus Anthony et Laurent",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "bulk_send",
+          "source": {
+            "name": "Batterie"
+          },
+          "includeMain": false
+        }
       }
     },
     {
@@ -474,7 +557,14 @@
       "utterance": "mets Batterie à -25 dB sur tous les bus et façade",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "all_send",
+          "source": {
+            "name": "Batterie"
+          },
+          "includeMain": true
+        }
       }
     },
     {
@@ -503,7 +593,14 @@
       "utterance": "baisse progressivement Batterie à -30 dB en 2 secondes",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "ramp",
+          "target": {
+            "name": "Batterie"
+          },
+          "durationSeconds": 2
+        }
       }
     },
     {
@@ -539,7 +636,17 @@
       "utterance": "en 3 secondes monte progressivement Batterie sur Anthony à -10 dB",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "send_ramp",
+          "source": {
+            "name": "Batterie"
+          },
+          "destination": {
+            "name": "Anthony"
+          },
+          "durationSeconds": 3
+        }
       }
     },
     {
@@ -603,7 +710,15 @@
       "utterance": "dans 3 secondes baisse progressivement Batterie à -30 dB en 2 secondes",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "delayed_ramp",
+          "target": {
+            "name": "Batterie"
+          },
+          "durationSeconds": 2,
+          "delaySeconds": 3
+        }
       }
     },
     {
@@ -630,7 +745,11 @@
       "utterance": "annule l'automation auto-3",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "cancel",
+          "id": "auto-3"
+        }
       }
     },
     {
@@ -648,7 +767,16 @@
       "utterance": "baisse la façade puis remonte-la après 5 secondes",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "sequence",
+          "count": 3,
+          "actionTypes": [
+            "run",
+            "wait",
+            "run"
+          ]
+        }
       }
     },
     {
@@ -657,7 +785,16 @@
       "utterance": "mute Batterie puis dans 2 secondes unmute Batterie",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "sequence",
+          "count": 3,
+          "actionTypes": [
+            "run",
+            "wait",
+            "run"
+          ]
+        }
       }
     },
     {
@@ -730,7 +867,8 @@
       },
       "expected": {
         "status": "clarification",
-        "effect": "none"
+        "effect": "none",
+        "noOperations": true
       }
     },
     {
@@ -739,7 +877,8 @@
       "utterance": "mute Introuvable",
       "expected": {
         "status": "clarification",
-        "effect": "none"
+        "effect": "none",
+        "noOperations": true
       }
     },
     {
@@ -748,7 +887,8 @@
       "utterance": "mute tom",
       "expected": {
         "status": "clarification",
-        "effect": "none"
+        "effect": "none",
+        "noOperations": true
       }
     },
     {
@@ -757,7 +897,8 @@
       "utterance": "montre-moi le niveau de Batterie",
       "expected": {
         "status": "unrecognized",
-        "effect": "none"
+        "effect": "none",
+        "noOperations": true
       }
     },
     {
@@ -766,7 +907,8 @@
       "utterance": "mute Batterie puis mute Introuvable",
       "expected": {
         "status": "clarification",
-        "effect": "none"
+        "effect": "none",
+        "noOperations": true
       }
     },
     {
@@ -968,7 +1110,16 @@
       "utterance": "mets Batterie à -20 dB puis baisse progressivement Batterie à -30 dB en 2 secondes puis mute Batterie",
       "expected": {
         "status": "ready",
-        "effect": "write"
+        "effect": "write",
+        "operation": {
+          "kind": "sequence",
+          "count": 3,
+          "actionTypes": [
+            "run",
+            "ramp",
+            "run"
+          ]
+        }
       }
     },
     {
@@ -1015,7 +1166,8 @@
       "utterance": "mute Guitr",
       "expected": {
         "status": "clarification",
-        "effect": "none"
+        "effect": "none",
+        "noOperations": true
       }
     },
     {
@@ -1024,7 +1176,8 @@
       "utterance": "mute Batterie puis mute tom",
       "expected": {
         "status": "clarification",
-        "effect": "none"
+        "effect": "none",
+        "noOperations": true
       }
     },
     {
