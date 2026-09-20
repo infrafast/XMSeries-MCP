@@ -120,6 +120,7 @@ export function canonicalizeNaturalFrenchCommand(raw: string): string {
     let text = raw.trim();
     if (!text) return text;
 
+    text = text.replace(/^[\s«»“”„‟"‹›]+/u, "").replace(/[\s«»“”„‟"‹›]+$/u, "").trim();
     text = normalizeSpokenFrenchLevels(text);
     text = normalizeLikelyFrenchSttSetVerb(text);
 
@@ -139,7 +140,7 @@ export function canonicalizeNaturalFrenchCommand(raw: string): string {
         .replace(/^\s*retire\s+(?:le\s+)?mute\s+(?:de\s+|du\s+|de la\s+)?/iu, "unmute ")
         .replace(/^\s*enleve\s+(?:le\s+)?mute\s+(?:de\s+|du\s+|de la\s+)?/iu, "unmute ");
 
-    return text.replace(/\s+/gu, " ").trim().replace(/[.!?]+$/u, "").trim();
+    return text.replace(/\s+/gu, " ").trim().replace(/[.!?]+$/u, "").trim().replace(/^[\s«»“”„‟"‹›]+/u, "").replace(/[\s«»“”„‟"‹›]+$/u, "").trim();
 }
 
 export function isMixerStatusUtterance(raw: string): boolean {
