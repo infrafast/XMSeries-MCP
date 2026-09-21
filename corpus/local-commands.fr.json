@@ -1133,7 +1133,7 @@
     },
     {
       "name": "fx-engine-disable-explicit",
-      "utterance": "désactive l'effet Hall FX FX",
+      "utterance": "désactive l'effet Hall FX",
       "expected": {
         "status": "ready",
         "effect": "write",
