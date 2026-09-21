@@ -54,5 +54,6 @@ for (const [utterance, expected] of cases) {
 
 assert.equal(parseDeterministicMixerIntent("mute les bus Anthony et Laurent"), null);
 assert.equal(parseDeterministicMixerIntent("mets Batterie à -20 dB sur les bus Anthony et Laurent"), null);
+assert.equal(parseDeterministicMixerIntent("set Voix to aux output 3 to -12 dB"), null);
 
 console.log("native deterministic intent parser tests: OK");
