@@ -14,7 +14,7 @@ import {
     ReadResourceRequestSchema,
     Tool,
 } from "@modelcontextprotocol/sdk/types.js";
-import { AutomationAction, AutomationCurve, AutomationEngine, AutomationRampAction } from "./automation.js";
+import { AutomationAction, AutomationCurve, AutomationEngine, AutomationRampAction, verifyAutomationReadback } from "./automation.js";
 import { coerceOscArg, MixerDisconnectedError, OSCClient, OSCProtocol, parseOscCountEnv } from "./osc-client.js";
 import { dbToFaderLevel, faderLevelToDb, formatDb } from "./level-table.js";
 import { isLocalGatewayEnabled } from "@infrafast/stage-command-core";
@@ -1488,10 +1488,12 @@ function delayedStructuredLevelAction(input: AutomationDelayedCommandInput): Aut
             await osc.assertMixerOnline();
             const expected = typeof ramp.to === "function" ? await ramp.to() : ramp.to;
             await ramp.write(expected);
-            const actual = await ramp.read();
-            if (Math.abs(actual - expected) > 0.002) {
-                throw new Error(`Delayed level verification failed for ${ramp.description || "target"}: expected ${expected.toFixed(6)}, read ${actual.toFixed(6)}`);
-            }
+            await verifyAutomationReadback(ramp.read, expected, {
+                description: ramp.description || "target",
+                tolerance: 0.002,
+                attempts: 5,
+                retryDelayMs: 60,
+            });
         },
     };
 }
