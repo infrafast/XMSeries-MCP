@@ -1144,6 +1144,82 @@
           "on": false
         }
       }
+    },
+    {
+      "name": "generic-named-mute-list-infers-buses",
+      "utterance": "unmute Anthony et Laurent",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "mute",
+          "family": "bus",
+          "name": "Anthony",
+          "mute": false
+        }
+      }
+    },
+    {
+      "name": "generic-named-mute-list-mixed-families",
+      "utterance": "mute Batterie et Anthony",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "mute",
+          "family": "channel",
+          "name": "Batterie",
+          "mute": true
+        }
+      }
+    },
+    {
+      "name": "generic-destination-list-set-without-family-word",
+      "utterance": "mets Batterie à -20 dB sur Anthony et Laurent",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "write_send",
+          "source": "Batterie",
+          "destination": "Anthony"
+        }
+      }
+    },
+    {
+      "name": "generic-destination-list-send-mute",
+      "utterance": "mute Batterie sur Anthony et Laurent",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "mute_send",
+          "source": "Batterie",
+          "destination": "Anthony",
+          "mute": true
+        }
+      }
+    },
+    {
+      "name": "generic-destination-list-read",
+      "utterance": "niveau de Batterie sur Anthony et Laurent",
+      "expected": {
+        "status": "ready",
+        "effect": "read",
+        "operation": {
+          "kind": "read_send",
+          "source": "Batterie",
+          "destination": "Anthony"
+        }
+      }
+    },
+    {
+      "name": "generic-destination-list-capability-reject",
+      "utterance": "mets Batterie à -20 dB sur Anthony et Playback",
+      "expected": {
+        "status": "clarification",
+        "effect": "none"
+      }
     }
   ]
 }
