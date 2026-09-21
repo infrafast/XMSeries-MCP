@@ -147,6 +147,9 @@ function splitRoute(text: string): { sourceQuery: string; destinationQuery: stri
 export function parseDeterministicMixerIntent(raw: string): NativeMixerIntent | null {
     let text = compact(raw);
     if (!text || isBulkLike(text)) return null;
+    // Channel -> physical AUX output is a dedicated mixer capability with
+    // protocol-specific guards; keep it on the existing specialized parser path.
+    if (/\b(?:sortie\s+aux|aux\s+output)\s+\d+\b/iu.test(text)) return null;
 
     const original = text;
     const wantsRead = readRequested(text);
