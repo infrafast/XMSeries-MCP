@@ -2093,6 +2093,10 @@ async function ready(text) {
         "baisse basse-mike de 4 dB",
     );
     assert.equal(
+        canonicalizeNaturalFrenchCommand("monte le son de la batterie de deux dB"),
+        "monte le son de la batterie de 2 dB",
+    );
+    assert.equal(
         canonicalizeNaturalFrenchCommand("baisse progressivement guitar-clode à moins trente dB en deux secondes"),
         "baisse progressivement guitar-clode à -30 dB en 2 secondes",
     );
@@ -2122,6 +2126,12 @@ async function ready(text) {
         text: "monte Batterie de trois dB",
     });
     assert.equal(relative.status, "ready", JSON.stringify(relative));
+
+    const naturalRelative = await gateway.analyze({
+        protocol: GATEWAY_PROTOCOL,
+        text: "monte le son de la Batterie de deux dB",
+    });
+    assert.equal(naturalRelative.status, "ready", JSON.stringify(naturalRelative));
 
     const ramp = await gateway.analyze({
         protocol: GATEWAY_PROTOCOL,
