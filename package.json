@@ -17,10 +17,11 @@
     "test:name-resolution": "npm run build && node test-name-resolution.mjs",
     "test:llm-tools": "node test-llm-tools.js",
     "start:openai": "node dist/openai-remote.js",
-    "test:ci": "npm run build && node test-native-intent-parser.mjs && node test-name-resolution.mjs && node test-relative-level-safety.mjs && node test-automation-ramp-duration.mjs && node test-automation-ramp-schema.mjs && node test-automation-delayed-readback.mjs && node test-lifecycle.mjs && node test-speaker-context.mjs && node test-oscxr-protocol-safety.mjs && node test-local-gateway.mjs && node test-local-corpus.mjs && node test-local-recipe.mjs",
+    "test:ci": "npm run build && node test-native-intent-parser.mjs && node test-capability-symmetry.mjs && node test-name-resolution.mjs && node test-relative-level-safety.mjs && node test-automation-ramp-duration.mjs && node test-automation-ramp-schema.mjs && node test-automation-delayed-readback.mjs && node test-lifecycle.mjs && node test-speaker-context.mjs && node test-oscxr-protocol-safety.mjs && node test-local-gateway.mjs && node test-local-corpus.mjs && node test-local-recipe.mjs",
     "test:local-recipe": "npm run build && node test-local-recipe.mjs",
     "test:native-parser": "npm run build && node test-native-intent-parser.mjs",
-    "test:automation-delayed-readback": "npm run build && node test-automation-delayed-readback.mjs"
+    "test:automation-delayed-readback": "npm run build && node test-automation-delayed-readback.mjs",
+    "test:capability-symmetry": "npm run build && node test-capability-symmetry.mjs"
   },
   "keywords": [
     "mcp",
