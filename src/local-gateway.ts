@@ -1641,9 +1641,7 @@ export class LocalMixerCommandGateway {
                     errorText: `Cible « ${query} » ambiguë ou introuvable. Correspondances: ${candidates}. Reformule avec les noms exacts.`,
                 };
             }
-            if (!targets.some((existing) => sameIdentity(existing, target))) {
-                targets.push(target);
-            }
+            targets.push(target);
         }
         return { targets };
     }
@@ -1663,6 +1661,105 @@ export class LocalMixerCommandGateway {
             }
         }
         return resolved.targets;
+    }
+
+    private async planMultiSendIntent(
+        intent: Extract<Intent, { kind: "multi_send" }>,
+    ): Promise<AnalyzeCommandResult> {
+        const sourceResult = await resolveOneNamedTarget(
+            this.adapter,
+            intent.intent.sourceQuery,
+            SEND_SOURCE_FAMILIES,
+        );
+        const source = sourceResult.target;
+        if (!source || source.matchType === "fuzzy") {
+            const stored = this.store.createContinuation({ intent, candidates: [] });
+            return {
+                protocol: GATEWAY_PROTOCOL,
+                recognized: true,
+                status: "clarification",
+                effect: "none",
+                continuationToken: stored.token,
+                expiresInMs: stored.expiresInMs,
+                responseText: `Source « ${intent.intent.sourceQuery} » ambiguë ou introuvable. Reformule avec le nom exact de la source.`,
+            };
+        }
+
+        // Preserve a real configured destination whose own name contains a
+        // conjunction before interpreting the phrase as a destination list.
+        const whole = await resolveOneNamedTarget(this.adapter, intent.rawDestinationQuery);
+        if (
+            whole.target &&
+            whole.target.matchType !== "fuzzy" &&
+            this.adapter.canUseSend(source, whole.target)
+        ) {
+            const effect = intent.intent.kind === "send_read_level" ? "read" : "write";
+            const stored = this.store.createPlan(
+                { ...intent.intent, source, destination: whole.target },
+                effect,
+            );
+            return {
+                protocol: GATEWAY_PROTOCOL,
+                recognized: true,
+                status: "ready",
+                effect,
+                planToken: stored.token,
+                expiresInMs: stored.expiresInMs,
+                responseText: null,
+            };
+        }
+
+        const resolved = await this.resolveExactNamedQueries(intent.destinationQueries);
+        if (resolved.errorText) {
+            const stored = this.store.createContinuation({ intent, candidates: [] });
+            return {
+                protocol: GATEWAY_PROTOCOL,
+                recognized: true,
+                status: "clarification",
+                effect: "none",
+                continuationToken: stored.token,
+                expiresInMs: stored.expiresInMs,
+                responseText: resolved.errorText,
+            };
+        }
+
+        const unsupported = resolved.targets.filter(
+            (target) => !this.adapter.canUseSend(source, target),
+        );
+        if (unsupported.length > 0) {
+            const stored = this.store.createContinuation({ intent, candidates: [] });
+            return {
+                protocol: GATEWAY_PROTOCOL,
+                recognized: true,
+                status: "clarification",
+                effect: "none",
+                continuationToken: stored.token,
+                expiresInMs: stored.expiresInMs,
+                responseText: `Destination(s) non compatible(s) avec l'opération de send depuis ${displayName(source)} : ${unsupported.map((target) => `${displayName(target)} (${target.family})`).join(", ")}. Précise une destination supportée.`,
+            };
+        }
+
+        const effect = intent.intent.kind === "send_read_level" ? "read" : "write";
+        const stored = this.store.createPlan(
+            {
+                kind: "multi_send",
+                intent: intent.intent,
+                sourceQuery: intent.intent.sourceQuery,
+                source,
+                destinationQueries: intent.destinationQueries,
+                destinations: resolved.targets,
+            },
+            effect,
+        );
+        return {
+            protocol: GATEWAY_PROTOCOL,
+            recognized: true,
+            status: "ready",
+            effect,
+            planToken: stored.token,
+            expiresInMs: stored.expiresInMs,
+            responseText: null,
+        };
     }
 
     private async planBulkIntent(intent: BulkIntent): Promise<AnalyzeCommandResult> {
@@ -1715,98 +1812,6 @@ export class LocalMixerCommandGateway {
             };
         }
 
-        if (intent.kind === "bulk_named_send_db") {
-            const sourceResult = await resolveOneNamedTarget(this.adapter, intent.sourceQuery, SEND_SOURCE_FAMILIES);
-            const source = sourceResult.target;
-            if (!source || source.matchType === "fuzzy") {
-                const stored = this.store.createContinuation({ intent, candidates: [] });
-                return {
-                    protocol: GATEWAY_PROTOCOL,
-                    recognized: true,
-                    status: "clarification",
-                    effect: "none",
-                    continuationToken: stored.token,
-                    expiresInMs: stored.expiresInMs,
-                    responseText: `Source « ${intent.sourceQuery} » ambiguë ou introuvable. Reformule avec le nom exact de la source.`,
-                };
-            }
-
-            // As for target lists, a configured destination may itself contain
-            // a conjunction. Prefer that exact target if it is a valid send destination.
-            const whole = await resolveOneNamedTarget(this.adapter, intent.rawDestinationQuery);
-            if (whole.target && whole.target.matchType !== "fuzzy" && this.adapter.canWriteSendLevel(source, whole.target)) {
-                const stored = this.store.createPlan(
-                    {
-                        kind: "send_set_level",
-                        sourceQuery: intent.sourceQuery,
-                        destinationQuery: intent.rawDestinationQuery,
-                        source,
-                        destination: whole.target,
-                        unit: "db",
-                        value: intent.db,
-                    },
-                    "write",
-                );
-                return {
-                    protocol: GATEWAY_PROTOCOL,
-                    recognized: true,
-                    status: "ready",
-                    effect: "write",
-                    planToken: stored.token,
-                    expiresInMs: stored.expiresInMs,
-                    responseText: null,
-                };
-            }
-
-            const resolved = await this.resolveExactNamedQueries(intent.destinationQueries);
-            if (resolved.errorText) {
-                const stored = this.store.createContinuation({ intent, candidates: [] });
-                return {
-                    protocol: GATEWAY_PROTOCOL,
-                    recognized: true,
-                    status: "clarification",
-                    effect: "none",
-                    continuationToken: stored.token,
-                    expiresInMs: stored.expiresInMs,
-                    responseText: resolved.errorText,
-                };
-            }
-
-            const unsupported = resolved.targets.filter((target) => !this.adapter.canWriteSendLevel(source, target));
-            if (unsupported.length > 0) {
-                const stored = this.store.createContinuation({ intent, candidates: [] });
-                return {
-                    protocol: GATEWAY_PROTOCOL,
-                    recognized: true,
-                    status: "clarification",
-                    effect: "none",
-                    continuationToken: stored.token,
-                    expiresInMs: stored.expiresInMs,
-                    responseText: `Destination(s) non compatible(s) avec un envoi depuis ${displayName(source)} : ${unsupported.map((target) => `${displayName(target)} (${target.family})`).join(", ")}. Précise une destination supportée.`,
-                };
-            }
-
-            const stored = this.store.createPlan(
-                {
-                    kind: "bulk_named_send_db",
-                    sourceQuery: intent.sourceQuery,
-                    source,
-                    destinationQueries: intent.destinationQueries,
-                    destinations: resolved.targets,
-                    db: intent.db,
-                },
-                "write",
-            );
-            return {
-                protocol: GATEWAY_PROTOCOL,
-                recognized: true,
-                status: "ready",
-                effect: "write",
-                planToken: stored.token,
-                expiresInMs: stored.expiresInMs,
-                responseText: null,
-            };
-        }
 
         if (intent.kind === "bulk_channel_mute") {
             if (intent.mode === "all") {
