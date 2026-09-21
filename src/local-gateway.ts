@@ -407,14 +407,28 @@ async function resolveOneNamedTarget(
     query: string,
     families?: LocalMixerTargetFamily[],
 ): Promise<{ target: LocalMixerTarget | null; matches: LocalMixerTarget[] }> {
+    const originalQuery = cleanTarget(query);
     const qualified = qualifiedTargetQuery(query, families);
     if (qualified.families && qualified.families.length === 0) {
         return { target: null, matches: [] };
     }
+
     if (!qualified.families || qualified.families.includes("main")) {
-        const main = mainTarget(qualified.query);
+        const main = mainTarget(originalQuery);
         if (main) return { target: main, matches: [main] };
     }
+
+    // A real label may itself start with a family word, for example
+    // "Matrix Vox". Prefer a safe match of the complete label before treating
+    // that first word as an explicit qualifier.
+    if (qualified.query !== originalQuery) {
+        const fullMatches = await adapter.resolve(originalQuery, qualified.families);
+        const full = safeUnique(fullMatches);
+        if (full && full.matchType !== "fuzzy") {
+            return { target: full, matches: fullMatches };
+        }
+    }
+
     const matches = await adapter.resolve(qualified.query, qualified.families);
     return { target: safeUnique(matches), matches };
 }
@@ -2020,11 +2034,9 @@ export class LocalMixerCommandGateway {
         intent: Extract<Intent, { kind: "read_mute" | "read_effect_on" | "set_effect_on" }>,
         families: LocalMixerTargetFamily[],
     ): Promise<AnalyzeCommandResult> {
-        const qualified = qualifiedTargetQuery(intent.targetQuery, families);
-        const matches = qualified.families?.length === 0
-            ? []
-            : await this.adapter.resolve(qualified.query, qualified.families);
-        const resolved = safeUnique(matches);
+        const resolvedQuery = await resolveOneNamedTarget(this.adapter, intent.targetQuery, families);
+        const matches = resolvedQuery.matches;
+        const resolved = resolvedQuery.target;
         if (resolved && resolved.matchType !== "fuzzy") {
             const effect = intent.kind === "set_effect_on" ? "write" : "read";
             const stored = this.store.createPlan({ ...intent, target: resolved }, effect);
@@ -2206,11 +2218,8 @@ export class LocalMixerCommandGateway {
         expected: LocalMixerTarget,
         families: LocalMixerTargetFamily[],
     ): Promise<LocalMixerTarget> {
-        const qualified = qualifiedTargetQuery(query, families);
-        const matches = qualified.families?.length === 0
-            ? []
-            : await this.adapter.resolve(qualified.query, qualified.families);
-        const live = safeUnique(matches);
+        const resolvedQuery = await resolveOneNamedTarget(this.adapter, query, families);
+        const live = resolvedQuery.target;
         if (!live || !sameIdentity(live, expected) || live.matchType === "fuzzy") {
             throw new Error("STALE_TARGET: resolver identity changed");
         }
@@ -2224,9 +2233,8 @@ export class LocalMixerCommandGateway {
     ): Promise<LocalMixerTarget> {
         if (expected.family === "main") return expected;
 
-        const qualified = qualifiedTargetQuery(query);
-        const matches = await this.adapter.resolve(qualified.query, qualified.families);
-        const live = safeUnique(matches);
+        const resolvedQuery = await resolveOneNamedTarget(this.adapter, query);
+        const live = resolvedQuery.target;
         if (!live || !sameIdentity(live, expected)) {
             throw new Error("STALE_TARGET: resolver identity changed");
         }
