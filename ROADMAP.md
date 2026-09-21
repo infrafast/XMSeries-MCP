@@ -69,6 +69,7 @@ Shared dependency:
 - [x] mute / unmute;
 - [x] bare-name targets resolve globally through the existing resolver exactly as today;
 - [x] ambiguous contains/structured and fuzzy-only matches require clarification and never create an executable write token;
+- [x] 2026-09-21 STT replay experiment kept fuzzy recovery benchmark-only: family-scoped matching recovered a small number of misheard names with zero wrong accepted on the 20-name XR16 corpus and the 60-name stress registry, but production fuzzy writes remain fail-closed pending broader evidence;
 - [x] Main LR/façade aliases remain a mixer-domain decision here, never in LSA;
 - [x] plan execution re-resolves target identity before write dispatch and fails stale changes closed.
 
