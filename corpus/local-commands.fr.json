@@ -1116,6 +1116,34 @@
           "durationSeconds": 2
         }
       }
+    },
+    {
+      "name": "fx-engine-enable-explicit",
+      "utterance": "active l'effet Hall FX",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "set_fx",
+          "family": "fxreturn",
+          "name": "Hall FX",
+          "on": true
+        }
+      }
+    },
+    {
+      "name": "fx-engine-disable-explicit",
+      "utterance": "désactive l'effet Hall FX",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "set_fx",
+          "family": "fxreturn",
+          "name": "Hall FX",
+          "on": false
+        }
+      }
     }
   ]
 }

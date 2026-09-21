@@ -2170,6 +2170,38 @@
           }
         }
       }
+    },
+    {
+      "category": "fx",
+      "name": "fx-engine-enable-explicit",
+      "utterance": "active l'effet Hall FX",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "set_fx",
+          "target": {
+            "name": "Hall FX"
+          },
+          "on": true
+        }
+      }
+    },
+    {
+      "category": "fx",
+      "name": "fx-engine-disable-explicit",
+      "utterance": "désactive l'effet Hall FX",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "set_fx",
+          "target": {
+            "name": "Hall FX"
+          },
+          "on": false
+        }
+      }
     }
   ]
 }

@@ -68,6 +68,9 @@ function makeHarness() {
             operations.push({ kind: "read_fx", target });
             return true;
         },
+        async setEffectOn(target, on) {
+            operations.push({ kind: "set_fx", target, on });
+        },
         async readChannelName(channel) {
             operations.push({ kind: "read_channel_name", channel });
             return channel === 6 ? "Batterie" : `Channel-${channel}`;

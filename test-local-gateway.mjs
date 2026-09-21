@@ -25,6 +25,7 @@ let writes = [];
 let muteWrites = [];
 let muteReadCalls = [];
 let effectStateCalls = [];
+let effectWriteCalls = [];
 let channelNameCalls = [];
 let sendLevel = 0.5;
 let sendReadCalls = [];
@@ -81,6 +82,9 @@ const adapter = {
     async readEffectOn(target) {
         effectStateCalls.push(target);
         return true;
+    },
+    async setEffectOn(target, on) {
+        effectWriteCalls.push({ target, on });
     },
     async readChannelName(channel) {
         channelNameCalls.push(channel);
@@ -262,6 +266,39 @@ async function ready(text) {
     assert.equal(effectStateCalls[0].family, "fxreturn");
     assert.equal(effectStateCalls[0].name, "Hall FX");
     assert.match(result.responseText, /actif/);
+}
+
+// Explicit effect-engine writes are distinct from FX-return mute.
+{
+    effectWriteCalls = [];
+    let analyzed = await ready("active l'effet Hall FX");
+    let result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(effectWriteCalls.length, 1);
+    assert.equal(effectWriteCalls[0].target.family, "fxreturn");
+    assert.equal(effectWriteCalls[0].target.name, "Hall FX");
+    assert.equal(effectWriteCalls[0].on, true);
+
+    analyzed = await ready("désactive l'effet Hall FX");
+    result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(effectWriteCalls.at(-1).on, false);
+
+    muteWrites = [];
+    analyzed = await ready("mute Hall FX");
+    result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(muteWrites.at(-1).target.name, "Hall FX");
+    assert.equal(effectWriteCalls.length, 2);
 }
 
 // Numeric channel name read maps directly to the dedicated MCP primitive.

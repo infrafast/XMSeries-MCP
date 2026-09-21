@@ -78,14 +78,45 @@ const cases = [
     kind: "ramp_level", targetQuery: "Batterie", from: { unit: "db", value: -40 },
     to: { unit: "db", value: -10 }, durationSeconds: 5
   }],
+  ["statut du mixeur", { kind: "status" }],
+  ["quelles sont les automations en cours ?", { kind: "automation_list" }],
+  ["annule la dernière automation", { kind: "automation_cancel", lastRunning: true }],
+  ["annule l'automation auto-3", { kind: "automation_cancel", id: "auto-3", lastRunning: false }],
+  ["quel est le nom de la voie 6 ?", { kind: "read_channel_name", channel: 6 }],
+  ["état du mute de Batterie", { kind: "read_mute", targetQuery: "Batterie" }],
+  ["Hall FX est-il actif ?", { kind: "read_effect_on", targetQuery: "Hall FX" }],
+  ["active l'effet Hall FX", { kind: "set_effect_on", targetQuery: "Hall FX", on: true }],
+  ["désactive l'effet Hall FX", { kind: "set_effect_on", targetQuery: "Hall FX", on: false }],
+  ["mute les bus Anthony et Laurent", {
+    kind: "bulk_bus_mute", mode: "selected", busQueries: ["Anthony", "Laurent"], mute: true
+  }],
+  ["coupe tous les bus sauf Anthony", {
+    kind: "bulk_bus_mute", mode: "all_except", busQueries: ["Anthony"], mute: true
+  }],
+  ["mute les voies Voix et Batterie", {
+    kind: "bulk_channel_mute", mode: "selected", channelQueries: ["Voix", "Batterie"], mute: true
+  }],
+  ["mets Batterie à -20 dB sur les bus Anthony et Laurent", {
+    kind: "bulk_send_db", mode: "selected", sourceQuery: "Batterie",
+    busQueries: ["Anthony", "Laurent"], db: -20, includeMain: false
+  }],
+  ["mets Batterie à -25 dB sur tous les bus et façade", {
+    kind: "bulk_send_db", mode: "all", sourceQuery: "Batterie",
+    busQueries: [], db: -25, includeMain: true
+  }],
+  ["set Voix to aux output 3 to -12 dB", {
+    kind: "send_to_aux_output", sourceQuery: "Voix", aux: 3, unit: "db", value: -12
+  }],
+  ["mets Batterie sur sortie aux 2 au niveau 0.5", {
+    kind: "send_to_aux_output", sourceQuery: "Batterie", aux: 2, unit: "level", value: 0.5
+  }],
 ];
 
 for (const [utterance, expected] of cases) {
   assert.deepEqual(parseDeterministicMixerIntent(utterance), expected, utterance);
 }
 
-assert.equal(parseDeterministicMixerIntent("mute les bus Anthony et Laurent"), null);
-assert.equal(parseDeterministicMixerIntent("mets Batterie à -20 dB sur les bus Anthony et Laurent"), null);
-assert.equal(parseDeterministicMixerIntent("set Voix to aux output 3 to -12 dB"), null);
+assert.equal(parseDeterministicMixerIntent("Batterie -20 dB"), null);
+assert.deepEqual(parseDeterministicMixerIntent("active Hall FX"), { kind: "mute", targetQuery: "Hall FX", mute: false }, "historical FX-return unmute shorthand must stay compatible");
 
 console.log("native deterministic intent parser tests: OK");
