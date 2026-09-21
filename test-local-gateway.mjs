@@ -2085,6 +2085,18 @@ async function ready(text) {
         "Mets Batterie à +3 dB",
     );
     assert.equal(
+        canonicalizeNaturalFrenchCommand("monte guitar-anto de trois dB"),
+        "monte guitar-anto de 3 dB",
+    );
+    assert.equal(
+        canonicalizeNaturalFrenchCommand("baisse basse-mike de quatre dB"),
+        "baisse basse-mike de 4 dB",
+    );
+    assert.equal(
+        canonicalizeNaturalFrenchCommand("baisse progressivement guitar-clode à moins trente dB en deux secondes"),
+        "baisse progressivement guitar-clode à -30 dB en 2 secondes",
+    );
+    assert.equal(
         canonicalizeNaturalFrenchCommand("mais je voulais simplement vérifier"),
         "mais je voulais simplement vérifier",
     );
@@ -2101,6 +2113,21 @@ async function ready(text) {
     assert.equal(result.ok, true);
     assert.equal(sendWrites.at(-1).source.name, "Batterie");
     assert.equal(sendWrites.at(-1).destination.name, "Anthony");
+}
+
+// Spoken unsigned relative values and ramp durations must reach the real parser.
+{
+    const relative = await gateway.analyze({
+        protocol: GATEWAY_PROTOCOL,
+        text: "monte Batterie de trois dB",
+    });
+    assert.equal(relative.status, "ready", JSON.stringify(relative));
+
+    const ramp = await gateway.analyze({
+        protocol: GATEWAY_PROTOCOL,
+        text: "baisse progressivement Batterie à moins trente dB en deux secondes",
+    });
+    assert.equal(ramp.status, "ready", JSON.stringify(ramp));
 }
 
 // OR4B13 natural-language status variants converge to the same read intent.
