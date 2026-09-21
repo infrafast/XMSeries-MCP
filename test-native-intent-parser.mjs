@@ -24,6 +24,12 @@ const cases = [
   ["mets la guitare de anto sur claude à -5db", {
     kind: "send_set_level", sourceQuery: "guitare de anto", destinationQuery: "claude", unit: "db", value: -5
   }],
+  ["monte Voix de 10%", {
+    kind: "adjust_level", targetQuery: "Voix", unit: "percent", delta: 10
+  }],
+  ["mets Voix à 50%", {
+    kind: "set_level", targetQuery: "Voix", unit: "percent", value: 50
+  }],
   ["Batterie moins fort", {
     kind: "adjust_level_qualitative", targetQuery: "Batterie", direction: "down", amount: "normal"
   }],
