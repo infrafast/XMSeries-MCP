@@ -155,6 +155,7 @@ type LocalContinuation =
     | {
           intent: TargetIntent | SendIntent | BulkIntent | Extract<Intent, { kind: "send_to_aux_output" }>;
           candidates: LocalMixerTarget[];
+          families?: LocalMixerTargetFamily[];
       }
     | {
           kind: "speaker_context";
