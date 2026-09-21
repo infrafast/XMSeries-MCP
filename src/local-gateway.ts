@@ -766,21 +766,23 @@ export class LocalMixerCommandGateway {
                 };
             }
 
-            if (plan.kind === "bulk_named_send_db") {
+
+            if (plan.kind === "multi_send") {
                 const source = await this.revalidateScopedTarget(plan.sourceQuery, plan.source, SEND_SOURCE_FAMILIES);
                 const destinations = await this.revalidateNamedTargets(plan.destinationQueries, plan.destinations);
-                const unsupported = destinations.filter((target) => !this.adapter.canWriteSendLevel(source, target));
+                const unsupported = destinations.filter((target) => !this.adapter.canUseSend(source, target));
                 if (unsupported.length > 0) {
                     throw new Error(`Destination de send devenue incompatible : ${unsupported.map(displayName).join(", ")}`);
                 }
-                const converted = levelToNormalized("db", plan.db);
+
+                const responses: string[] = [];
                 for (const destination of destinations) {
-                    await this.adapter.writeSendLevel(source, destination, converted.level);
+                    responses.push(await this.executeResolvedSendIntent(plan.intent, source, destination));
                 }
                 return {
                     protocol: GATEWAY_PROTOCOL,
                     ok: true,
-                    responseText: `${displayName(source)} réglé à ${converted.label} sur ${destinations.map(displayName).join(", ")}.`,
+                    responseText: responses.join("; "),
                 };
             }
 
@@ -920,133 +922,17 @@ export class LocalMixerCommandGateway {
                 plan.kind === "send_delay_mute"
             ) {
                 const source = await this.revalidateScopedTarget(plan.sourceQuery, plan.source, SEND_SOURCE_FAMILIES);
-                const destination = await this.revalidateScopedTarget(plan.destinationQuery, plan.destination, ["bus"]);
-                if (plan.kind === "send_read_level") {
-                    const level = await this.adapter.readSendLevel(source, destination);
-                    const converted = faderLevelToDb(level);
-                    return {
-                        protocol: GATEWAY_PROTOCOL,
-                        ok: true,
-                        responseText: `${displayName(source)} → ${displayName(destination)} est à ${formatDb(converted.db)}.`,
-                    };
+                const [destination] = await this.revalidateNamedTargets(
+                    [plan.destinationQuery],
+                    [plan.destination],
+                );
+                if (!this.adapter.canUseSend(source, destination)) {
+                    throw new Error(`Destination de send devenue incompatible : ${displayName(destination)}`);
                 }
-
-                if (plan.kind === "send_set_level") {
-                    const converted = levelToNormalized(plan.unit, plan.value);
-                    await this.adapter.writeSendLevel(source, destination, converted.level);
-                    return {
-                        protocol: GATEWAY_PROTOCOL,
-                        ok: true,
-                        responseText: `${displayName(source)} → ${displayName(destination)} réglé à ${converted.label}.`,
-                    };
-                }
-                if (plan.kind === "send_adjust_level") {
-                    const current = await this.adapter.readSendLevel(source, destination);
-                    const adjusted = adjustedLevel(current, plan.unit, plan.delta);
-                    await this.adapter.writeSendLevel(source, destination, adjusted.level);
-                    return {
-                        protocol: GATEWAY_PROTOCOL,
-                        ok: true,
-                        responseText: `${displayName(source)} → ${displayName(destination)} : ${adjusted.beforeLabel} → ${adjusted.afterLabel}.`,
-                    };
-                }
-                if (plan.kind === "send_adjust_level_qualitative") {
-                    const adjusted = await this.adapter.adjustQualitativeSend(
-                        source,
-                        destination,
-                        plan.direction,
-                        plan.amount,
-                    );
-                    return {
-                        protocol: GATEWAY_PROTOCOL,
-                        ok: true,
-                        responseText: `${displayName(source)} → ${displayName(destination)} : ${formatDb(adjusted.beforeDb)} → ${formatDb(adjusted.targetDb)}.`,
-                    };
-                }
-                if (plan.kind === "send_mute") {
-                    await this.adapter.setSendMute(source, destination, plan.mute);
-                    return {
-                        protocol: GATEWAY_PROTOCOL,
-                        ok: true,
-                        responseText: `${displayName(source)} → ${displayName(destination)} ${plan.mute ? "coupé" : "réactivé"}.`,
-                    };
-                }
-
-                if (plan.kind === "send_delay_mute") {
-                    const jobId = await this.adapter.scheduleSendMute(
-                        source,
-                        destination,
-                        plan.mute,
-                        plan.delaySeconds,
-                    );
-                    return {
-                        protocol: GATEWAY_PROTOCOL,
-                        ok: true,
-                        responseText: `Action programmée ${jobId} : ${displayName(source)} → ${displayName(destination)} ${plan.mute ? "sera coupé" : "sera réactivé"} dans ${formatSeconds(plan.delaySeconds)}.`,
-                    };
-                }
-
-                if (plan.kind === "send_delay_level") {
-                    const converted = levelToNormalized(plan.value.unit, plan.value.value);
-                    const jobId = await this.adapter.scheduleSend(source, destination, converted.level, plan.delaySeconds);
-                    return {
-                        protocol: GATEWAY_PROTOCOL,
-                        ok: true,
-                        responseText: `Action programmée ${jobId} : ${displayName(source)} → ${displayName(destination)} à ${converted.label} dans ${formatSeconds(plan.delaySeconds)}.`,
-                    };
-                }
-
-                if (plan.kind === "send_ramp_level_qualitative") {
-                    const preview = await this.adapter.previewQualitativeSend(
-                        source,
-                        destination,
-                        plan.direction,
-                        plan.amount,
-                    );
-                    const jobId = await this.adapter.startSendRamp(
-                        source,
-                        destination,
-                        preview.targetLevel,
-                        plan.durationSeconds,
-                    );
-                    return {
-                        protocol: GATEWAY_PROTOCOL,
-                        ok: true,
-                        responseText: `Automation ${jobId} démarrée : ${displayName(source)} → ${displayName(destination)} de ${formatDb(preview.beforeDb)} vers ${formatDb(preview.targetDb)} sur ${formatSeconds(plan.durationSeconds)}.`,
-                    };
-                }
-
-                if (plan.kind === "send_delayed_ramp_level") {
-                    const current = await this.adapter.readSendLevel(source, destination);
-                    const toLevel = plan.delta
-                        ? adjustedLevel(current, plan.delta.unit, plan.delta.value).level
-                        : levelToNormalized(plan.to!.unit, plan.to!.value).level;
-                    const fromLevel = plan.from ? levelToNormalized(plan.from.unit, plan.from.value).level : undefined;
-                    const jobId = await this.adapter.startDelayedSendRamp(
-                        source,
-                        destination,
-                        toLevel,
-                        plan.durationSeconds,
-                        plan.delaySeconds,
-                        fromLevel,
-                    );
-                    return {
-                        protocol: GATEWAY_PROTOCOL,
-                        ok: true,
-                        responseText: `Automation ${jobId} programmée : ${displayName(source)} → ${displayName(destination)} dans ${formatSeconds(plan.delaySeconds)} sur ${formatSeconds(plan.durationSeconds)}.`,
-                    };
-                }
-
-                const current = await this.adapter.readSendLevel(source, destination);
-                const toLevel = plan.delta
-                    ? adjustedLevel(current, plan.delta.unit, plan.delta.value).level
-                    : levelToNormalized(plan.to!.unit, plan.to!.value).level;
-                const fromLevel = plan.from ? levelToNormalized(plan.from.unit, plan.from.value).level : undefined;
-                const jobId = await this.adapter.startSendRamp(source, destination, toLevel, plan.durationSeconds, fromLevel);
                 return {
                     protocol: GATEWAY_PROTOCOL,
                     ok: true,
-                    responseText: `Automation ${jobId} démarrée : ${displayName(source)} → ${displayName(destination)} sur ${formatSeconds(plan.durationSeconds)}.`,
+                    responseText: await this.executeResolvedSendIntent(plan, source, destination),
                 };
             }
 
@@ -1184,6 +1070,118 @@ export class LocalMixerCommandGateway {
                 responseText: `La commande mixeur a échoué : ${message}`,
             };
         }
+    }
+
+    private async executeResolvedSendIntent(
+        intent: NativeSendIntent,
+        source: LocalMixerTarget,
+        destination: LocalMixerTarget,
+    ): Promise<string> {
+        if (intent.kind === "send_read_level") {
+            const level = await this.adapter.readSendLevel(source, destination);
+            const converted = faderLevelToDb(level);
+            return `${displayName(source)} → ${displayName(destination)} est à ${formatDb(converted.db)}.`;
+        }
+
+        if (intent.kind === "send_set_level") {
+            const converted = levelToNormalized(intent.unit, intent.value);
+            await this.adapter.writeSendLevel(source, destination, converted.level);
+            return `${displayName(source)} → ${displayName(destination)} réglé à ${converted.label}.`;
+        }
+
+        if (intent.kind === "send_adjust_level") {
+            const current = await this.adapter.readSendLevel(source, destination);
+            const adjusted = adjustedLevel(current, intent.unit, intent.delta);
+            await this.adapter.writeSendLevel(source, destination, adjusted.level);
+            return `${displayName(source)} → ${displayName(destination)} : ${adjusted.beforeLabel} → ${adjusted.afterLabel}.`;
+        }
+
+        if (intent.kind === "send_adjust_level_qualitative") {
+            const adjusted = await this.adapter.adjustQualitativeSend(
+                source,
+                destination,
+                intent.direction,
+                intent.amount,
+            );
+            return `${displayName(source)} → ${displayName(destination)} : ${formatDb(adjusted.beforeDb)} → ${formatDb(adjusted.targetDb)}.`;
+        }
+
+        if (intent.kind === "send_mute") {
+            await this.adapter.setSendMute(source, destination, intent.mute);
+            return `${displayName(source)} → ${displayName(destination)} ${intent.mute ? "coupé" : "réactivé"}.`;
+        }
+
+        if (intent.kind === "send_delay_mute") {
+            const jobId = await this.adapter.scheduleSendMute(
+                source,
+                destination,
+                intent.mute,
+                intent.delaySeconds,
+            );
+            return `Action programmée ${jobId} : ${displayName(source)} → ${displayName(destination)} ${intent.mute ? "sera coupé" : "sera réactivé"} dans ${formatSeconds(intent.delaySeconds)}.`;
+        }
+
+        if (intent.kind === "send_delay_level") {
+            const converted = levelToNormalized(intent.value.unit, intent.value.value);
+            const jobId = await this.adapter.scheduleSend(
+                source,
+                destination,
+                converted.level,
+                intent.delaySeconds,
+            );
+            return `Action programmée ${jobId} : ${displayName(source)} → ${displayName(destination)} à ${converted.label} dans ${formatSeconds(intent.delaySeconds)}.`;
+        }
+
+        if (intent.kind === "send_ramp_level_qualitative") {
+            const preview = await this.adapter.previewQualitativeSend(
+                source,
+                destination,
+                intent.direction,
+                intent.amount,
+            );
+            const jobId = await this.adapter.startSendRamp(
+                source,
+                destination,
+                preview.targetLevel,
+                intent.durationSeconds,
+            );
+            return `Automation ${jobId} démarrée : ${displayName(source)} → ${displayName(destination)} de ${formatDb(preview.beforeDb)} vers ${formatDb(preview.targetDb)} sur ${formatSeconds(intent.durationSeconds)}.`;
+        }
+
+        if (intent.kind === "send_delayed_ramp_level") {
+            const current = await this.adapter.readSendLevel(source, destination);
+            const toLevel = intent.delta
+                ? adjustedLevel(current, intent.delta.unit, intent.delta.value).level
+                : levelToNormalized(intent.to!.unit, intent.to!.value).level;
+            const fromLevel = intent.from
+                ? levelToNormalized(intent.from.unit, intent.from.value).level
+                : undefined;
+            const jobId = await this.adapter.startDelayedSendRamp(
+                source,
+                destination,
+                toLevel,
+                intent.durationSeconds,
+                intent.delaySeconds,
+                fromLevel,
+            );
+            return `Automation ${jobId} programmée : ${displayName(source)} → ${displayName(destination)} dans ${formatSeconds(intent.delaySeconds)} sur ${formatSeconds(intent.durationSeconds)}.`;
+        }
+
+        const current = await this.adapter.readSendLevel(source, destination);
+        const toLevel = intent.delta
+            ? adjustedLevel(current, intent.delta.unit, intent.delta.value).level
+            : levelToNormalized(intent.to!.unit, intent.to!.value).level;
+        const fromLevel = intent.from
+            ? levelToNormalized(intent.from.unit, intent.from.value).level
+            : undefined;
+        const jobId = await this.adapter.startSendRamp(
+            source,
+            destination,
+            toLevel,
+            intent.durationSeconds,
+            fromLevel,
+        );
+        return `Automation ${jobId} démarrée : ${displayName(source)} → ${displayName(destination)} sur ${formatSeconds(intent.durationSeconds)}.`;
     }
 
     private async planAuxOutputIntent(
