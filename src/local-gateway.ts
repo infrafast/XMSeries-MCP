@@ -156,7 +156,7 @@ type LocalPlan =
 
 type LocalContinuation =
     | {
-          intent: TargetIntent | SendIntent | BulkIntent | Extract<Intent, { kind: "send_to_aux_output" }>;
+          intent: TargetIntent | SendIntent | BulkIntent | Extract<Intent, { kind: "multi_send" | "send_to_aux_output" }>;
           candidates: LocalMixerTarget[];
           families?: LocalMixerTargetFamily[];
       }
@@ -288,6 +288,7 @@ function sequencePrimaryTarget(intent: Intent): string | null {
 
 function sequenceDestination(intent: Intent): string | null {
     if ("destinationQuery" in intent && typeof intent.destinationQuery === "string") return intent.destinationQuery;
+    if (intent.kind === "multi_send") return intent.rawDestinationQuery;
     return null;
 }
 
@@ -2116,7 +2117,9 @@ export class LocalMixerCommandGateway {
                 expiresInMs: stored.expiresInMs,
                 responseText: active.intent.kind === "send_to_aux_output"
                     ? "Reformule la commande complète avec la voie source exacte et la sortie AUX."
-                    : "Reformule la commande complète avec la source et le bus de destination exacts.",
+                    : active.intent.kind === "multi_send"
+                      ? "Reformule la commande complète avec la source et toutes les destinations exactes."
+                      : "Reformule la commande complète avec la source et la destination exactes.",
             };
         }
 
