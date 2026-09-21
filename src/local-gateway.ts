@@ -1379,7 +1379,9 @@ export class LocalMixerCommandGateway {
             if (intent.kind === "send_delayed_ramp_level") {
                 wait(intent.delaySeconds, `attendre ${formatSeconds(intent.delaySeconds)}`);
             }
-            const from = intent.from ? levelToNormalized(intent.from.unit, intent.from.value).level : undefined;
+            const from = "from" in intent && intent.from
+                ? levelToNormalized(intent.from.unit, intent.from.value).level
+                : undefined;
             let to: number | (() => Promise<number>);
             if (intent.kind === "send_ramp_level_qualitative") {
                 to = async () => (await this.adapter.previewQualitativeSend(source, destination, intent.direction, intent.amount)).targetLevel;
