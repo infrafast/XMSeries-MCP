@@ -523,6 +523,8 @@ Natural-language variants are normalized before structural parsing. The French L
 
 The structural parser itself is native Node/TypeScript and follows a lexical-slot + constraint-matching design: local regexes recognize lexical primitives such as verbs, values, properties, list selectors, destinations, delays and durations, then semantic constraints select one typed intent. All elementary Local commands now enter this same parser, including mixer/automation status, mute/FX-state/name reads, grouped selectors, physical AUX destinations and automation cancellation. Constituent order stays flexible without making meaning fuzzy: `à` remains absolute, `de` relative, `en` a ramp duration and `dans` a delayed execution marker. Only temporal sequence composition/anaphora and recognized-speaker expansion stay outside the elementary parser. Target identity, structured-name resolution, capability checks, fuzzy clarification, protocol guards and write authorization remain specialized XMSeries layers and are deliberately not delegated to grammar.
 
+Named lists are family-agnostic unless the user explicitly names a family. For example, `unmute Anthony et Laurent` is parsed as two target names, each name is resolved against the mixer inventory, and only then is the operation validated. The same composition applies to route destinations: `mets Batterie à -20 dB sur Anthony et Laurent`, `mute Batterie sur Anthony et Laurent`, relative changes, reads, delays and ramps all share the same multi-destination wrapper. A configured target whose own label contains `et/and` is tried as one exact target before the text is treated as a list. The grammar therefore never assumes that an unqualified destination is a bus; the adapter capability layer decides whether the resolved source→destination relation is supported. In the current XMSeries implementation, ordinary send destinations are buses; another resolved family is reported as incompatible rather than as an unknown name.
+
 | Intent | Canonical examples |
 |---|---|
 | Mixer status | `statut mixeur` |
@@ -546,6 +548,8 @@ The structural parser itself is native Node/TypeScript and follows a lexical-slo
 | Source -> bus qualitative | `monte batterie sur Anthony` · `baisse un peu Playback dans Anthony` |
 | FX/aux -> bus absolute | `mets Hall FX sur Anthony à -18 dB` · `mets Playback sur Anthony à -20 dB` |
 | Source -> bus mute | `mute Batterie sur Anthony` · `coupe Hall FX sur Anthony` · `réactive Playback dans Anthony` |
+| Named target lists | `unmute Anthony et Laurent` · `mute Batterie et Anthony` (family inferred after resolving each name) |
+| Multi-destination routes | `mets Batterie à -20 dB sur Anthony et Laurent` · `mute Batterie sur Anthony et Laurent` · `monte Batterie sur Anthony et Laurent de 3 dB` |
 | Bulk bus mute | `mute les bus Anthony et Laurent` · `coupe tous les bus` · `coupe tous les bus sauf Anthony` |
 | Bulk channel -> buses | `mets batterie à -20 dB sur les bus Anthony et Laurent` · `mets batterie à -25 dB sur tous les bus et façade` |
 | Progressive/ramp | `baisse progressivement batterie à -30 dB en 2 secondes` |
@@ -573,7 +577,7 @@ The deterministic Local milestone has an executable acceptance corpus in `corpus
 npm run test:local-recipe
 ```
 
-This recipe covers the user-facing command families documented above and the canonical behaviors required by `PROMPT.md`: reads, absolute/relative/qualitative levels, mutes, explicit FX engine state, source-to-bus routes, grouped operations, normalized values, DCA, X32 matrices, channel-to-AUX output, ramps/fades/delays, automation status/cancel, multi-action sequences, explicit anaphora, speaker context, and fail-closed ambiguity handling. Critical cases also assert the exact planned/executed operation, and safety cases assert that no side effect occurred.
+This recipe covers the user-facing command families documented above and the canonical behaviors required by `PROMPT.md`: reads, absolute/relative/qualitative levels, mutes, explicit FX engine state, source routes, family-inferred named lists and multi-destination composition, grouped operations, normalized values, DCA, X32 matrices, channel-to-AUX output, ramps/fades/delays, automation status/cancel, multi-action sequences, explicit anaphora, speaker context, capability rejection, and fail-closed ambiguity handling. Critical cases also assert the exact planned/executed operation, and safety cases assert that no side effect occurred.
 
 For a Raspberry Pi live recipe, update/build the MCP first:
 
