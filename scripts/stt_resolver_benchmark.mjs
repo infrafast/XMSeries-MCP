@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { parseLocalMixerIntent } from "../dist/local-gateway.js";
+import { parseLocalMixerIntent, qualifiedTargetQuery } from "../dist/local-gateway.js";
 import { rankNamedTargetCandidates } from "../dist/index.js";
 
 const VARIANTS = ["base_prompt_current", "small_prompt_current"];
@@ -72,9 +72,21 @@ function scoped(reg, families) {
   return reg.filter(x => families.includes(x.family));
 }
 function strictResolve(query, reg, families) {
-  const matches = rankNamedTargetCandidates(query, scoped(reg, families));
+  const qualified = qualifiedTargetQuery(query, families);
+  if (qualified.families && qualified.families.length === 0) {
+    return { accepted: null, method: "family_conflict", score: null, margin: null, experimental: false };
+  }
+  const matches = rankNamedTargetCandidates(qualified.query, scoped(reg, qualified.families));
   const accepted = matches.length === 1 && matches[0].matchType !== "fuzzy" ? matches[0] : null;
-  return { accepted, method: accepted ? accepted.matchType : "unresolved", score: null, margin: null, experimental: false };
+  return {
+    accepted,
+    method: accepted ? accepted.matchType : "unresolved",
+    score: null,
+    margin: null,
+    experimental: false,
+    normalizedQuery: qualified.query,
+    families: qualified.families,
+  };
 }
 function norm(s) {
   return String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
@@ -106,12 +118,13 @@ function threshold(q) {
 }
 function familyFuzzy(query, reg, families) {
   const strict = strictResolve(query,reg,families);
-  if (strict.accepted) return strict;
-  const scored=scoped(reg,families).map(candidate=>({candidate,score:similarity(query,candidate.name)})).sort((a,b)=>b.score-a.score);
+  if (strict.accepted || strict.method === "family_conflict") return strict;
+  const qualified = qualifiedTargetQuery(query, families);
+  const scored=scoped(reg,qualified.families).map(candidate=>({candidate,score:similarity(qualified.query,candidate.name)})).sort((a,b)=>b.score-a.score);
   const a=scored[0], b=scored[1];
   if (!a) return strict;
   const margin=a.score-(b?.score ?? 0);
-  if (a.score < threshold(query) || margin < .08) return { ...strict, method:"fuzzy_rejected", score:a.score, margin };
+  if (a.score < threshold(qualified.query) || margin < .08) return { ...strict, method:"fuzzy_rejected", score:a.score, margin };
   return { accepted:{...a.candidate,matchType:"fuzzy"}, method:"family_fuzzy", score:a.score, margin, experimental:true };
 }
 
