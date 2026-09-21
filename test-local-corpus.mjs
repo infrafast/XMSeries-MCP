@@ -72,6 +72,9 @@ function makeHarness() {
             operations.push({ kind: "write_send", source: source.name, destination: destination.name, level: next });
             sendLevel = next;
         },
+        canUseSend(source, destination) {
+            return ["channel", "fxreturn", "aux"].includes(source.family) && destination.family === "bus";
+        },
         async setSendMute(source, destination, mute) {
             operations.push({ kind: "mute_send", source: source.name, destination: destination.name, mute });
         },
