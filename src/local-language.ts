@@ -211,6 +211,7 @@ export function isAutomationStatusUtterance(raw: string): boolean {
     return (
         /^(?:quelles?\s+sont\s+)?(?:les\s+)?(?:automations|automatisations|fades|rampes)(?:\s+(?:en cours|actives))?$/u.test(text) ||
         /^(?:liste|affiche|montre moi|donne moi)\s+(?:les\s+)?(?:automations|automatisations)(?:\s+(?:en cours|actives))?$/u.test(text) ||
+        /^(?:liste|statut|etat)\s+(?:des\s+|les\s+)?(?:automations|automatisations)$/u.test(text) ||
         /^(?:quel est|quelle est)\s+(?:le\s+|la\s+)?(?:statut|etat)\s+(?:des\s+)?(?:automations|automatisations)$/u.test(text)
     );
 }
