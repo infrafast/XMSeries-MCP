@@ -193,11 +193,11 @@ function parseControlIntent(text: string): NativeMixerIntent | null {
     // return mute; only wording that names "effet/effect/fx" as the object
     // selects the effect engine state.
     const effectSet = text.match(
-        /^\s*(mute|unmute|active|allume|enable|on|off|disable)\s+(?:(?:l['’]?|le\s+|la\s+)?(?:effet|effect|fx)\s+)(.+?)\s*$/iu,
+        /^\s*(mute|coupe|desactive|désactive|eteins|éteins|unmute|reactive|réactive|active|rallume|ouvre|allume|enable|on|off|disable)\s+(?:(?:l['’]?|le\s+|la\s+)?(?:effet|effect|fx)\s+)(.+?)\s*$/iu,
     );
     if (effectSet?.[1] && effectSet[2]) {
         const action = simplify(effectSet[1]);
-        const on = ["unmute", "active", "allume", "enable", "on"].includes(action);
+        const on = ["unmute", "reactive", "active", "rallume", "ouvre", "allume", "enable", "on"].includes(action);
         const targetQuery = cleanTarget(effectSet[2]);
         if (targetQuery) return { kind: "set_effect_on", targetQuery, on };
     }
