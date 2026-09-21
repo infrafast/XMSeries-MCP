@@ -94,6 +94,32 @@
       }
     },
     {
+      "name": "stt-signed-numeric-negative-db",
+      "utterance": "mets Batterie à moins 5 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "family": "channel",
+          "name": "Batterie"
+        }
+      }
+    },
+    {
+      "name": "stt-signed-numeric-positive-db",
+      "utterance": "mets Batterie à plus 7 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "family": "channel",
+          "name": "Batterie"
+        }
+      }
+    },
+    {
       "name": "absolute-channel-directional-up",
       "utterance": "monte Batterie à -8 dB",
       "expected": {
