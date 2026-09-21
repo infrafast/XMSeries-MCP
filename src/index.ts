@@ -593,7 +593,7 @@ const localCommandGateway = new LocalMixerCommandGateway({
                 throw new Error("Local send source must be a channel, FX return or aux return.");
         }
     },
-    canWriteSendLevel: (source, destination) =>
+    canUseSend: (source, destination) =>
         destination.family === "bus" && ["channel", "fxreturn", "aux"].includes(source.family),
     setSendMute: localGatewaySetSendMute,
     startLevelRamp: async (target, toLevel, durationSeconds, fromLevel) => {
