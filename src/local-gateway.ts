@@ -1702,7 +1702,7 @@ export class LocalMixerCommandGateway {
             };
         }
 
-        const stored = this.store.createContinuation({ intent, candidates: matches.slice(0, 8) });
+        const stored = this.store.createContinuation({ intent, candidates: matches.slice(0, 8), families });
         return {
             protocol: GATEWAY_PROTOCOL,
             recognized: true,
@@ -1819,10 +1819,12 @@ export class LocalMixerCommandGateway {
             };
         }
 
-        const main = mainTarget(reply);
-        if (main) return this.readyTargetPlan(active.intent, main);
+        if (!active.families) {
+            const main = mainTarget(reply);
+            if (main) return this.readyTargetPlan(active.intent, main);
+        }
 
-        const matches = await this.adapter.resolve(reply);
+        const matches = await this.adapter.resolve(reply, active.families);
         const resolved = safeUnique(matches);
         if (!resolved) {
             return {
