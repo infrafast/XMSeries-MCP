@@ -7,8 +7,8 @@ import {
 } from "@infrafast/stage-command-core";
 import { dbToFaderLevel, faderLevelToDb, formatDb } from "./level-table.js";
 import { isLocalGatewayEnabled } from "@infrafast/stage-command-core";
-import { canonicalizeNaturalFrenchCommand, isAutomationStatusUtterance, isMainLevelReadUtterance, isMixerStatusUtterance } from "./local-language.js";
-import { parseDeterministicMixerIntent } from "./local-intent-parser.js";
+import { canonicalizeNaturalFrenchCommand } from "./local-language.js";
+import { parseDeterministicMixerIntent, type NativeMixerIntent } from "./local-intent-parser.js";
 
 export type LocalMixerTargetFamily =
     | "channel"
@@ -59,6 +59,7 @@ export interface LocalMixerGatewayAdapter {
     readLevel(target: LocalMixerTarget): Promise<number>;
     readChannelMute(target: LocalMixerTarget): Promise<boolean>;
     readEffectOn(target: LocalMixerTarget): Promise<boolean>;
+    setEffectOn(target: LocalMixerTarget, on: boolean): Promise<void>;
     readChannelName(channel: number): Promise<string>;
     writeLevel(target: LocalMixerTarget, level: number): Promise<void>;
     setMute(target: LocalMixerTarget, mute: boolean): Promise<void>;
@@ -111,39 +112,7 @@ export interface LocalMixerGatewayAdapter {
 type LevelUnit = "db" | "percent" | "level";
 type LevelValue = { unit: LevelUnit; value: number };
 
-type Intent =
-    | { kind: "status" }
-    | { kind: "read_level"; targetQuery: string }
-    | { kind: "read_mute"; targetQuery: string }
-    | { kind: "read_effect_on"; targetQuery: string }
-    | { kind: "read_channel_name"; channel: number }
-    | { kind: "set_level"; targetQuery: string; unit: LevelUnit; value: number }
-    | { kind: "adjust_level"; targetQuery: string; unit: LevelUnit; delta: number }
-    | { kind: "adjust_level_qualitative"; targetQuery: string; direction: LocalRelativeDirection; amount: LocalRelativeAmount }
-    | { kind: "send_read_level"; sourceQuery: string; destinationQuery: string }
-    | { kind: "send_set_level"; sourceQuery: string; destinationQuery: string; unit: LevelUnit; value: number }
-    | { kind: "send_adjust_level"; sourceQuery: string; destinationQuery: string; unit: LevelUnit; delta: number }
-    | { kind: "send_adjust_level_qualitative"; sourceQuery: string; destinationQuery: string; direction: LocalRelativeDirection; amount: LocalRelativeAmount }
-    | { kind: "send_mute"; sourceQuery: string; destinationQuery: string; mute: boolean }
-    | { kind: "send_to_aux_output"; sourceQuery: string; aux: number; unit: LevelUnit; value: number }
-    | { kind: "ramp_level"; targetQuery: string; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
-    | { kind: "delayed_ramp_level"; targetQuery: string; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number; delaySeconds: number }
-    | { kind: "ramp_level_qualitative"; targetQuery: string; direction: LocalRelativeDirection; amount: LocalRelativeAmount; durationSeconds: number }
-    | { kind: "send_ramp_level"; sourceQuery: string; destinationQuery: string; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number }
-    | { kind: "send_delayed_ramp_level"; sourceQuery: string; destinationQuery: string; to?: LevelValue; from?: LevelValue; delta?: LevelValue; durationSeconds: number; delaySeconds: number }
-    | { kind: "send_ramp_level_qualitative"; sourceQuery: string; destinationQuery: string; direction: LocalRelativeDirection; amount: LocalRelativeAmount; durationSeconds: number }
-    | { kind: "delay_level"; targetQuery: string; value: LevelValue; delaySeconds: number }
-    | { kind: "delay_mute"; targetQuery: string; mute: boolean; delaySeconds: number }
-    | { kind: "send_delay_level"; sourceQuery: string; destinationQuery: string; value: LevelValue; delaySeconds: number }
-    | { kind: "send_delay_mute"; sourceQuery: string; destinationQuery: string; mute: boolean; delaySeconds: number }
-    | { kind: "automation_list" }
-    | { kind: "automation_cancel"; id?: string; lastRunning: boolean }
-    | { kind: "bulk_channel_mute"; mode: "selected" | "all" | "all_except"; channelQueries: string[]; mute: boolean }
-    | { kind: "bulk_bus_mute"; mode: "selected" | "all" | "all_except"; busQueries: string[]; mute: boolean }
-    | { kind: "bulk_send_db"; mode: "selected" | "all"; sourceQuery: string; busQueries: string[]; db: number; includeMain: boolean }
-    | { kind: "mute"; targetQuery: string; mute: boolean }
-    | { kind: "sequence"; clauses: Array<{ text: string; waitBeforeSeconds: number }> };
-
+type Intent = NativeMixerIntent | { kind: "sequence"; clauses: Array<{ text: string; waitBeforeSeconds: number }> };
 type TargetIntent = Extract<Intent, { targetQuery: string }>;
 type SendIntent = Extract<Intent, { sourceQuery: string; destinationQuery: string }>;
 type BulkIntent = Extract<Intent, { kind: "bulk_channel_mute" | "bulk_bus_mute" | "bulk_send_db" }>;
@@ -153,6 +122,7 @@ type LocalPlan =
     | { kind: "read_level"; targetQuery: string; target: LocalMixerTarget }
     | { kind: "read_mute"; targetQuery: string; target: LocalMixerTarget }
     | { kind: "read_effect_on"; targetQuery: string; target: LocalMixerTarget }
+    | { kind: "set_effect_on"; targetQuery: string; target: LocalMixerTarget; on: boolean }
     | { kind: "read_channel_name"; channel: number }
     | { kind: "set_level"; targetQuery: string; target: LocalMixerTarget; unit: LevelUnit; value: number }
     | { kind: "adjust_level"; targetQuery: string; target: LocalMixerTarget; unit: LevelUnit; delta: number }
@@ -417,245 +387,15 @@ function parseSequenceIntent(raw: string): Intent | null {
 
 function parseIntent(raw: string, allowSequence = true): Intent | null {
     const text = canonicalizeNaturalFrenchCommand(normalizeLikelyFrenchSttDirection(raw));
-    const normalized = simplify(text);
 
+    // Sequence composition and explicit anaphora remain a separate temporal/context
+    // layer by design. Every elementary clause is parsed by the same native matcher.
     if (allowSequence) {
         const sequence = parseSequenceIntent(text);
         if (sequence) return sequence;
     }
 
-    if (
-        [
-            "etat mixeur",
-            "etat du mixeur",
-            "statut mixeur",
-            "statut du mixeur",
-            "mixer status",
-            "status mixer",
-            "mixeur status",
-        ].includes(normalized) ||
-        isMixerStatusUtterance(text)
-    ) {
-        return { kind: "status" };
-    }
-
-    if (
-        [
-            "liste automations",
-            "liste les automations",
-            "liste des automations",
-            "statut automations",
-            "statut des automations",
-            "etat automations",
-            "etat des automations",
-            "automation status",
-            "list automations",
-        ].includes(normalized) ||
-        isAutomationStatusUtterance(text)
-    ) {
-        return { kind: "automation_list" };
-    }
-
-    const cancelLastAutomation =
-        /^(?:annule|annuler|cancel|stop|arrete|arrête)\s+(?:(?:la|le)\s+)?(?:derniere|dernière|dernier|last)\s+(?:automation|automatisation|fade|rampe|ramp)$/iu.test(
-            text,
-        );
-    if (cancelLastAutomation) {
-        return { kind: "automation_cancel", lastRunning: true };
-    }
-
-    const cancelAutomation = text.match(
-        /^\s*(?:annule|annuler|cancel|stop|arrete|arrête)\s+(?:(?:l['’]?|la\s+|le\s+)?(?:automation|automatisation|fade|rampe|ramp)\s+)?(auto-\d+)\s*$/iu,
-    );
-    if (cancelAutomation?.[1]) {
-        return { kind: "automation_cancel", id: cancelAutomation[1].toLowerCase(), lastRunning: false };
-    }
-
-    // Specialized read-only mixer metadata stays outside the generic level/routing grammar.
-    const channelNameMatch = text.match(
-        /^\s*(?:(?:quel(?:le)?\s+est\s+)?(?:le\s+)?nom\s+(?:de\s+)?(?:la\s+)?(?:voie|tranche|canal|channel)\s+(\d+)|(?:channel|voie|tranche|canal)\s+(\d+)\s+(?:name|nom))\s*\??\s*$/iu,
-    );
-    if (channelNameMatch) {
-        const channel = Number(channelNameMatch[1] || channelNameMatch[2]);
-        if (Number.isInteger(channel) && channel > 0) {
-            return { kind: "read_channel_name", channel };
-        }
-    }
-
-    const muteStatePrefix = text.match(
-        /^\s*(?:etat|état|statut)\s+(?:du\s+)?mute\s+(?:de\s+|du\s+|de la\s+)?(.+?)\s*\??\s*$/iu,
-    );
-    const muteStateQuestion = text.match(
-        /^\s*(?:est[-\s]?ce\s+que\s+)?(.+?)\s+(?:est\s+(?:mute|muté|mutée|coupe|coupé|coupée)|est[-\s]?(?:il|elle)\s+(?:mute|muté|mutée|coupe|coupé|coupée))\s*\??\s*$/iu,
-    );
-    if (muteStatePrefix || muteStateQuestion) {
-        const targetQuery = cleanTarget(muteStatePrefix?.[1] || muteStateQuestion?.[1] || "");
-        if (targetQuery) return { kind: "read_mute", targetQuery };
-    }
-
-    const effectStatePrefix = text.match(
-        /^\s*(?:etat|état|statut)\s+(?:de\s+)?(?:l['’]?effet|fx)\s+(.+?)\s*\??\s*$/iu,
-    );
-    const effectStateQuestion = text.match(
-        /^\s*(?:est[-\s]?ce\s+que\s+)?(.+?)\s+(?:est\s+(?:actif|active|allume|allumé|allumée|on)|est[-\s]?(?:il|elle)\s+(?:actif|active|allume|allumé|allumée|on))\s*\??\s*$/iu,
-    );
-    if (effectStatePrefix || effectStateQuestion) {
-        const targetQuery = cleanTarget(effectStatePrefix?.[1] || effectStateQuestion?.[1] || "");
-        if (targetQuery) return { kind: "read_effect_on", targetQuery };
-    }
-
-    // Targetless natural Main-level questions have an established safe normalizer.
-    if (isMainLevelReadUtterance(text)) {
-        return { kind: "read_level", targetQuery: "main" };
-    }
-
-    // Physical AUX output is a distinct mixer capability with protocol-specific guards.
-    const channelToAuxNormalized = text.match(
-        /^\s*(?:mets|met|regle|règle|fixe|set)\s+(.+?)\s+(?:sur|vers|to)\s+(?:la\s+)?(?:sortie\s+aux|aux\s+output)\s+(\d+)\s+(?:(?:a|à|to)\s+)?(?:au\s+)?(?:niveau|level)\s+(0(?:[.,]\d+)?|1(?:[.,]0+)?)\s*$/iu,
-    );
-    if (channelToAuxNormalized?.[1] && channelToAuxNormalized[2] && channelToAuxNormalized[3]) {
-        const aux = Number(channelToAuxNormalized[2]);
-        const value = parseNormalizedLevel(channelToAuxNormalized[3]);
-        if (Number.isInteger(aux) && aux > 0 && value !== null) {
-            return {
-                kind: "send_to_aux_output",
-                sourceQuery: cleanTarget(channelToAuxNormalized[1]),
-                aux,
-                unit: "level",
-                value,
-            };
-        }
-    }
-
-    const channelToAuxOutput = text.match(
-        /^\s*(?:mets|met|regle|règle|fixe|set)\s+(.+?)\s+(?:sur|vers|to)\s+(?:la\s+)?(?:sortie\s+aux|aux\s+output)\s+(\d+)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
-    );
-    if (channelToAuxOutput?.[1] && channelToAuxOutput[2] && channelToAuxOutput[3] && channelToAuxOutput[4]) {
-        const aux = Number(channelToAuxOutput[2]);
-        const value = parseTemporalLevelValue(channelToAuxOutput[3], channelToAuxOutput[4]);
-        if (Number.isInteger(aux) && aux > 0 && value) {
-            return {
-                kind: "send_to_aux_output",
-                sourceQuery: cleanTarget(channelToAuxOutput[1]),
-                aux,
-                unit: value.unit,
-                value: value.value,
-            };
-        }
-    }
-
-    // Group/bulk operations deliberately retain their dedicated grammar because their
-    // semantics and execution safety differ from a single source -> destination route.
-    const bulkAllChannelMute = text.match(
-        /^\s*(mute|coupe|couper|desactive|désactive|eteins|éteins|unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\s+(?:(?:toutes\s+les\s+(?:voies|tranches))|(?:tous\s+les\s+(?:canaux|channels))|all\s+channels)(?:\s+(?:sauf|except)\s+(.+))?\s*$/iu,
-    );
-    if (bulkAllChannelMute?.[1]) {
-        const mute = !["unmute", "demute", "démute", "reactive", "réactive", "remets"].includes(
-            bulkAllChannelMute[1].toLocaleLowerCase("fr-FR"),
-        );
-        const channelQueries = bulkAllChannelMute[2] ? splitTargetList(bulkAllChannelMute[2]) : [];
-        return {
-            kind: "bulk_channel_mute",
-            mode: channelQueries.length > 0 ? "all_except" : "all",
-            channelQueries,
-            mute,
-        };
-    }
-
-    const bulkSelectedChannelMute = text.match(
-        /^\s*(mute|coupe|couper|desactive|désactive|eteins|éteins|unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\s+(?:(?:les\s+)?(?:voies|tranches|canaux|channels))\s+(.+?)\s*$/iu,
-    );
-    if (bulkSelectedChannelMute?.[1] && bulkSelectedChannelMute[2]) {
-        const channelQueries = splitTargetList(bulkSelectedChannelMute[2]);
-        if (channelQueries.length > 0) {
-            const mute = !["unmute", "demute", "démute", "reactive", "réactive", "remets"].includes(
-                bulkSelectedChannelMute[1].toLocaleLowerCase("fr-FR"),
-            );
-            return { kind: "bulk_channel_mute", mode: "selected", channelQueries, mute };
-        }
-    }
-
-    const bulkAllBusMute = text.match(
-        /^\s*(mute|coupe|couper|desactive|désactive|eteins|éteins|unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\s+tous\s+les\s+bus(?:\s+sauf\s+(.+))?\s*$/iu,
-    );
-    if (bulkAllBusMute?.[1]) {
-        const mute = !["unmute", "demute", "démute", "reactive", "réactive", "remets"].includes(
-            bulkAllBusMute[1].toLocaleLowerCase("fr-FR"),
-        );
-        const busQueries = bulkAllBusMute[2] ? splitTargetList(bulkAllBusMute[2]) : [];
-        return {
-            kind: "bulk_bus_mute",
-            mode: busQueries.length > 0 ? "all_except" : "all",
-            busQueries,
-            mute,
-        };
-    }
-
-    const bulkSelectedBusMute = text.match(
-        /^\s*(mute|coupe|couper|desactive|désactive|eteins|éteins|unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\s+(?:les\s+)?bus\s+(.+?)\s*$/iu,
-    );
-    if (bulkSelectedBusMute?.[1] && bulkSelectedBusMute[2]) {
-        const busQueries = splitTargetList(bulkSelectedBusMute[2]);
-        if (busQueries.length > 0) {
-            const mute = !["unmute", "demute", "démute", "reactive", "réactive", "remets"].includes(
-                bulkSelectedBusMute[1].toLocaleLowerCase("fr-FR"),
-            );
-            return { kind: "bulk_bus_mute", mode: "selected", busQueries, mute };
-        }
-    }
-
-    const bulkSendAll = text.match(
-        /^\s*(?:mets|met|regle|règle|fixe|set)\s+(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*d[bB]\s+sur\s+tous\s+les\s+bus(?:\s+et\s+(?:la\s+)?(?:facade|façade|main(?:\s+lr)?|lr))?\s*$/iu,
-    );
-    if (bulkSendAll?.[1] && bulkSendAll[2]) {
-        const db = parseDb(bulkSendAll[2]);
-        if (db !== null) {
-            const includeMain = /\s+et\s+(?:la\s+)?(?:facade|façade|main(?:\s+lr)?|lr)\s*$/iu.test(text);
-            return {
-                kind: "bulk_send_db",
-                mode: "all",
-                sourceQuery: cleanTarget(bulkSendAll[1]),
-                busQueries: [],
-                db,
-                includeMain,
-            };
-        }
-    }
-
-    const bulkSendSelected = text.match(
-        /^\s*(?:mets|met|regle|règle|fixe|set)\s+(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*d[bB]\s+sur\s+(?:les\s+)?bus\s+(.+?)\s*$/iu,
-    );
-    if (bulkSendSelected?.[1] && bulkSendSelected[2] && bulkSendSelected[3]) {
-        const db = parseDb(bulkSendSelected[2]);
-        let destinationText = bulkSendSelected[3].trim();
-        let includeMain = false;
-        const mainSuffix = destinationText.match(
-            /^(.*?)(?:\s+et\s+(?:la\s+)?(?:facade|façade|main(?:\s+lr)?|lr))\s*$/iu,
-        );
-        if (mainSuffix?.[1]) {
-            destinationText = mainSuffix[1].trim();
-            includeMain = true;
-        }
-        const busQueries = splitTargetList(destinationText);
-        if (db !== null && busQueries.length > 0) {
-            return {
-                kind: "bulk_send_db",
-                mode: "selected",
-                sourceQuery: cleanTarget(bulkSendSelected[1]),
-                busQueries,
-                db,
-                includeMain,
-            };
-        }
-    }
-
-    // All ordinary level/routing/ramp/delay/mute language now goes through the
-    // native lexical-slot + constraint matcher. There is no whole-utterance regex
-    // fallback after this point.
-    const nativeDeterministicIntent = parseDeterministicMixerIntent(text);
-    if (nativeDeterministicIntent) return nativeDeterministicIntent as Intent;
-
-    return null;
+    return parseDeterministicMixerIntent(text);
 }
 
 function sameIdentity(a: LocalMixerTarget, b: LocalMixerTarget): boolean {
@@ -931,7 +671,7 @@ export class LocalMixerCommandGateway {
         if (intent.kind === "read_mute") {
             return await this.planScopedTargetIntent(intent, ["channel"]);
         }
-        if (intent.kind === "read_effect_on") {
+        if (intent.kind === "read_effect_on" || intent.kind === "set_effect_on") {
             return await this.planScopedTargetIntent(intent, ["fxreturn"]);
         }
 
@@ -1126,6 +866,16 @@ export class LocalMixerCommandGateway {
                     protocol: GATEWAY_PROTOCOL,
                     ok: true,
                     responseText: `${displayName(liveTarget)} est ${on ? "actif" : "coupé"}.`,
+                };
+            }
+
+            if (plan.kind === "set_effect_on") {
+                const liveTarget = await this.revalidateScopedTarget(plan.targetQuery, plan.target, ["fxreturn"]);
+                await this.adapter.setEffectOn(liveTarget, plan.on);
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    ok: true,
+                    responseText: `${displayName(liveTarget)} : effet ${plan.on ? "activé" : "désactivé"}.`,
                 };
             }
 
@@ -1962,18 +1712,19 @@ export class LocalMixerCommandGateway {
     }
 
     private async planScopedTargetIntent(
-        intent: Extract<Intent, { kind: "read_mute" | "read_effect_on" }>,
+        intent: Extract<Intent, { kind: "read_mute" | "read_effect_on" | "set_effect_on" }>,
         families: LocalMixerTargetFamily[],
     ): Promise<AnalyzeCommandResult> {
         const matches = await this.adapter.resolve(intent.targetQuery, families);
         const resolved = safeUnique(matches);
         if (resolved && resolved.matchType !== "fuzzy") {
-            const stored = this.store.createPlan({ ...intent, target: resolved }, "read");
+            const effect = intent.kind === "set_effect_on" ? "write" : "read";
+            const stored = this.store.createPlan({ ...intent, target: resolved }, effect);
             return {
                 protocol: GATEWAY_PROTOCOL,
                 recognized: true,
                 status: "ready",
-                effect: "read",
+                effect,
                 planToken: stored.token,
                 expiresInMs: stored.expiresInMs,
                 responseText: null,
@@ -2032,7 +1783,7 @@ export class LocalMixerCommandGateway {
         intent: TargetIntent,
         target: LocalMixerTarget,
     ): AnalyzeCommandResult {
-        const effect = intent.kind === "read_level" ? "read" : "write";
+        const effect = intent.kind === "read_level" || intent.kind === "read_mute" || intent.kind === "read_effect_on" ? "read" : "write";
         const plan: LocalPlan = { ...intent, target } as LocalPlan;
 
         const stored = this.store.createPlan(plan, effect);
