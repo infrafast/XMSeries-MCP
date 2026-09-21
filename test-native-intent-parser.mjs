@@ -33,6 +33,12 @@ const cases = [
   ["baisse le volume", {
     kind: "adjust_level_qualitative", targetQuery: "main", direction: "down", amount: "normal"
   }],
+  ["où est le fader", {
+    kind: "read_level", targetQuery: "main"
+  }],
+  ["où est le fader de Batterie", {
+    kind: "read_level", targetQuery: "Batterie"
+  }],
   ["fade out en 5 secondes", {
     kind: "ramp_level", targetQuery: "main", to: { unit: "db", value: -120 }, durationSeconds: 5
   }],
