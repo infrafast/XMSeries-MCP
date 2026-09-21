@@ -111,6 +111,11 @@ function isBulkLike(text: string): boolean {
 }
 
 function readRequested(text: string): boolean {
+    // A trailing level noun is a read cue only when no explicit write verb is present.
+    // This prevents "monte le son" / "baisse le volume" from degrading into reads.
+    if (/\b(?:monte|augmente|raise|increase|baisse|diminue|lower|decrease|mets|met|regle|règle|fixe|set|mute|coupe|unmute|rallume|reactive|réactive)\b/iu.test(text)) {
+        return false;
+    }
     return (
         /^\s*(?:quel(?:le)?\s+est\s+)?(?:le\s+)?(?:niveau|volume|fader|son)\b/iu.test(text) ||
         /^\s*(?:lis|donne|read|get|affiche|montre(?:-|\s)+moi)\b/iu.test(text) ||
