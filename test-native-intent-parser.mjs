@@ -117,6 +117,6 @@ for (const [utterance, expected] of cases) {
 }
 
 assert.equal(parseDeterministicMixerIntent("Batterie -20 dB"), null);
-assert.equal(parseDeterministicMixerIntent("active Hall FX"), null, "FX engine writes require explicit effet/fx object wording");
+assert.deepEqual(parseDeterministicMixerIntent("active Hall FX"), { kind: "mute", targetQuery: "Hall FX", mute: false }, "historical FX-return unmute shorthand must stay compatible");
 
 console.log("native deterministic intent parser tests: OK");
