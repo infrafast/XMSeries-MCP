@@ -230,6 +230,12 @@ export function parseDeterministicMixerIntent(raw: string): NativeMixerIntent | 
     const fadeDirection = fadeMatch?.[1] ? simplify(fadeMatch[1]) : null;
     if (fadeMatch?.[0]) text = compact(text.replace(fadeMatch[0], " "));
 
+    // In an explicit from/to range, standalone "fade" is a structural ramp
+    // keyword just like "rampe"/"ramp", never part of the target name.
+    if (from && to) {
+        text = compact(text.replace(/\bfade\b/giu, " "));
+    }
+
     const progressive = /\b(?:progressivement|progressively|gradually|rampe|ramp)\b/iu.test(text) || Boolean(fadeDirection);
     text = compact(text.replace(/\b(?:progressivement|progressively|gradually|rampe|ramp)\b/giu, " "));
 
