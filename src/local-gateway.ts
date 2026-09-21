@@ -211,35 +211,11 @@ function mainTarget(query: string): LocalMixerTarget | null {
     };
 }
 
-function parseDb(value: string): number | null {
-    const cleaned = value.trim().replace(",", ".");
-    if (!/^[+-]?\d+(?:\.\d+)?$/u.test(cleaned)) return null;
-    const number = Number(cleaned);
-    return Number.isFinite(number) ? number : null;
-}
-
 function cleanTarget(value: string): string {
     return value
         .replace(/^\s*(?:le|la|les|de|du|de la|de l|d|the)\s+/iu, "")
         .replace(/\s*(?:fader|niveau|volume|son)\s*$/iu, "")
         .trim();
-}
-
-function splitTargetList(value: string): string[] {
-    return value
-        .split(/\s*(?:,|;|\bet\b|\band\b)\s*/iu)
-        .map((item) => cleanTarget(item))
-        .filter(Boolean);
-}
-
-function parsePercent(value: string): number | null {
-    const number = parseDb(value);
-    return number !== null && Number.isFinite(number) ? number : null;
-}
-
-function parseNormalizedLevel(value: string): number | null {
-    const number = parseDb(value);
-    return number !== null && number >= 0 && number <= 1 ? number : null;
 }
 
 function levelToNormalized(unit: LevelUnit, value: number): { level: number; label: string } {
@@ -287,17 +263,6 @@ function adjustedLevel(currentLevel: number, unit: LevelUnit, delta: number): { 
     };
 }
 
-
-function parseTemporalLevelValue(rawValue: string, rawUnit: string): LevelValue | null {
-    const normalizedUnit = simplify(rawUnit);
-    const unit: LevelUnit = rawUnit === "%" ? "percent" : normalizedUnit === "level" || normalizedUnit === "niveau" ? "level" : "db";
-    const value = unit === "percent"
-        ? parsePercent(rawValue)
-        : unit === "level"
-          ? parseNormalizedLevel(rawValue)
-          : parseDb(rawValue);
-    return value === null ? null : { unit, value };
-}
 
 function normalizeLikelyFrenchSttDirection(raw: string): string {
     const text = raw.trim();
