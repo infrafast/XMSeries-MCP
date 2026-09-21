@@ -8,6 +8,7 @@ import {
 import { dbToFaderLevel, faderLevelToDb, formatDb } from "./level-table.js";
 import { isLocalGatewayEnabled } from "@infrafast/stage-command-core";
 import { canonicalizeNaturalFrenchCommand, isAutomationStatusUtterance, isMainLevelReadUtterance, isMixerStatusUtterance } from "./local-language.js";
+import { parseDeterministicMixerIntent } from "./local-intent-parser.js";
 
 export type LocalMixerTargetFamily =
     | "channel"
@@ -844,6 +845,13 @@ function parseIntent(raw: string, allowSequence = true): Intent | null {
         const targetQuery = cleanTarget(effectStatePrefix?.[1] || effectStateQuestion?.[1] || "");
         if (targetQuery) return { kind: "read_effect_on", targetQuery };
     }
+
+    if (isMainLevelReadUtterance(text)) {
+        return { kind: "read_level", targetQuery: "main" };
+    }
+
+    const nativeDeterministicIntent = parseDeterministicMixerIntent(text);
+    if (nativeDeterministicIntent) return nativeDeterministicIntent as Intent;
 
     const flexibleTemporalIntent = parseFlexibleTemporalIntent(text);
     if (flexibleTemporalIntent) return flexibleTemporalIntent;
