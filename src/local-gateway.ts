@@ -229,9 +229,9 @@ function qualifiedTargetQuery(
     const query = cleanTarget(rawQuery);
     const qualifiers: Array<{ pattern: RegExp; family: LocalMixerTargetFamily }> = [
         { pattern: /^(?:channel|channels|voie|voies|canal|canaux|tranche|tranches|source)\s+(.+)$/iu, family: "channel" },
+        { pattern: /^(?:retour\s+fx|fx(?:\s+return)?|effet|effets|effect|effects)\s+(.+)$/iu, family: "fxreturn" },
+        { pattern: /^(?:aux\s+return|aux|auxiliaire|auxiliaires)\s+(.+)$/iu, family: "aux" },
         { pattern: /^(?:bus|retour|retours|monitor|moniteur|moniteurs)\s+(.+)$/iu, family: "bus" },
-        { pattern: /^(?:fx(?:\s+return)?|effet|effets|effect|effects|retour\s+fx)\s+(.+)$/iu, family: "fxreturn" },
-        { pattern: /^(?:aux|auxiliaire|auxiliaires|aux\s+return)\s+(.+)$/iu, family: "aux" },
         { pattern: /^(?:dca)\s+(.+)$/iu, family: "dca" },
         { pattern: /^(?:matrix|matrice|matrices)\s+(.+)$/iu, family: "matrix" },
     ];
