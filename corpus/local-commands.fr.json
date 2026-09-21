@@ -1060,6 +1060,62 @@
         "status": "clarification",
         "effect": "none"
       }
+    },
+    {
+      "name": "native-ramp-value-before-verb",
+      "utterance": "Batterie à -30 dB baisse progressivement en 2 secondes",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "ramp",
+          "family": "channel",
+          "name": "Batterie",
+          "durationSeconds": 2
+        }
+      }
+    },
+    {
+      "name": "native-send-ramp-progressive-first",
+      "utterance": "progressivement monte Batterie sur Anthony en 3 secondes à -10 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "send_ramp",
+          "source": "Batterie",
+          "destination": "Anthony",
+          "durationSeconds": 3
+        }
+      }
+    },
+    {
+      "name": "native-delay-value-before-target",
+      "utterance": "mets à -27 dB Batterie dans 2 secondes",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "delay",
+          "family": "channel",
+          "name": "Batterie",
+          "delaySeconds": 2
+        }
+      }
+    },
+    {
+      "name": "native-send-structured-progressive-permuted",
+      "utterance": "progressivement baisse la guitare de anto sur claude en 2 secondes à -5 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "send_ramp",
+          "source": "guitar-anto",
+          "destination": "Claude",
+          "durationSeconds": 2
+        }
+      }
     }
   ]
 }
