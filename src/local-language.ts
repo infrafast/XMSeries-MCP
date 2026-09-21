@@ -88,6 +88,16 @@ function parseFrenchIntegerWords(raw: string): number | null {
 function normalizeSpokenFrenchQuantities(raw: string): string {
     let text = raw.replace(/\b(?:d[ée]cibels?|decibels?)\b/giu, "dB");
 
+    // Signed numeric STT hybrids: Whisper commonly emits "moins 5 dB"
+    // even when the user spoke the number as a word.
+    text = text.replace(
+        /\b(moins|plus)\s+(\d+(?:[.,]\d+)?)\s+(dB|%)\b/giu,
+        (_full, signRaw: string, numberRaw: string, unitRaw: string) => {
+            const sign = simplifyForMatch(signRaw) === "moins" ? "-" : "+";
+            return sign + numberRaw.replace(",", ".") + " " + unitRaw;
+        },
+    );
+
     // Signed absolute levels: "moins cinq dB" / "plus trois décibels".
     text = text.replace(
         /\b(moins|plus)\s+((?:[\p{L}-]+\s*){1,5})\s+dB\b/giu,
