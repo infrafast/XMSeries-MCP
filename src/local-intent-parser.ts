@@ -326,6 +326,10 @@ function parseBulkSendIntent(text: string): NativeMixerIntent | null {
 
     const busQueries = splitTargetList(tail);
     if (!explicitBusSelector || !busQueries.length) return null;
+    // A single explicit bus destination is still an ordinary route. Let the
+    // generic route parser preserve the "bus" qualifier so the resolver can
+    // constrain that endpoint. Batch semantics start at two destinations.
+    if (busQueries.length === 1) return null;
     return { kind: "bulk_send_db", mode: "selected", sourceQuery, busQueries, db, includeMain };
 }
 
