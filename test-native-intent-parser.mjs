@@ -48,6 +48,10 @@ const cases = [
   ["fade out en 5 secondes", {
     kind: "ramp_level", targetQuery: "main", to: { unit: "db", value: -120 }, durationSeconds: 5
   }],
+  ["dans 5 secondes fais un fade out de Voix", {
+    kind: "delayed_ramp_level", targetQuery: "Voix", to: { unit: "db", value: -120 },
+    durationSeconds: 5, delaySeconds: 5
+  }],
   ["en 4 secondes fais une rampe Batterie de -40 dB à -10 dB", {
     kind: "ramp_level", targetQuery: "Batterie", from: { unit: "db", value: -40 },
     to: { unit: "db", value: -10 }, durationSeconds: 4
