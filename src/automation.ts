@@ -45,6 +45,36 @@ interface AutomationJob extends AutomationJobSnapshot {
     abortController: AbortController;
 }
 
+export async function verifyAutomationReadback(
+    read: () => Promise<number>,
+    expected: number,
+    options?: {
+        description?: string;
+        tolerance?: number;
+        attempts?: number;
+        retryDelayMs?: number;
+    },
+): Promise<number> {
+    const attempts = Math.max(1, options?.attempts ?? 5);
+    const tolerance = options?.tolerance ?? 0.002;
+    const retryDelayMs = Math.max(0, options?.retryDelayMs ?? 60);
+    let actual = Number.NaN;
+
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+        if (attempt > 1 && retryDelayMs > 0) {
+            await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+        }
+        actual = await read();
+        if (Math.abs(actual - expected) <= tolerance) {
+            return actual;
+        }
+    }
+
+    throw new Error(
+        `Delayed level verification failed for ${options?.description || "target"}: expected ${formatAutomationValue(expected)}, read ${formatAutomationValue(actual)}`,
+    );
+}
+
 export class AutomationEngine {
     private jobs = new Map<string, AutomationJob>();
     private nextId = 1;
