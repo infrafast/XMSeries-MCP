@@ -8,7 +8,7 @@ import {
 import { dbToFaderLevel, faderLevelToDb, formatDb } from "./level-table.js";
 import { isLocalGatewayEnabled } from "@infrafast/stage-command-core";
 import { canonicalizeNaturalFrenchCommand } from "./local-language.js";
-import { parseDeterministicMixerIntent, type NativeMixerIntent } from "./local-intent-parser.js";
+import { parseDeterministicMixerIntent, type NativeMixerIntent, type NativeSendIntent } from "./local-intent-parser.js";
 
 export type LocalMixerTargetFamily =
     | "channel"
@@ -65,7 +65,7 @@ export interface LocalMixerGatewayAdapter {
     setMute(target: LocalMixerTarget, mute: boolean): Promise<void>;
     readSendLevel(source: LocalMixerTarget, destination: LocalMixerTarget): Promise<number>;
     writeSendLevel(source: LocalMixerTarget, destination: LocalMixerTarget, level: number): Promise<void>;
-    canWriteSendLevel(source: LocalMixerTarget, destination: LocalMixerTarget): boolean;
+    canUseSend(source: LocalMixerTarget, destination: LocalMixerTarget): boolean;
     writeChannelToAux(source: LocalMixerTarget, aux: number, level: number): Promise<void>;
     setSendMute(source: LocalMixerTarget, destination: LocalMixerTarget, mute: boolean): Promise<void>;
     startLevelRamp(target: LocalMixerTarget, toLevel: number, durationSeconds: number, fromLevel?: number): Promise<string>;
@@ -116,7 +116,7 @@ type LevelValue = { unit: LevelUnit; value: number };
 type Intent = NativeMixerIntent | { kind: "sequence"; clauses: Array<{ text: string; waitBeforeSeconds: number }> };
 type TargetIntent = Extract<Intent, { targetQuery: string }>;
 type SendIntent = Extract<Intent, { sourceQuery: string; destinationQuery: string }>;
-type BulkIntent = Extract<Intent, { kind: "bulk_channel_mute" | "bulk_bus_mute" | "bulk_named_mute" | "bulk_named_send_db" | "bulk_send_db" }>;
+type BulkIntent = Extract<Intent, { kind: "bulk_channel_mute" | "bulk_bus_mute" | "bulk_named_mute" | "bulk_send_db" }>;
 
 type LocalPlan =
     | { kind: "status" }
@@ -149,7 +149,7 @@ type LocalPlan =
     | { kind: "bulk_channel_mute"; mode: "selected" | "all" | "all_except"; channelQueries: string[]; channels: LocalMixerTarget[]; mute: boolean }
     | { kind: "bulk_bus_mute"; mode: "selected" | "all" | "all_except"; busQueries: string[]; buses: LocalMixerTarget[]; mute: boolean }
     | { kind: "bulk_named_mute"; targetQueries: string[]; targets: LocalMixerTarget[]; mute: boolean }
-    | { kind: "bulk_named_send_db"; sourceQuery: string; source: LocalMixerTarget; destinationQueries: string[]; destinations: LocalMixerTarget[]; db: number }
+    | { kind: "multi_send"; intent: NativeSendIntent; sourceQuery: string; source: LocalMixerTarget; destinationQueries: string[]; destinations: LocalMixerTarget[] }
     | { kind: "bulk_send_db"; mode: "selected" | "all"; sourceQuery: string; source: LocalMixerTarget; busQueries: string[]; buses: LocalMixerTarget[]; db: number; includeMain: boolean }
     | { kind: "mute"; targetQuery: string; target: LocalMixerTarget; mute: boolean }
     | { kind: "sequence"; steps: Array<{ waitBeforeSeconds: number; plan: LocalPlan }> };
@@ -627,7 +627,11 @@ export class LocalMixerCommandGateway {
             };
         }
 
-        if (intent.kind === "bulk_channel_mute" || intent.kind === "bulk_bus_mute" || intent.kind === "bulk_named_mute" || intent.kind === "bulk_named_send_db" || intent.kind === "bulk_send_db") {
+        if (intent.kind === "multi_send") {
+            return await this.planMultiSendIntent(intent);
+        }
+
+        if (intent.kind === "bulk_channel_mute" || intent.kind === "bulk_bus_mute" || intent.kind === "bulk_named_mute" || intent.kind === "bulk_send_db") {
             return await this.planBulkIntent(intent);
         }
 
@@ -1242,7 +1246,9 @@ export class LocalMixerCommandGateway {
         }
 
         let result: AnalyzeCommandResult;
-        if (intent.kind === "bulk_channel_mute" || intent.kind === "bulk_bus_mute" || intent.kind === "bulk_named_mute" || intent.kind === "bulk_named_send_db" || intent.kind === "bulk_send_db") {
+        if (intent.kind === "multi_send") {
+            result = await this.planMultiSendIntent(intent);
+        } else if (intent.kind === "bulk_channel_mute" || intent.kind === "bulk_bus_mute" || intent.kind === "bulk_named_mute" || intent.kind === "bulk_send_db") {
             result = await this.planBulkIntent(intent);
         } else if (intent.kind === "send_to_aux_output") {
             result = await this.planAuxOutputIntent(intent);
