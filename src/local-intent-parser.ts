@@ -1,3 +1,9 @@
+import {
+    isAutomationStatusUtterance,
+    isMainLevelReadUtterance,
+    isMixerStatusUtterance,
+} from "./local-language.js";
+
 /**
  * Native deterministic mixer intent parser.
  *
@@ -15,6 +21,17 @@ export type NativeDirection = "up" | "down";
 export type NativeAmount = "little" | "normal" | "much";
 
 export type NativeMixerIntent =
+    | { kind: "status" }
+    | { kind: "automation_list" }
+    | { kind: "automation_cancel"; id?: string; lastRunning: boolean }
+    | { kind: "read_channel_name"; channel: number }
+    | { kind: "read_mute"; targetQuery: string }
+    | { kind: "read_effect_on"; targetQuery: string }
+    | { kind: "set_effect_on"; targetQuery: string; on: boolean }
+    | { kind: "send_to_aux_output"; sourceQuery: string; aux: number; unit: NativeLevelUnit; value: number }
+    | { kind: "bulk_channel_mute"; mode: "selected" | "all" | "all_except"; channelQueries: string[]; mute: boolean }
+    | { kind: "bulk_bus_mute"; mode: "selected" | "all" | "all_except"; busQueries: string[]; mute: boolean }
+    | { kind: "bulk_send_db"; mode: "selected" | "all"; sourceQuery: string; busQueries: string[]; db: number; includeMain: boolean }
     | { kind: "read_level"; targetQuery: string }
     | { kind: "set_level"; targetQuery: string; unit: NativeLevelUnit; value: number }
     | { kind: "adjust_level"; targetQuery: string; unit: NativeLevelUnit; delta: number }
@@ -114,12 +131,193 @@ function directionFrom(raw: string | undefined): NativeDirection | null {
     return null;
 }
 
-function isBulkLike(text: string): boolean {
-    return (
-        /\b(?:tous|toutes|all)\s+(?:les\s+)?(?:bus|voies|tranches|canaux|channels)\b/iu.test(text) ||
-        /^\s*(?:mute|coupe|couper|desactive|désactive|eteins|éteins|unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\s+(?:les\s+)?(?:bus|voies|tranches|canaux|channels)\b/iu.test(text) ||
-        /\bsur\s+(?:les\s+)?bus\b/iu.test(text)
+function splitTargetList(value: string): string[] {
+    return value
+        .split(/\s*(?:,|;|\bet\b|\band\b)\s*/iu)
+        .map((item) => cleanTarget(item))
+        .filter(Boolean);
+}
+
+function muteValue(raw: string): boolean {
+    const value = simplify(raw);
+    return !["unmute", "demute", "reactive", "active", "rallume", "ouvre", "remet", "remets"].includes(value);
+}
+
+function parseControlIntent(text: string): NativeMixerIntent | null {
+    if (isMixerStatusUtterance(text)) return { kind: "status" };
+    if (isAutomationStatusUtterance(text)) return { kind: "automation_list" };
+
+    const cancelLast = text.match(
+        /^\s*(?:annule|annuler|cancel|stop|arrete|arrête)\s+(?:(?:la|le)\s+)?(?:derniere|dernière|dernier|last)\s+(?:automation|automatisation|fade|rampe|ramp)\s*$/iu,
     );
+    if (cancelLast) return { kind: "automation_cancel", lastRunning: true };
+
+    const cancelById = text.match(
+        /^\s*(?:annule|annuler|cancel|stop|arrete|arrête)\s+(?:(?:l['’]?|la\s+|le\s+)?(?:automation|automatisation|fade|rampe|ramp)\s+)?(auto-\d+)\s*$/iu,
+    );
+    if (cancelById?.[1]) {
+        return { kind: "automation_cancel", id: cancelById[1].toLowerCase(), lastRunning: false };
+    }
+
+    const channelName = text.match(
+        /^\s*(?:(?:quel(?:le)?\s+est\s+)?(?:le\s+)?nom\s+(?:de\s+)?(?:la\s+)?(?:voie|tranche|canal|channel)\s+(\d+)|(?:channel|voie|tranche|canal)\s+(\d+)\s+(?:name|nom))\s*\??\s*$/iu,
+    );
+    if (channelName) {
+        const channel = Number(channelName[1] || channelName[2]);
+        if (Number.isInteger(channel) && channel > 0) return { kind: "read_channel_name", channel };
+    }
+
+    const muteStatePrefix = text.match(
+        /^\s*(?:etat|état|statut)\s+(?:du\s+)?mute\s+(?:de\s+|du\s+|de la\s+)?(.+?)\s*\??\s*$/iu,
+    );
+    const muteStateQuestion = text.match(
+        /^\s*(?:est[-\s]?ce\s+que\s+)?(.+?)\s+(?:est\s+(?:mute|muté|mutée|coupe|coupé|coupée)|est[-\s]?(?:il|elle)\s+(?:mute|muté|mutée|coupe|coupé|coupée))\s*\??\s*$/iu,
+    );
+    if (muteStatePrefix || muteStateQuestion) {
+        const targetQuery = cleanTarget(muteStatePrefix?.[1] || muteStateQuestion?.[1] || "");
+        if (targetQuery) return { kind: "read_mute", targetQuery };
+    }
+
+    const effectStatePrefix = text.match(
+        /^\s*(?:etat|état|statut)\s+(?:de\s+)?(?:l['’]?effet|effet|fx)\s+(.+?)\s*\??\s*$/iu,
+    );
+    const effectStateQuestion = text.match(
+        /^\s*(?:est[-\s]?ce\s+que\s+)?(.+?)\s+(?:est\s+(?:actif|active|allume|allumé|allumée|on)|est[-\s]?(?:il|elle)\s+(?:actif|active|allume|allumé|allumée|on))\s*\??\s*$/iu,
+    );
+    if (effectStatePrefix || effectStateQuestion) {
+        const targetQuery = cleanTarget(effectStatePrefix?.[1] || effectStateQuestion?.[1] || "");
+        if (targetQuery) return { kind: "read_effect_on", targetQuery };
+    }
+
+    // Effect-engine on/off is deliberately explicit. "mute Hall FX" remains a
+    // return mute; only wording that names "effet/effect/fx" as the object
+    // selects the effect engine state.
+    const effectSet = text.match(
+        /^\s*(mute|unmute|active|allume|enable|on|off|disable)\s+(?:(?:l['’]?|le\s+|la\s+)?(?:effet|effect|fx)\s+)(.+?)\s*$/iu,
+    );
+    if (effectSet?.[1] && effectSet[2]) {
+        const action = simplify(effectSet[1]);
+        const on = ["unmute", "active", "allume", "enable", "on"].includes(action);
+        const targetQuery = cleanTarget(effectSet[2]);
+        if (targetQuery) return { kind: "set_effect_on", targetQuery, on };
+    }
+
+    if (isMainLevelReadUtterance(text)) return { kind: "read_level", targetQuery: "main" };
+    return null;
+}
+
+function parseBulkMuteIntent(text: string): NativeMixerIntent | null {
+    const action = text.match(
+        /^\s*(mute|coupe|couper|desactive|désactive|eteins|éteins|unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\b/iu,
+    );
+    if (!action?.[1]) return null;
+
+    const mute = muteValue(action[1]);
+    let rest = compact(text.slice(action[0].length));
+    let family: "channel" | "bus" | null = null;
+    let all = false;
+
+    const allChannels = rest.match(/^(?:toutes\s+les\s+(?:voies|tranches)|tous\s+les\s+(?:canaux|channels)|all\s+channels)\b/iu);
+    const allBuses = rest.match(/^(?:tous\s+les\s+bus|all\s+buses)\b/iu);
+    const selectedChannels = rest.match(/^(?:les\s+)?(?:voies|tranches|canaux|channels)\b/iu);
+    const selectedBuses = rest.match(/^(?:les\s+)?bus\b/iu);
+
+    const marker = allChannels || allBuses || selectedChannels || selectedBuses;
+    if (!marker) return null;
+    if (allChannels || selectedChannels) family = "channel";
+    if (allBuses || selectedBuses) family = "bus";
+    all = Boolean(allChannels || allBuses);
+    rest = compact(rest.slice(marker[0].length));
+
+    if (all) {
+        if (!rest) {
+            return family === "channel"
+                ? { kind: "bulk_channel_mute", mode: "all", channelQueries: [], mute }
+                : { kind: "bulk_bus_mute", mode: "all", busQueries: [], mute };
+        }
+        const except = rest.match(/^(?:sauf|except)\s+(.+)$/iu);
+        if (!except?.[1]) return null;
+        const queries = splitTargetList(except[1]);
+        if (!queries.length) return null;
+        return family === "channel"
+            ? { kind: "bulk_channel_mute", mode: "all_except", channelQueries: queries, mute }
+            : { kind: "bulk_bus_mute", mode: "all_except", busQueries: queries, mute };
+    }
+
+    const queries = splitTargetList(rest);
+    if (!queries.length) return null;
+    return family === "channel"
+        ? { kind: "bulk_channel_mute", mode: "selected", channelQueries: queries, mute }
+        : { kind: "bulk_bus_mute", mode: "selected", busQueries: queries, mute };
+}
+
+function parseBulkSendIntent(text: string): NativeMixerIntent | null {
+    const set = text.match(/^\s*(?:mets|met|regle|règle|fixe|set)\b/iu);
+    if (!set) return null;
+    let rest = compact(text.slice(set[0].length));
+
+    const valueSlot = take(rest, /(?:^|\s)(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*d[bB](?=\s|$)/iu);
+    if (!valueSlot.match?.[1]) return null;
+    const db = number(valueSlot.match[1]);
+    if (db === null) return null;
+    rest = valueSlot.text;
+
+    const destination = rest.match(/\b(?:sur|to)\s+((?:tous\s+les\s+bus|all\s+buses)|(?:les\s+)?bus)\b/iu);
+    if (!destination?.[0] || !destination[1] || destination.index === undefined) return null;
+
+    const sourceQuery = cleanTarget(rest.slice(0, destination.index));
+    if (!sourceQuery) return null;
+
+    let tail = compact(rest.slice(destination.index + destination[0].length));
+    let includeMain = false;
+    const mainSuffix = tail.match(
+        /^(.*?)(?:\s+et\s+(?:la\s+)?(?:facade|façade|main(?:\s+lr)?|lr))\s*$/iu,
+    );
+    if (mainSuffix) {
+        tail = compact(mainSuffix[1] || "");
+        includeMain = true;
+    } else if (/^(?:et\s+)?(?:la\s+)?(?:facade|façade|main(?:\s+lr)?|lr)$/iu.test(tail)) {
+        tail = "";
+        includeMain = true;
+    }
+
+    const all = /^(?:tous\s+les\s+bus|all\s+buses)$/iu.test(destination[1]);
+    if (all) {
+        if (tail && !includeMain) return null;
+        return { kind: "bulk_send_db", mode: "all", sourceQuery, busQueries: [], db, includeMain };
+    }
+
+    const busQueries = splitTargetList(tail);
+    if (!busQueries.length) return null;
+    return { kind: "bulk_send_db", mode: "selected", sourceQuery, busQueries, db, includeMain };
+}
+
+function parsePhysicalAuxIntent(text: string): NativeMixerIntent | null {
+    const set = text.match(/^\s*(?:mets|met|regle|règle|fixe|set)\b/iu);
+    if (!set) return null;
+    const rest = compact(text.slice(set[0].length));
+    const destination = rest.match(/\b(?:sur|vers|to)\s+(?:la\s+)?(?:sortie\s+aux|aux\s+output)\s+(\d+)\b/iu);
+    if (!destination?.[1] || destination.index === undefined) return null;
+
+    const aux = Number(destination[1]);
+    if (!Number.isInteger(aux) || aux <= 0) return null;
+    const sourceQuery = cleanTarget(rest.slice(0, destination.index));
+    if (!sourceQuery) return null;
+
+    const tail = compact(rest.slice(destination.index + destination[0].length));
+    const normalized = tail.match(/^(?:(?:a|à|to)\s+)?(?:au\s+)?(?:niveau|level)\s+(0(?:[.,]\d+)?|1(?:[.,]0+)?)$/iu);
+    if (normalized?.[1]) {
+        const parsed = level(normalized[1], "level");
+        if (parsed) return { kind: "send_to_aux_output", sourceQuery, aux, unit: parsed.unit, value: parsed.value };
+    }
+
+    const explicit = tail.match(/^(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)$/iu);
+    if (explicit?.[1] && explicit[2]) {
+        const parsed = level(explicit[1], explicit[2]);
+        if (parsed) return { kind: "send_to_aux_output", sourceQuery, aux, unit: parsed.unit, value: parsed.value };
+    }
+
+    return null;
 }
 
 function readRequested(text: string): boolean {
@@ -161,10 +359,21 @@ function splitRoute(text: string): { sourceQuery: string; destinationQuery: stri
 
 export function parseDeterministicMixerIntent(raw: string): NativeMixerIntent | null {
     let text = compact(raw);
-    if (!text || isBulkLike(text)) return null;
-    // Channel -> physical AUX output is a dedicated mixer capability with
-    // protocol-specific guards; keep it on the existing specialized parser path.
-    if (/\b(?:sortie\s+aux|aux\s+output)\s+\d+\b/iu.test(text)) return null;
+    if (!text) return null;
+
+    // Domain-neutral intent selection lives here; protocol/capability enforcement
+    // remains in the gateway adapter and OSC layer.
+    const control = parseControlIntent(text);
+    if (control) return control;
+
+    const bulkMute = parseBulkMuteIntent(text);
+    if (bulkMute) return bulkMute;
+
+    const bulkSend = parseBulkSendIntent(text);
+    if (bulkSend) return bulkSend;
+
+    const auxOutput = parsePhysicalAuxIntent(text);
+    if (auxOutput) return auxOutput;
 
     const original = text;
     const wantsRead = readRequested(text);
