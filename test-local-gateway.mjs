@@ -1683,6 +1683,41 @@ async function ready(text) {
     assert.deepEqual(sendMuteWrites.map((entry) => entry.destination.name), ["Anthony", "Laurent"]);
 }
 
+// Multi-destination composition also applies to read, relative and ramp send intents.
+{
+    sendReadCalls = [];
+    let analyzed = await ready("niveau de Batterie sur Anthony et Laurent");
+    let result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(analyzed.effect, "read");
+    assert.deepEqual(sendReadCalls.map((entry) => entry.destination.name), ["Anthony", "Laurent"]);
+
+    sendWrites = [];
+    sendLevel = 0.5;
+    analyzed = await ready("monte Batterie sur Anthony et Laurent de 3 dB");
+    result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.deepEqual(sendWrites.map((entry) => entry.destination.name), ["Anthony", "Laurent"]);
+
+    automationCalls = [];
+    analyzed = await ready("baisse progressivement Batterie sur Anthony et Laurent à -30 dB en 2 secondes");
+    result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.deepEqual(
+        automationCalls.filter((entry) => entry.kind === "send-ramp").map((entry) => entry.destination.name),
+        ["Anthony", "Laurent"],
+    );
+}
+
 // Non-bus destinations are resolved correctly, then rejected by capability rather than reported missing.
 {
     sendWrites = [];
