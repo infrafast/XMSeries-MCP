@@ -88,6 +88,8 @@ OR4B4 PR #12 merged on `main` as `968c94f69d4bd007191fff1762101707a94c70b5`. PR 
 
 Temporal grammar in this slice is explicit: `en N secondes` is ramp duration; `dans N secondes` is delay before an action. The flexible-slot parser accepts equivalent constituent reorderings while preserving those markers strictly; unbound level literals are rejected rather than guessed. Fade-in/out without an explicit target defaults to Main LR/façade.
 
+
+- [~] native constraint-driven parser refactor: the primary Local level/routing/ramp/delay/mute path now uses a Node/TypeScript lexical-slot extractor plus semantic constraint matcher instead of whole-utterance regex selection. Existing resolver, ambiguity/fuzzy-write safety, planner, OSC adapters and automation engine remain authoritative. The legacy regex branches are retained only as compatibility fallback until the full regression corpus and live Pi acceptance confirm removal is safe.
 ### XDG3 — Regression corpus and cloud/local drift control
 
 - [x] maintain a deterministic command corpus in-repo covering French first: `corpus/local-commands.fr.json` is executed in CI by `test-local-corpus.mjs`; English expansion remains incremental;
