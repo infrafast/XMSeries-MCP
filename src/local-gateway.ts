@@ -1387,6 +1387,12 @@ export class LocalMixerCommandGateway {
                 continue;
             }
 
+            if (plan.kind === "set_effect_on") {
+                const target = await this.revalidateScopedTarget(plan.targetQuery, plan.target, ["fxreturn"]);
+                run(`${plan.on ? "activer" : "désactiver"} l'effet ${displayName(target)}`, () => this.adapter.setEffectOn(target, plan.on));
+                continue;
+            }
+
             const target = await this.revalidateTarget(plan.targetQuery, plan.target, true);
             if (plan.kind === "set_level") {
                 const converted = levelToNormalized(plan.unit, plan.value);
