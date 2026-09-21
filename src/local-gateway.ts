@@ -1329,6 +1329,78 @@ export class LocalMixerCommandGateway {
             actions.push({ type: "run", description, run: fn });
         };
 
+        const appendSend = async (
+            intent: NativeSendIntent,
+            source: LocalMixerTarget,
+            destination: LocalMixerTarget,
+        ) => {
+            if (!this.adapter.canUseSend(source, destination)) {
+                throw new Error(`Destination de send incompatible : ${displayName(destination)}`);
+            }
+            if (intent.kind === "send_read_level") {
+                throw new Error("Une macro ne peut pas contenir une lecture de send.");
+            }
+            if (intent.kind === "send_set_level") {
+                const converted = levelToNormalized(intent.unit, intent.value);
+                run(`${displayName(source)} vers ${displayName(destination)}`, () => this.adapter.writeSendLevel(source, destination, converted.level));
+                return;
+            }
+            if (intent.kind === "send_adjust_level") {
+                run(`ajuster ${displayName(source)} vers ${displayName(destination)}`, async () => {
+                    const current = await this.adapter.readSendLevel(source, destination);
+                    const adjusted = adjustedLevel(current, intent.unit, intent.delta);
+                    await this.adapter.writeSendLevel(source, destination, adjusted.level);
+                });
+                return;
+            }
+            if (intent.kind === "send_adjust_level_qualitative") {
+                run(`ajuster ${displayName(source)} vers ${displayName(destination)}`, async () => {
+                    await this.adapter.adjustQualitativeSend(source, destination, intent.direction, intent.amount);
+                });
+                return;
+            }
+            if (intent.kind === "send_mute") {
+                run(`${intent.mute ? "mute" : "unmute"} ${displayName(source)} vers ${displayName(destination)}`, () => this.adapter.setSendMute(source, destination, intent.mute));
+                return;
+            }
+            if (intent.kind === "send_delay_level") {
+                wait(intent.delaySeconds, `attendre ${formatSeconds(intent.delaySeconds)}`);
+                const converted = levelToNormalized(intent.value.unit, intent.value.value);
+                run(`${displayName(source)} vers ${displayName(destination)}`, () => this.adapter.writeSendLevel(source, destination, converted.level));
+                return;
+            }
+            if (intent.kind === "send_delay_mute") {
+                wait(intent.delaySeconds, `attendre ${formatSeconds(intent.delaySeconds)}`);
+                run(`${intent.mute ? "mute" : "unmute"} ${displayName(source)} vers ${displayName(destination)}`, () => this.adapter.setSendMute(source, destination, intent.mute));
+                return;
+            }
+
+            if (intent.kind === "send_delayed_ramp_level") {
+                wait(intent.delaySeconds, `attendre ${formatSeconds(intent.delaySeconds)}`);
+            }
+            const from = intent.from ? levelToNormalized(intent.from.unit, intent.from.value).level : undefined;
+            let to: number | (() => Promise<number>);
+            if (intent.kind === "send_ramp_level_qualitative") {
+                to = async () => (await this.adapter.previewQualitativeSend(source, destination, intent.direction, intent.amount)).targetLevel;
+            } else if (intent.delta) {
+                to = async () => {
+                    const current = await this.adapter.readSendLevel(source, destination);
+                    return adjustedLevel(current, intent.delta!.unit, intent.delta!.value).level;
+                };
+            } else {
+                to = levelToNormalized(intent.to!.unit, intent.to!.value).level;
+            }
+            actions.push({
+                type: "ramp",
+                description: `rampe ${displayName(source)} vers ${displayName(destination)}`,
+                from,
+                to,
+                durationSeconds: intent.durationSeconds,
+                read: () => this.adapter.readSendLevel(source, destination),
+                write: (value) => this.adapter.writeSendLevel(source, destination, value),
+            });
+        };
+
         for (const item of steps) {
             wait(item.waitBeforeSeconds, item.waitBeforeSeconds > 0 ? `attendre ${item.waitBeforeSeconds} s` : undefined);
             const plan = item.plan;
@@ -1345,16 +1417,11 @@ export class LocalMixerCommandGateway {
                 continue;
             }
 
-            if (plan.kind === "bulk_named_send_db") {
+            if (plan.kind === "multi_send") {
                 const source = await this.revalidateScopedTarget(plan.sourceQuery, plan.source, SEND_SOURCE_FAMILIES);
                 const destinations = await this.revalidateNamedTargets(plan.destinationQueries, plan.destinations);
-                const unsupported = destinations.filter((target) => !this.adapter.canWriteSendLevel(source, target));
-                if (unsupported.length > 0) {
-                    throw new Error(`Destination de send devenue incompatible : ${unsupported.map(displayName).join(", ")}`);
-                }
-                const converted = levelToNormalized("db", plan.db);
                 for (const destination of destinations) {
-                    run(`${displayName(source)} vers ${displayName(destination)}`, () => this.adapter.writeSendLevel(source, destination, converted.level));
+                    await appendSend(plan.intent, source, destination);
                 }
                 continue;
             }
@@ -1408,56 +1475,11 @@ export class LocalMixerCommandGateway {
                 plan.kind === "send_delay_mute"
             ) {
                 const source = await this.revalidateScopedTarget(plan.sourceQuery, plan.source, SEND_SOURCE_FAMILIES);
-                const destination = await this.revalidateScopedTarget(plan.destinationQuery, plan.destination, ["bus"]);
-
-                if (plan.kind === "send_set_level") {
-                    const converted = levelToNormalized(plan.unit, plan.value);
-                    run(`${displayName(source)} vers ${displayName(destination)}`, () => this.adapter.writeSendLevel(source, destination, converted.level));
-                } else if (plan.kind === "send_adjust_level") {
-                    run(`ajuster ${displayName(source)} vers ${displayName(destination)}`, async () => {
-                        const current = await this.adapter.readSendLevel(source, destination);
-                        const adjusted = adjustedLevel(current, plan.unit, plan.delta);
-                        await this.adapter.writeSendLevel(source, destination, adjusted.level);
-                    });
-                } else if (plan.kind === "send_adjust_level_qualitative") {
-                    run(`ajuster ${displayName(source)} vers ${displayName(destination)}`, async () => {
-                        await this.adapter.adjustQualitativeSend(source, destination, plan.direction, plan.amount);
-                    });
-                } else if (plan.kind === "send_mute") {
-                    run(`${plan.mute ? "mute" : "unmute"} ${displayName(source)} vers ${displayName(destination)}`, () => this.adapter.setSendMute(source, destination, plan.mute));
-                } else if (plan.kind === "send_delay_level") {
-                    wait(plan.delaySeconds, `attendre ${formatSeconds(plan.delaySeconds)}`);
-                    const converted = levelToNormalized(plan.value.unit, plan.value.value);
-                    run(`${displayName(source)} vers ${displayName(destination)}`, () => this.adapter.writeSendLevel(source, destination, converted.level));
-                } else if (plan.kind === "send_delay_mute") {
-                    wait(plan.delaySeconds, `attendre ${formatSeconds(plan.delaySeconds)}`);
-                    run(`${plan.mute ? "mute" : "unmute"} ${displayName(source)} vers ${displayName(destination)}`, () => this.adapter.setSendMute(source, destination, plan.mute));
-                } else {
-                    if (plan.kind === "send_delayed_ramp_level") {
-                        wait(plan.delaySeconds, `attendre ${formatSeconds(plan.delaySeconds)}`);
-                    }
-                    const from = "from" in plan && plan.from ? levelToNormalized(plan.from.unit, plan.from.value).level : undefined;
-                    let to: number | (() => Promise<number>);
-                    if (plan.kind === "send_ramp_level_qualitative") {
-                        to = async () => (await this.adapter.previewQualitativeSend(source, destination, plan.direction, plan.amount)).targetLevel;
-                    } else if (plan.delta) {
-                        to = async () => {
-                            const current = await this.adapter.readSendLevel(source, destination);
-                            return adjustedLevel(current, plan.delta!.unit, plan.delta!.value).level;
-                        };
-                    } else {
-                        to = levelToNormalized(plan.to!.unit, plan.to!.value).level;
-                    }
-                    actions.push({
-                        type: "ramp",
-                        description: `rampe ${displayName(source)} vers ${displayName(destination)}`,
-                        from,
-                        to,
-                        durationSeconds: plan.durationSeconds,
-                        read: () => this.adapter.readSendLevel(source, destination),
-                        write: (value) => this.adapter.writeSendLevel(source, destination, value),
-                    });
-                }
+                const [destination] = await this.revalidateNamedTargets(
+                    [plan.destinationQuery],
+                    [plan.destination],
+                );
+                await appendSend(plan, source, destination);
                 continue;
             }
 
