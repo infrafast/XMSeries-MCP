@@ -40,6 +40,7 @@ for (const kind of [
   '"bulk_channel_mute"',
   '"bulk_bus_mute"',
   '"bulk_send_db"',
+  '"multi_send"',
 ]) {
   assert.ok(parser.includes(`kind: ${kind}`), `native parser missing consolidated intent ${kind}`);
 }

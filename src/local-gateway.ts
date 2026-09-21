@@ -8,7 +8,7 @@ import {
 import { dbToFaderLevel, faderLevelToDb, formatDb } from "./level-table.js";
 import { isLocalGatewayEnabled } from "@infrafast/stage-command-core";
 import { canonicalizeNaturalFrenchCommand } from "./local-language.js";
-import { parseDeterministicMixerIntent, type NativeMixerIntent } from "./local-intent-parser.js";
+import { parseDeterministicMixerIntent, type NativeMixerIntent, type NativeSendIntent } from "./local-intent-parser.js";
 
 export type LocalMixerTargetFamily =
     | "channel"
@@ -65,6 +65,7 @@ export interface LocalMixerGatewayAdapter {
     setMute(target: LocalMixerTarget, mute: boolean): Promise<void>;
     readSendLevel(source: LocalMixerTarget, destination: LocalMixerTarget): Promise<number>;
     writeSendLevel(source: LocalMixerTarget, destination: LocalMixerTarget, level: number): Promise<void>;
+    canUseSend(source: LocalMixerTarget, destination: LocalMixerTarget): boolean;
     writeChannelToAux(source: LocalMixerTarget, aux: number, level: number): Promise<void>;
     setSendMute(source: LocalMixerTarget, destination: LocalMixerTarget, mute: boolean): Promise<void>;
     startLevelRamp(target: LocalMixerTarget, toLevel: number, durationSeconds: number, fromLevel?: number): Promise<string>;
@@ -115,7 +116,7 @@ type LevelValue = { unit: LevelUnit; value: number };
 type Intent = NativeMixerIntent | { kind: "sequence"; clauses: Array<{ text: string; waitBeforeSeconds: number }> };
 type TargetIntent = Extract<Intent, { targetQuery: string }>;
 type SendIntent = Extract<Intent, { sourceQuery: string; destinationQuery: string }>;
-type BulkIntent = Extract<Intent, { kind: "bulk_channel_mute" | "bulk_bus_mute" | "bulk_send_db" }>;
+type BulkIntent = Extract<Intent, { kind: "bulk_channel_mute" | "bulk_bus_mute" | "bulk_named_mute" | "bulk_send_db" }>;
 
 type LocalPlan =
     | { kind: "status" }
@@ -147,13 +148,15 @@ type LocalPlan =
     | { kind: "automation_cancel"; id: string }
     | { kind: "bulk_channel_mute"; mode: "selected" | "all" | "all_except"; channelQueries: string[]; channels: LocalMixerTarget[]; mute: boolean }
     | { kind: "bulk_bus_mute"; mode: "selected" | "all" | "all_except"; busQueries: string[]; buses: LocalMixerTarget[]; mute: boolean }
+    | { kind: "bulk_named_mute"; targetQueries: string[]; targets: LocalMixerTarget[]; mute: boolean }
+    | { kind: "multi_send"; intent: NativeSendIntent; sourceQuery: string; source: LocalMixerTarget; destinationQueries: string[]; destinations: LocalMixerTarget[] }
     | { kind: "bulk_send_db"; mode: "selected" | "all"; sourceQuery: string; source: LocalMixerTarget; busQueries: string[]; buses: LocalMixerTarget[]; db: number; includeMain: boolean }
     | { kind: "mute"; targetQuery: string; target: LocalMixerTarget; mute: boolean }
     | { kind: "sequence"; steps: Array<{ waitBeforeSeconds: number; plan: LocalPlan }> };
 
 type LocalContinuation =
     | {
-          intent: TargetIntent | SendIntent | BulkIntent | Extract<Intent, { kind: "send_to_aux_output" }>;
+          intent: TargetIntent | SendIntent | BulkIntent | Extract<Intent, { kind: "multi_send" | "send_to_aux_output" }>;
           candidates: LocalMixerTarget[];
           families?: LocalMixerTargetFamily[];
       }
@@ -285,6 +288,7 @@ function sequencePrimaryTarget(intent: Intent): string | null {
 
 function sequenceDestination(intent: Intent): string | null {
     if ("destinationQuery" in intent && typeof intent.destinationQuery === "string") return intent.destinationQuery;
+    if (intent.kind === "multi_send") return intent.rawDestinationQuery;
     return null;
 }
 
@@ -370,6 +374,19 @@ function sameIdentity(a: LocalMixerTarget, b: LocalMixerTarget): boolean {
 
 function safeUnique(matches: LocalMixerTarget[]): LocalMixerTarget | null {
     return matches.length === 1 && matches[0].matchType !== "fuzzy" ? matches[0] : null;
+}
+
+async function resolveOneNamedTarget(
+    adapter: LocalMixerGatewayAdapter,
+    query: string,
+    families?: LocalMixerTargetFamily[],
+): Promise<{ target: LocalMixerTarget | null; matches: LocalMixerTarget[] }> {
+    if (!families || families.includes("main")) {
+        const main = mainTarget(query);
+        if (main) return { target: main, matches: [main] };
+    }
+    const matches = await adapter.resolve(query, families);
+    return { target: safeUnique(matches), matches };
 }
 
 function summarizeCandidates(matches: LocalMixerTarget[]): string {
@@ -611,7 +628,11 @@ export class LocalMixerCommandGateway {
             };
         }
 
-        if (intent.kind === "bulk_channel_mute" || intent.kind === "bulk_bus_mute" || intent.kind === "bulk_send_db") {
+        if (intent.kind === "multi_send") {
+            return await this.planMultiSendIntent(intent);
+        }
+
+        if (intent.kind === "bulk_channel_mute" || intent.kind === "bulk_bus_mute" || intent.kind === "bulk_named_mute" || intent.kind === "bulk_send_db") {
             return await this.planBulkIntent(intent);
         }
 
@@ -730,6 +751,39 @@ export class LocalMixerCommandGateway {
                     protocol: GATEWAY_PROTOCOL,
                     ok: true,
                     responseText: `Automation ${jobId} démarrée : séquence de ${plan.steps.length} ${plan.steps.length === 1 ? "action" : "actions"}.`,
+                };
+            }
+
+            if (plan.kind === "bulk_named_mute") {
+                const targets = await this.revalidateNamedTargets(plan.targetQueries, plan.targets);
+                // Revalidate the complete list before the first side effect.
+                for (const target of targets) {
+                    await this.adapter.setMute(target, plan.mute);
+                }
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    ok: true,
+                    responseText: `${targets.map(displayName).join(", ")} : ${plan.mute ? "coupés" : "réactivés"}.`,
+                };
+            }
+
+
+            if (plan.kind === "multi_send") {
+                const source = await this.revalidateScopedTarget(plan.sourceQuery, plan.source, SEND_SOURCE_FAMILIES);
+                const destinations = await this.revalidateNamedTargets(plan.destinationQueries, plan.destinations);
+                const unsupported = destinations.filter((target) => !this.adapter.canUseSend(source, target));
+                if (unsupported.length > 0) {
+                    throw new Error(`Destination de send devenue incompatible : ${unsupported.map(displayName).join(", ")}`);
+                }
+
+                const responses: string[] = [];
+                for (const destination of destinations) {
+                    responses.push(await this.executeResolvedSendIntent(plan.intent, source, destination));
+                }
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    ok: true,
+                    responseText: responses.join("; "),
                 };
             }
 
@@ -869,133 +923,17 @@ export class LocalMixerCommandGateway {
                 plan.kind === "send_delay_mute"
             ) {
                 const source = await this.revalidateScopedTarget(plan.sourceQuery, plan.source, SEND_SOURCE_FAMILIES);
-                const destination = await this.revalidateScopedTarget(plan.destinationQuery, plan.destination, ["bus"]);
-                if (plan.kind === "send_read_level") {
-                    const level = await this.adapter.readSendLevel(source, destination);
-                    const converted = faderLevelToDb(level);
-                    return {
-                        protocol: GATEWAY_PROTOCOL,
-                        ok: true,
-                        responseText: `${displayName(source)} → ${displayName(destination)} est à ${formatDb(converted.db)}.`,
-                    };
+                const [destination] = await this.revalidateNamedTargets(
+                    [plan.destinationQuery],
+                    [plan.destination],
+                );
+                if (!this.adapter.canUseSend(source, destination)) {
+                    throw new Error(`Destination de send devenue incompatible : ${displayName(destination)}`);
                 }
-
-                if (plan.kind === "send_set_level") {
-                    const converted = levelToNormalized(plan.unit, plan.value);
-                    await this.adapter.writeSendLevel(source, destination, converted.level);
-                    return {
-                        protocol: GATEWAY_PROTOCOL,
-                        ok: true,
-                        responseText: `${displayName(source)} → ${displayName(destination)} réglé à ${converted.label}.`,
-                    };
-                }
-                if (plan.kind === "send_adjust_level") {
-                    const current = await this.adapter.readSendLevel(source, destination);
-                    const adjusted = adjustedLevel(current, plan.unit, plan.delta);
-                    await this.adapter.writeSendLevel(source, destination, adjusted.level);
-                    return {
-                        protocol: GATEWAY_PROTOCOL,
-                        ok: true,
-                        responseText: `${displayName(source)} → ${displayName(destination)} : ${adjusted.beforeLabel} → ${adjusted.afterLabel}.`,
-                    };
-                }
-                if (plan.kind === "send_adjust_level_qualitative") {
-                    const adjusted = await this.adapter.adjustQualitativeSend(
-                        source,
-                        destination,
-                        plan.direction,
-                        plan.amount,
-                    );
-                    return {
-                        protocol: GATEWAY_PROTOCOL,
-                        ok: true,
-                        responseText: `${displayName(source)} → ${displayName(destination)} : ${formatDb(adjusted.beforeDb)} → ${formatDb(adjusted.targetDb)}.`,
-                    };
-                }
-                if (plan.kind === "send_mute") {
-                    await this.adapter.setSendMute(source, destination, plan.mute);
-                    return {
-                        protocol: GATEWAY_PROTOCOL,
-                        ok: true,
-                        responseText: `${displayName(source)} → ${displayName(destination)} ${plan.mute ? "coupé" : "réactivé"}.`,
-                    };
-                }
-
-                if (plan.kind === "send_delay_mute") {
-                    const jobId = await this.adapter.scheduleSendMute(
-                        source,
-                        destination,
-                        plan.mute,
-                        plan.delaySeconds,
-                    );
-                    return {
-                        protocol: GATEWAY_PROTOCOL,
-                        ok: true,
-                        responseText: `Action programmée ${jobId} : ${displayName(source)} → ${displayName(destination)} ${plan.mute ? "sera coupé" : "sera réactivé"} dans ${formatSeconds(plan.delaySeconds)}.`,
-                    };
-                }
-
-                if (plan.kind === "send_delay_level") {
-                    const converted = levelToNormalized(plan.value.unit, plan.value.value);
-                    const jobId = await this.adapter.scheduleSend(source, destination, converted.level, plan.delaySeconds);
-                    return {
-                        protocol: GATEWAY_PROTOCOL,
-                        ok: true,
-                        responseText: `Action programmée ${jobId} : ${displayName(source)} → ${displayName(destination)} à ${converted.label} dans ${formatSeconds(plan.delaySeconds)}.`,
-                    };
-                }
-
-                if (plan.kind === "send_ramp_level_qualitative") {
-                    const preview = await this.adapter.previewQualitativeSend(
-                        source,
-                        destination,
-                        plan.direction,
-                        plan.amount,
-                    );
-                    const jobId = await this.adapter.startSendRamp(
-                        source,
-                        destination,
-                        preview.targetLevel,
-                        plan.durationSeconds,
-                    );
-                    return {
-                        protocol: GATEWAY_PROTOCOL,
-                        ok: true,
-                        responseText: `Automation ${jobId} démarrée : ${displayName(source)} → ${displayName(destination)} de ${formatDb(preview.beforeDb)} vers ${formatDb(preview.targetDb)} sur ${formatSeconds(plan.durationSeconds)}.`,
-                    };
-                }
-
-                if (plan.kind === "send_delayed_ramp_level") {
-                    const current = await this.adapter.readSendLevel(source, destination);
-                    const toLevel = plan.delta
-                        ? adjustedLevel(current, plan.delta.unit, plan.delta.value).level
-                        : levelToNormalized(plan.to!.unit, plan.to!.value).level;
-                    const fromLevel = plan.from ? levelToNormalized(plan.from.unit, plan.from.value).level : undefined;
-                    const jobId = await this.adapter.startDelayedSendRamp(
-                        source,
-                        destination,
-                        toLevel,
-                        plan.durationSeconds,
-                        plan.delaySeconds,
-                        fromLevel,
-                    );
-                    return {
-                        protocol: GATEWAY_PROTOCOL,
-                        ok: true,
-                        responseText: `Automation ${jobId} programmée : ${displayName(source)} → ${displayName(destination)} dans ${formatSeconds(plan.delaySeconds)} sur ${formatSeconds(plan.durationSeconds)}.`,
-                    };
-                }
-
-                const current = await this.adapter.readSendLevel(source, destination);
-                const toLevel = plan.delta
-                    ? adjustedLevel(current, plan.delta.unit, plan.delta.value).level
-                    : levelToNormalized(plan.to!.unit, plan.to!.value).level;
-                const fromLevel = plan.from ? levelToNormalized(plan.from.unit, plan.from.value).level : undefined;
-                const jobId = await this.adapter.startSendRamp(source, destination, toLevel, plan.durationSeconds, fromLevel);
                 return {
                     protocol: GATEWAY_PROTOCOL,
                     ok: true,
-                    responseText: `Automation ${jobId} démarrée : ${displayName(source)} → ${displayName(destination)} sur ${formatSeconds(plan.durationSeconds)}.`,
+                    responseText: await this.executeResolvedSendIntent(plan, source, destination),
                 };
             }
 
@@ -1135,6 +1073,118 @@ export class LocalMixerCommandGateway {
         }
     }
 
+    private async executeResolvedSendIntent(
+        intent: NativeSendIntent,
+        source: LocalMixerTarget,
+        destination: LocalMixerTarget,
+    ): Promise<string> {
+        if (intent.kind === "send_read_level") {
+            const level = await this.adapter.readSendLevel(source, destination);
+            const converted = faderLevelToDb(level);
+            return `${displayName(source)} → ${displayName(destination)} est à ${formatDb(converted.db)}.`;
+        }
+
+        if (intent.kind === "send_set_level") {
+            const converted = levelToNormalized(intent.unit, intent.value);
+            await this.adapter.writeSendLevel(source, destination, converted.level);
+            return `${displayName(source)} → ${displayName(destination)} réglé à ${converted.label}.`;
+        }
+
+        if (intent.kind === "send_adjust_level") {
+            const current = await this.adapter.readSendLevel(source, destination);
+            const adjusted = adjustedLevel(current, intent.unit, intent.delta);
+            await this.adapter.writeSendLevel(source, destination, adjusted.level);
+            return `${displayName(source)} → ${displayName(destination)} : ${adjusted.beforeLabel} → ${adjusted.afterLabel}.`;
+        }
+
+        if (intent.kind === "send_adjust_level_qualitative") {
+            const adjusted = await this.adapter.adjustQualitativeSend(
+                source,
+                destination,
+                intent.direction,
+                intent.amount,
+            );
+            return `${displayName(source)} → ${displayName(destination)} : ${formatDb(adjusted.beforeDb)} → ${formatDb(adjusted.targetDb)}.`;
+        }
+
+        if (intent.kind === "send_mute") {
+            await this.adapter.setSendMute(source, destination, intent.mute);
+            return `${displayName(source)} → ${displayName(destination)} ${intent.mute ? "coupé" : "réactivé"}.`;
+        }
+
+        if (intent.kind === "send_delay_mute") {
+            const jobId = await this.adapter.scheduleSendMute(
+                source,
+                destination,
+                intent.mute,
+                intent.delaySeconds,
+            );
+            return `Action programmée ${jobId} : ${displayName(source)} → ${displayName(destination)} ${intent.mute ? "sera coupé" : "sera réactivé"} dans ${formatSeconds(intent.delaySeconds)}.`;
+        }
+
+        if (intent.kind === "send_delay_level") {
+            const converted = levelToNormalized(intent.value.unit, intent.value.value);
+            const jobId = await this.adapter.scheduleSend(
+                source,
+                destination,
+                converted.level,
+                intent.delaySeconds,
+            );
+            return `Action programmée ${jobId} : ${displayName(source)} → ${displayName(destination)} à ${converted.label} dans ${formatSeconds(intent.delaySeconds)}.`;
+        }
+
+        if (intent.kind === "send_ramp_level_qualitative") {
+            const preview = await this.adapter.previewQualitativeSend(
+                source,
+                destination,
+                intent.direction,
+                intent.amount,
+            );
+            const jobId = await this.adapter.startSendRamp(
+                source,
+                destination,
+                preview.targetLevel,
+                intent.durationSeconds,
+            );
+            return `Automation ${jobId} démarrée : ${displayName(source)} → ${displayName(destination)} de ${formatDb(preview.beforeDb)} vers ${formatDb(preview.targetDb)} sur ${formatSeconds(intent.durationSeconds)}.`;
+        }
+
+        if (intent.kind === "send_delayed_ramp_level") {
+            const current = await this.adapter.readSendLevel(source, destination);
+            const toLevel = intent.delta
+                ? adjustedLevel(current, intent.delta.unit, intent.delta.value).level
+                : levelToNormalized(intent.to!.unit, intent.to!.value).level;
+            const fromLevel = intent.from
+                ? levelToNormalized(intent.from.unit, intent.from.value).level
+                : undefined;
+            const jobId = await this.adapter.startDelayedSendRamp(
+                source,
+                destination,
+                toLevel,
+                intent.durationSeconds,
+                intent.delaySeconds,
+                fromLevel,
+            );
+            return `Automation ${jobId} programmée : ${displayName(source)} → ${displayName(destination)} dans ${formatSeconds(intent.delaySeconds)} sur ${formatSeconds(intent.durationSeconds)}.`;
+        }
+
+        const current = await this.adapter.readSendLevel(source, destination);
+        const toLevel = intent.delta
+            ? adjustedLevel(current, intent.delta.unit, intent.delta.value).level
+            : levelToNormalized(intent.to!.unit, intent.to!.value).level;
+        const fromLevel = intent.from
+            ? levelToNormalized(intent.from.unit, intent.from.value).level
+            : undefined;
+        const jobId = await this.adapter.startSendRamp(
+            source,
+            destination,
+            toLevel,
+            intent.durationSeconds,
+            fromLevel,
+        );
+        return `Automation ${jobId} démarrée : ${displayName(source)} → ${displayName(destination)} sur ${formatSeconds(intent.durationSeconds)}.`;
+    }
+
     private async planAuxOutputIntent(
         intent: Extract<Intent, { kind: "send_to_aux_output" }>,
     ): Promise<AnalyzeCommandResult> {
@@ -1195,7 +1245,9 @@ export class LocalMixerCommandGateway {
         }
 
         let result: AnalyzeCommandResult;
-        if (intent.kind === "bulk_channel_mute" || intent.kind === "bulk_bus_mute" || intent.kind === "bulk_send_db") {
+        if (intent.kind === "multi_send") {
+            result = await this.planMultiSendIntent(intent);
+        } else if (intent.kind === "bulk_channel_mute" || intent.kind === "bulk_bus_mute" || intent.kind === "bulk_named_mute" || intent.kind === "bulk_send_db") {
             result = await this.planBulkIntent(intent);
         } else if (intent.kind === "send_to_aux_output") {
             result = await this.planAuxOutputIntent(intent);
@@ -1278,12 +1330,103 @@ export class LocalMixerCommandGateway {
             actions.push({ type: "run", description, run: fn });
         };
 
+        const appendSend = async (
+            intent: NativeSendIntent,
+            source: LocalMixerTarget,
+            destination: LocalMixerTarget,
+        ) => {
+            if (!this.adapter.canUseSend(source, destination)) {
+                throw new Error(`Destination de send incompatible : ${displayName(destination)}`);
+            }
+            if (intent.kind === "send_read_level") {
+                throw new Error("Une macro ne peut pas contenir une lecture de send.");
+            }
+            if (intent.kind === "send_set_level") {
+                const converted = levelToNormalized(intent.unit, intent.value);
+                run(`${displayName(source)} vers ${displayName(destination)}`, () => this.adapter.writeSendLevel(source, destination, converted.level));
+                return;
+            }
+            if (intent.kind === "send_adjust_level") {
+                run(`ajuster ${displayName(source)} vers ${displayName(destination)}`, async () => {
+                    const current = await this.adapter.readSendLevel(source, destination);
+                    const adjusted = adjustedLevel(current, intent.unit, intent.delta);
+                    await this.adapter.writeSendLevel(source, destination, adjusted.level);
+                });
+                return;
+            }
+            if (intent.kind === "send_adjust_level_qualitative") {
+                run(`ajuster ${displayName(source)} vers ${displayName(destination)}`, async () => {
+                    await this.adapter.adjustQualitativeSend(source, destination, intent.direction, intent.amount);
+                });
+                return;
+            }
+            if (intent.kind === "send_mute") {
+                run(`${intent.mute ? "mute" : "unmute"} ${displayName(source)} vers ${displayName(destination)}`, () => this.adapter.setSendMute(source, destination, intent.mute));
+                return;
+            }
+            if (intent.kind === "send_delay_level") {
+                wait(intent.delaySeconds, `attendre ${formatSeconds(intent.delaySeconds)}`);
+                const converted = levelToNormalized(intent.value.unit, intent.value.value);
+                run(`${displayName(source)} vers ${displayName(destination)}`, () => this.adapter.writeSendLevel(source, destination, converted.level));
+                return;
+            }
+            if (intent.kind === "send_delay_mute") {
+                wait(intent.delaySeconds, `attendre ${formatSeconds(intent.delaySeconds)}`);
+                run(`${intent.mute ? "mute" : "unmute"} ${displayName(source)} vers ${displayName(destination)}`, () => this.adapter.setSendMute(source, destination, intent.mute));
+                return;
+            }
+
+            if (intent.kind === "send_delayed_ramp_level") {
+                wait(intent.delaySeconds, `attendre ${formatSeconds(intent.delaySeconds)}`);
+            }
+            const from = "from" in intent && intent.from
+                ? levelToNormalized(intent.from.unit, intent.from.value).level
+                : undefined;
+            let to: number | (() => Promise<number>);
+            if (intent.kind === "send_ramp_level_qualitative") {
+                to = async () => (await this.adapter.previewQualitativeSend(source, destination, intent.direction, intent.amount)).targetLevel;
+            } else if (intent.delta) {
+                to = async () => {
+                    const current = await this.adapter.readSendLevel(source, destination);
+                    return adjustedLevel(current, intent.delta!.unit, intent.delta!.value).level;
+                };
+            } else {
+                to = levelToNormalized(intent.to!.unit, intent.to!.value).level;
+            }
+            actions.push({
+                type: "ramp",
+                description: `rampe ${displayName(source)} vers ${displayName(destination)}`,
+                from,
+                to,
+                durationSeconds: intent.durationSeconds,
+                read: () => this.adapter.readSendLevel(source, destination),
+                write: (value) => this.adapter.writeSendLevel(source, destination, value),
+            });
+        };
+
         for (const item of steps) {
             wait(item.waitBeforeSeconds, item.waitBeforeSeconds > 0 ? `attendre ${item.waitBeforeSeconds} s` : undefined);
             const plan = item.plan;
 
             if (plan.kind === "sequence" || plan.kind === "status" || plan.kind === "automation_list" || plan.kind === "automation_cancel" || plan.kind === "read_level" || plan.kind === "read_mute" || plan.kind === "read_effect_on" || plan.kind === "read_channel_name" || plan.kind === "send_read_level") {
                 throw new Error("Une macro contient une étape non exécutable.");
+            }
+
+            if (plan.kind === "bulk_named_mute") {
+                const targets = await this.revalidateNamedTargets(plan.targetQueries, plan.targets);
+                for (const target of targets) {
+                    run(`${plan.mute ? "mute" : "unmute"} ${displayName(target)}`, () => this.adapter.setMute(target, plan.mute));
+                }
+                continue;
+            }
+
+            if (plan.kind === "multi_send") {
+                const source = await this.revalidateScopedTarget(plan.sourceQuery, plan.source, SEND_SOURCE_FAMILIES);
+                const destinations = await this.revalidateNamedTargets(plan.destinationQueries, plan.destinations);
+                for (const destination of destinations) {
+                    await appendSend(plan.intent, source, destination);
+                }
+                continue;
             }
 
             if (plan.kind === "bulk_channel_mute") {
@@ -1335,56 +1478,11 @@ export class LocalMixerCommandGateway {
                 plan.kind === "send_delay_mute"
             ) {
                 const source = await this.revalidateScopedTarget(plan.sourceQuery, plan.source, SEND_SOURCE_FAMILIES);
-                const destination = await this.revalidateScopedTarget(plan.destinationQuery, plan.destination, ["bus"]);
-
-                if (plan.kind === "send_set_level") {
-                    const converted = levelToNormalized(plan.unit, plan.value);
-                    run(`${displayName(source)} vers ${displayName(destination)}`, () => this.adapter.writeSendLevel(source, destination, converted.level));
-                } else if (plan.kind === "send_adjust_level") {
-                    run(`ajuster ${displayName(source)} vers ${displayName(destination)}`, async () => {
-                        const current = await this.adapter.readSendLevel(source, destination);
-                        const adjusted = adjustedLevel(current, plan.unit, plan.delta);
-                        await this.adapter.writeSendLevel(source, destination, adjusted.level);
-                    });
-                } else if (plan.kind === "send_adjust_level_qualitative") {
-                    run(`ajuster ${displayName(source)} vers ${displayName(destination)}`, async () => {
-                        await this.adapter.adjustQualitativeSend(source, destination, plan.direction, plan.amount);
-                    });
-                } else if (plan.kind === "send_mute") {
-                    run(`${plan.mute ? "mute" : "unmute"} ${displayName(source)} vers ${displayName(destination)}`, () => this.adapter.setSendMute(source, destination, plan.mute));
-                } else if (plan.kind === "send_delay_level") {
-                    wait(plan.delaySeconds, `attendre ${formatSeconds(plan.delaySeconds)}`);
-                    const converted = levelToNormalized(plan.value.unit, plan.value.value);
-                    run(`${displayName(source)} vers ${displayName(destination)}`, () => this.adapter.writeSendLevel(source, destination, converted.level));
-                } else if (plan.kind === "send_delay_mute") {
-                    wait(plan.delaySeconds, `attendre ${formatSeconds(plan.delaySeconds)}`);
-                    run(`${plan.mute ? "mute" : "unmute"} ${displayName(source)} vers ${displayName(destination)}`, () => this.adapter.setSendMute(source, destination, plan.mute));
-                } else {
-                    if (plan.kind === "send_delayed_ramp_level") {
-                        wait(plan.delaySeconds, `attendre ${formatSeconds(plan.delaySeconds)}`);
-                    }
-                    const from = "from" in plan && plan.from ? levelToNormalized(plan.from.unit, plan.from.value).level : undefined;
-                    let to: number | (() => Promise<number>);
-                    if (plan.kind === "send_ramp_level_qualitative") {
-                        to = async () => (await this.adapter.previewQualitativeSend(source, destination, plan.direction, plan.amount)).targetLevel;
-                    } else if (plan.delta) {
-                        to = async () => {
-                            const current = await this.adapter.readSendLevel(source, destination);
-                            return adjustedLevel(current, plan.delta!.unit, plan.delta!.value).level;
-                        };
-                    } else {
-                        to = levelToNormalized(plan.to!.unit, plan.to!.value).level;
-                    }
-                    actions.push({
-                        type: "ramp",
-                        description: `rampe ${displayName(source)} vers ${displayName(destination)}`,
-                        from,
-                        to,
-                        durationSeconds: plan.durationSeconds,
-                        read: () => this.adapter.readSendLevel(source, destination),
-                        write: (value) => this.adapter.writeSendLevel(source, destination, value),
-                    });
-                }
+                const [destination] = await this.revalidateNamedTargets(
+                    [plan.destinationQuery],
+                    [plan.destination],
+                );
+                await appendSend(plan, source, destination);
                 continue;
             }
 
@@ -1451,26 +1549,33 @@ export class LocalMixerCommandGateway {
     private async planSendIntent(
         intent: SendIntent,
     ): Promise<AnalyzeCommandResult> {
-        const sourceMatches = await this.adapter.resolve(intent.sourceQuery, SEND_SOURCE_FAMILIES);
-        const destinationMatches = await this.adapter.resolve(intent.destinationQuery, ["bus"]);
-        const source = safeUnique(sourceMatches);
-        const destination = safeUnique(destinationMatches);
+        const sourceResult = await resolveOneNamedTarget(
+            this.adapter,
+            intent.sourceQuery,
+            SEND_SOURCE_FAMILIES,
+        );
+        const destinationResult = await resolveOneNamedTarget(
+            this.adapter,
+            intent.destinationQuery,
+        );
+        const source = sourceResult.target;
+        const destination = destinationResult.target;
 
         if (!source || !destination) {
             const sourceText = source
                 ? displayName(source)
-                : sourceMatches.length === 1 && sourceMatches[0].matchType === "fuzzy"
-                  ? `correspondance approximative « ${displayName(sourceMatches[0])} » pour « ${intent.sourceQuery} »`
-                  : sourceMatches.length
-                    ? summarizeCandidates(sourceMatches)
+                : sourceResult.matches.length === 1 && sourceResult.matches[0].matchType === "fuzzy"
+                  ? `correspondance approximative « ${displayName(sourceResult.matches[0])} » pour « ${intent.sourceQuery} »`
+                  : sourceResult.matches.length
+                    ? summarizeCandidates(sourceResult.matches)
                     : `aucune source pour « ${intent.sourceQuery} »`;
             const destinationText = destination
                 ? displayName(destination)
-                : destinationMatches.length === 1 && destinationMatches[0].matchType === "fuzzy"
-                  ? `correspondance approximative « ${displayName(destinationMatches[0])} » pour « ${intent.destinationQuery} »`
-                  : destinationMatches.length
-                    ? summarizeCandidates(destinationMatches)
-                    : `aucun bus pour « ${intent.destinationQuery} »`;
+                : destinationResult.matches.length === 1 && destinationResult.matches[0].matchType === "fuzzy"
+                  ? `correspondance approximative « ${displayName(destinationResult.matches[0])} » pour « ${intent.destinationQuery} »`
+                  : destinationResult.matches.length
+                    ? summarizeCandidates(destinationResult.matches)
+                    : `aucune destination pour « ${intent.destinationQuery} »`;
             const stored = this.store.createContinuation({ intent, candidates: [] });
             return {
                 protocol: GATEWAY_PROTOCOL,
@@ -1479,7 +1584,20 @@ export class LocalMixerCommandGateway {
                 effect: "none",
                 continuationToken: stored.token,
                 expiresInMs: stored.expiresInMs,
-                responseText: `Route ambiguë ou introuvable. Source: ${sourceText}. Destination: ${destinationText}. Reformule avec la source et le bus exacts.`,
+                responseText: `Route ambiguë ou introuvable. Source: ${sourceText}. Destination: ${destinationText}. Reformule avec les noms exacts.`,
+            };
+        }
+
+        if (!this.adapter.canUseSend(source, destination)) {
+            const stored = this.store.createContinuation({ intent, candidates: [] });
+            return {
+                protocol: GATEWAY_PROTOCOL,
+                recognized: true,
+                status: "clarification",
+                effect: "none",
+                continuationToken: stored.token,
+                expiresInMs: stored.expiresInMs,
+                responseText: `La destination ${displayName(destination)} (${destination.family}) n'est pas compatible avec cette opération de send depuis ${displayName(source)}.`,
             };
         }
 
@@ -1552,7 +1670,192 @@ export class LocalMixerCommandGateway {
         return { targets };
     }
 
+    private async resolveExactNamedQueries(
+        queries: string[],
+        families?: LocalMixerTargetFamily[],
+    ): Promise<{ targets: LocalMixerTarget[]; errorText?: string }> {
+        const targets: LocalMixerTarget[] = [];
+        for (const query of queries) {
+            const { target, matches } = await resolveOneNamedTarget(this.adapter, query, families);
+            if (!target || target.matchType === "fuzzy") {
+                const candidates = matches.length > 0 ? summarizeCandidates(matches) : "aucune";
+                return {
+                    targets: [],
+                    errorText: `Cible « ${query} » ambiguë ou introuvable. Correspondances: ${candidates}. Reformule avec les noms exacts.`,
+                };
+            }
+            targets.push(target);
+        }
+        return { targets };
+    }
+
+    private async revalidateNamedTargets(
+        queries: string[],
+        expected: LocalMixerTarget[],
+        families?: LocalMixerTargetFamily[],
+    ): Promise<LocalMixerTarget[]> {
+        const resolved = await this.resolveExactNamedQueries(queries, families);
+        if (resolved.errorText || resolved.targets.length !== expected.length) {
+            throw new Error("STALE_TARGET: named target list changed");
+        }
+        for (let index = 0; index < expected.length; index += 1) {
+            if (!sameIdentity(resolved.targets[index], expected[index])) {
+                throw new Error("STALE_TARGET: named target list changed");
+            }
+        }
+        return resolved.targets;
+    }
+
+    private async planMultiSendIntent(
+        intent: Extract<Intent, { kind: "multi_send" }>,
+    ): Promise<AnalyzeCommandResult> {
+        const sourceResult = await resolveOneNamedTarget(
+            this.adapter,
+            intent.intent.sourceQuery,
+            SEND_SOURCE_FAMILIES,
+        );
+        const source = sourceResult.target;
+        if (!source || source.matchType === "fuzzy") {
+            const stored = this.store.createContinuation({ intent, candidates: [] });
+            return {
+                protocol: GATEWAY_PROTOCOL,
+                recognized: true,
+                status: "clarification",
+                effect: "none",
+                continuationToken: stored.token,
+                expiresInMs: stored.expiresInMs,
+                responseText: `Source « ${intent.intent.sourceQuery} » ambiguë ou introuvable. Reformule avec le nom exact de la source.`,
+            };
+        }
+
+        // Preserve a real configured destination whose own name contains a
+        // conjunction before interpreting the phrase as a destination list.
+        const whole = await resolveOneNamedTarget(this.adapter, intent.rawDestinationQuery);
+        if (
+            whole.target &&
+            whole.target.matchType !== "fuzzy" &&
+            this.adapter.canUseSend(source, whole.target)
+        ) {
+            const effect = intent.intent.kind === "send_read_level" ? "read" : "write";
+            const stored = this.store.createPlan(
+                { ...intent.intent, source, destination: whole.target },
+                effect,
+            );
+            return {
+                protocol: GATEWAY_PROTOCOL,
+                recognized: true,
+                status: "ready",
+                effect,
+                planToken: stored.token,
+                expiresInMs: stored.expiresInMs,
+                responseText: null,
+            };
+        }
+
+        const resolved = await this.resolveExactNamedQueries(intent.destinationQueries);
+        if (resolved.errorText) {
+            const stored = this.store.createContinuation({ intent, candidates: [] });
+            return {
+                protocol: GATEWAY_PROTOCOL,
+                recognized: true,
+                status: "clarification",
+                effect: "none",
+                continuationToken: stored.token,
+                expiresInMs: stored.expiresInMs,
+                responseText: resolved.errorText,
+            };
+        }
+
+        const unsupported = resolved.targets.filter(
+            (target) => !this.adapter.canUseSend(source, target),
+        );
+        if (unsupported.length > 0) {
+            const stored = this.store.createContinuation({ intent, candidates: [] });
+            return {
+                protocol: GATEWAY_PROTOCOL,
+                recognized: true,
+                status: "clarification",
+                effect: "none",
+                continuationToken: stored.token,
+                expiresInMs: stored.expiresInMs,
+                responseText: `Destination(s) non compatible(s) avec l'opération de send depuis ${displayName(source)} : ${unsupported.map((target) => `${displayName(target)} (${target.family})`).join(", ")}. Précise une destination supportée.`,
+            };
+        }
+
+        const effect = intent.intent.kind === "send_read_level" ? "read" : "write";
+        const stored = this.store.createPlan(
+            {
+                kind: "multi_send",
+                intent: intent.intent,
+                sourceQuery: intent.intent.sourceQuery,
+                source,
+                destinationQueries: intent.destinationQueries,
+                destinations: resolved.targets,
+            },
+            effect,
+        );
+        return {
+            protocol: GATEWAY_PROTOCOL,
+            recognized: true,
+            status: "ready",
+            effect,
+            planToken: stored.token,
+            expiresInMs: stored.expiresInMs,
+            responseText: null,
+        };
+    }
+
     private async planBulkIntent(intent: BulkIntent): Promise<AnalyzeCommandResult> {
+        if (intent.kind === "bulk_named_mute") {
+            // First preserve a legitimate configured target whose own name contains
+            // a conjunction (for example "Rock and Roll") before treating it as a list.
+            const whole = await resolveOneNamedTarget(this.adapter, intent.rawQuery);
+            if (whole.target && whole.target.matchType !== "fuzzy") {
+                const stored = this.store.createPlan(
+                    { kind: "mute", targetQuery: intent.rawQuery, target: whole.target, mute: intent.mute },
+                    "write",
+                );
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    recognized: true,
+                    status: "ready",
+                    effect: "write",
+                    planToken: stored.token,
+                    expiresInMs: stored.expiresInMs,
+                    responseText: null,
+                };
+            }
+
+            const resolved = await this.resolveExactNamedQueries(intent.targetQueries);
+            if (resolved.errorText) {
+                const stored = this.store.createContinuation({ intent, candidates: [] });
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    recognized: true,
+                    status: "clarification",
+                    effect: "none",
+                    continuationToken: stored.token,
+                    expiresInMs: stored.expiresInMs,
+                    responseText: resolved.errorText,
+                };
+            }
+
+            const stored = this.store.createPlan(
+                { kind: "bulk_named_mute", targetQueries: intent.targetQueries, targets: resolved.targets, mute: intent.mute },
+                "write",
+            );
+            return {
+                protocol: GATEWAY_PROTOCOL,
+                recognized: true,
+                status: "ready",
+                effect: "write",
+                planToken: stored.token,
+                expiresInMs: stored.expiresInMs,
+                responseText: null,
+            };
+        }
+
+
         if (intent.kind === "bulk_channel_mute") {
             if (intent.mode === "all") {
                 const stored = this.store.createPlan({ ...intent, channels: [] }, "write");
@@ -1802,7 +2105,7 @@ export class LocalMixerCommandGateway {
         }
 
         const active = continuation.value;
-        if ("channelQueries" in active.intent || "busQueries" in active.intent || "sourceQuery" in active.intent) {
+        if ("channelQueries" in active.intent || "busQueries" in active.intent || "targetQueries" in active.intent || "destinationQueries" in active.intent || "sourceQuery" in active.intent) {
             const stored = this.store.createContinuation({
                 intent: active.intent,
                 candidates: [],
@@ -1816,7 +2119,9 @@ export class LocalMixerCommandGateway {
                 expiresInMs: stored.expiresInMs,
                 responseText: active.intent.kind === "send_to_aux_output"
                     ? "Reformule la commande complète avec la voie source exacte et la sortie AUX."
-                    : "Reformule la commande complète avec la source et le bus de destination exacts.",
+                    : active.intent.kind === "multi_send"
+                      ? "Reformule la commande complète avec la source et toutes les destinations exactes."
+                      : "Reformule la commande complète avec la source et la destination exactes.",
             };
         }
 

@@ -107,6 +107,9 @@ const adapter = {
         sendWrites.push({ source, destination, level: next });
         sendLevel = next;
     },
+    canUseSend(source, destination) {
+        return ["channel", "fxreturn", "aux"].includes(source.family) && destination.family === "bus";
+    },
     async writeChannelToAux(source, aux, level) {
         auxOutputWrites.push({ source, aux, level });
     },
@@ -1623,6 +1626,110 @@ async function ready(text) {
     });
     assert.equal(result.ok, true);
     assert.deepEqual(bulkChannelMuteCalls[0].except.map((target) => target.name), ["Voix"]);
+}
+
+// Named target lists infer their families from resolution rather than grammar.
+{
+    muteWrites = [];
+    const analyzed = await ready("unmute Anthony et Laurent");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.deepEqual(muteWrites.map((entry) => [entry.target.name, entry.target.family, entry.mute]), [
+        ["Anthony", "bus", false],
+        ["Laurent", "bus", false],
+    ]);
+}
+
+// Generic target lists may safely mix families when the underlying operation supports both.
+{
+    muteWrites = [];
+    const analyzed = await ready("mute Batterie et Anthony");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.deepEqual(muteWrites.map((entry) => [entry.target.name, entry.target.family]), [
+        ["Batterie", "channel"],
+        ["Anthony", "bus"],
+    ]);
+}
+
+// Destination lists without a family keyword resolve names first, then validate send capability.
+{
+    sendWrites = [];
+    const analyzed = await ready("mets Batterie à -20 dB sur Anthony et Laurent");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.deepEqual(sendWrites.map((entry) => entry.destination.name), ["Anthony", "Laurent"]);
+    assert.deepEqual(sendWrites.map((entry) => entry.destination.family), ["bus", "bus"]);
+}
+
+// The same multi-destination composition applies to send mutes.
+{
+    sendMuteWrites = [];
+    const analyzed = await ready("mute Batterie sur Anthony et Laurent");
+    const result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.deepEqual(sendMuteWrites.map((entry) => entry.destination.name), ["Anthony", "Laurent"]);
+}
+
+// Multi-destination composition also applies to read, relative and ramp send intents.
+{
+    sendReadCalls = [];
+    let analyzed = await ready("niveau de Batterie sur Anthony et Laurent");
+    let result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(analyzed.effect, "read");
+    assert.deepEqual(sendReadCalls.map((entry) => entry.destination.name), ["Anthony", "Laurent"]);
+
+    sendWrites = [];
+    sendLevel = 0.5;
+    analyzed = await ready("monte Batterie sur Anthony et Laurent de 3 dB");
+    result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.deepEqual(sendWrites.map((entry) => entry.destination.name), ["Anthony", "Laurent"]);
+
+    automationCalls = [];
+    analyzed = await ready("baisse progressivement Batterie sur Anthony et Laurent à -30 dB en 2 secondes");
+    result = await gateway.execute({
+        protocol: GATEWAY_PROTOCOL,
+        planToken: analyzed.planToken,
+    });
+    assert.equal(result.ok, true);
+    assert.deepEqual(
+        automationCalls.filter((entry) => entry.kind === "send-ramp").map((entry) => entry.destination.name),
+        ["Anthony", "Laurent"],
+    );
+}
+
+// Non-bus destinations are resolved correctly, then rejected by capability rather than reported missing.
+{
+    sendWrites = [];
+    const analyzed = await gateway.analyze({
+        protocol: GATEWAY_PROTOCOL,
+        text: "mets Batterie à -20 dB sur Anthony et Playback",
+    });
+    assert.equal(analyzed.status, "clarification", JSON.stringify(analyzed));
+    assert.equal(analyzed.effect, "none");
+    assert.match(analyzed.responseText, /Playback \(aux\)/i);
+    assert.match(analyzed.responseText, /non compatible/i);
+    assert.equal(sendWrites.length, 0);
 }
 
 // OR4B4 selected bus bulk mute.

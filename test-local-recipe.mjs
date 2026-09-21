@@ -90,6 +90,9 @@ function makeHarness() {
             operations.push({ kind: "write_send", source, destination, level: next });
             sendLevel = next;
         },
+        canUseSend(source, destination) {
+            return ["channel", "fxreturn", "aux"].includes(source.family) && destination.family === "bus";
+        },
         async writeChannelToAux(source, aux, next) {
             operations.push({ kind: "aux_output", source, aux, level: next });
         },
