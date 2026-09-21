@@ -31,6 +31,7 @@ export type NativeMixerIntent =
     | { kind: "send_to_aux_output"; sourceQuery: string; aux: number; unit: NativeLevelUnit; value: number }
     | { kind: "bulk_channel_mute"; mode: "selected" | "all" | "all_except"; channelQueries: string[]; mute: boolean }
     | { kind: "bulk_bus_mute"; mode: "selected" | "all" | "all_except"; busQueries: string[]; mute: boolean }
+    | { kind: "bulk_named_mute"; targetQueries: string[]; rawQuery: string; mute: boolean }
     | { kind: "bulk_send_db"; mode: "selected" | "all"; sourceQuery: string; busQueries: string[]; db: number; includeMain: boolean }
     | { kind: "read_level"; targetQuery: string }
     | { kind: "set_level"; targetQuery: string; unit: NativeLevelUnit; value: number }
@@ -223,7 +224,16 @@ function parseBulkMuteIntent(text: string): NativeMixerIntent | null {
     const selectedBuses = rest.match(/^(?:les\s+)?bus\b/iu);
 
     const marker = allChannels || allBuses || selectedChannels || selectedBuses;
-    if (!marker) return null;
+    if (!marker) {
+        const targetQueries = splitTargetList(rest);
+        if (targetQueries.length < 2) return null;
+        return {
+            kind: "bulk_named_mute",
+            targetQueries,
+            rawQuery: cleanTarget(rest),
+            mute,
+        };
+    }
     if (allChannels || selectedChannels) family = "channel";
     if (allBuses || selectedBuses) family = "bus";
     all = Boolean(allChannels || allBuses);
@@ -263,12 +273,25 @@ function parseBulkSendIntent(text: string): NativeMixerIntent | null {
     rest = valueSlot.text;
 
     const destination = rest.match(/\b(?:sur|to)\s+((?:tous\s+les\s+bus|all\s+buses)|(?:les\s+)?bus)\b/iu);
-    if (!destination?.[0] || !destination[1] || destination.index === undefined) return null;
 
-    const sourceQuery = cleanTarget(rest.slice(0, destination.index));
+    let sourceQuery: string;
+    let tail: string;
+    let explicitBusSelector = false;
+    let all = false;
+
+    if (destination?.[0] && destination[1] && destination.index !== undefined) {
+        explicitBusSelector = true;
+        all = /^(?:tous\s+les\s+bus|all\s+buses)$/iu.test(destination[1]);
+        sourceQuery = cleanTarget(rest.slice(0, destination.index));
+        tail = compact(rest.slice(destination.index + destination[0].length));
+    } else {
+        const route = rest.match(/^(.+?)\s+(?:sur|to)\s+(.+)$/iu);
+        if (!route?.[1] || !route[2]) return null;
+        sourceQuery = cleanTarget(route[1]);
+        tail = compact(route[2]);
+    }
     if (!sourceQuery) return null;
 
-    let tail = compact(rest.slice(destination.index + destination[0].length));
     let includeMain = false;
     const mainSuffix = tail.match(
         /^(.*?)(?:\s+et\s+(?:la\s+)?(?:facade|façade|main(?:\s+lr)?|lr))\s*$/iu,
@@ -281,13 +304,16 @@ function parseBulkSendIntent(text: string): NativeMixerIntent | null {
         includeMain = true;
     }
 
-    const all = /^(?:tous\s+les\s+bus|all\s+buses)$/iu.test(destination[1]);
     if (all) {
         if (tail && !includeMain) return null;
         return { kind: "bulk_send_db", mode: "all", sourceQuery, busQueries: [], db, includeMain };
     }
 
     const busQueries = splitTargetList(tail);
+    // Without an explicit "bus" selector, only promote a route to a bulk send
+    // when the language contains a real list. A single destination remains on
+    // the ordinary source -> bus route path.
+    if (!explicitBusSelector && busQueries.length < 2) return null;
     if (!busQueries.length) return null;
     return { kind: "bulk_send_db", mode: "selected", sourceQuery, busQueries, db, includeMain };
 }
