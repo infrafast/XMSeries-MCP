@@ -72,12 +72,24 @@ function amountFrom(raw: string | undefined): NativeAmount {
 }
 
 function cleanTarget(raw: string): string {
-    return raw
+    let value = raw
         .replace(/[,;:]+/gu, " ")
         .replace(/\s+/gu, " ")
-        .trim()
-        .replace(/^(?:le|la|les|l['’]?|un|une|de|du|de la|de l['’]?|d['’]?)\s+/iu, "")
-        .replace(/^(?:niveau|volume|fader|son)\s+(?:(?:de|du|de la|de l['’]?|of)\s+)?/iu, "")
+        .trim();
+
+    // Strip only leading grammatical wrappers, and allow a short stack such as
+    // "un de Voix" created after removing "fais ... fade out". Internal ownership
+    // markers (e.g. "guitare de anto") are deliberately preserved.
+    for (let i = 0; i < 3; i += 1) {
+        const next = value
+            .replace(/^(?:de la|de l['’]?|du|d['’]?|de|le|la|les|l['’]?|un|une)\s+/iu, "")
+            .trim();
+        if (next === value) break;
+        value = next;
+    }
+
+    return value
+        .replace(/^(?:niveau|volume|fader|son)\s+(?:(?:de la|de l['’]?|du|de|of)\s+)?/iu, "")
         .replace(/\s+(?:niveau|volume|fader|son)\s*$/iu, "")
         .trim();
 }
