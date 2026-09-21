@@ -56,6 +56,10 @@ const cases = [
     kind: "ramp_level", targetQuery: "Batterie", from: { unit: "db", value: -40 },
     to: { unit: "db", value: -10 }, durationSeconds: 4
   }],
+  ["fade Batterie de -40 dB à -10 dB en 5 secondes", {
+    kind: "ramp_level", targetQuery: "Batterie", from: { unit: "db", value: -40 },
+    to: { unit: "db", value: -10 }, durationSeconds: 5
+  }],
 ];
 
 for (const [utterance, expected] of cases) {
