@@ -80,9 +80,10 @@ function parseFrenchIntegerWords(raw: string): number | null {
     return null;
 }
 
-function normalizeSpokenFrenchLevels(raw: string): string {
+function normalizeSpokenFrenchQuantities(raw: string): string {
     let text = raw.replace(/\b(?:d[ée]cibels?|decibels?)\b/giu, "dB");
 
+    // Signed absolute levels: "moins cinq dB" / "plus trois décibels".
     text = text.replace(
         /\b(moins|plus)\s+((?:[\p{L}-]+\s*){1,5})\s+dB\b/giu,
         (full, signRaw: string, wordsRaw: string) => {
@@ -90,6 +91,27 @@ function normalizeSpokenFrenchLevels(raw: string): string {
             if (value === null) return full;
             const sign = simplifyForMatch(signRaw) === "moins" ? "-" : "+";
             return sign + value + " dB";
+        },
+    );
+
+    // Unsigned relative/absolute values remain bounded by a mixer unit and
+    // structural preposition, so ordinary target names are never rewritten.
+    text = text.replace(
+        /\b(de|a|à|to)\s+((?:[\p{L}-]+\s*){1,5})\s+(dB|%)\b/giu,
+        (full, prepRaw: string, wordsRaw: string, unitRaw: string) => {
+            const value = parseFrenchIntegerWords(wordsRaw);
+            if (value === null) return full;
+            return prepRaw + " " + value + " " + unitRaw;
+        },
+    );
+
+    // Timings used by ramps/delays: "en deux secondes", "dans cinq secondes".
+    text = text.replace(
+        /\b(en|dans|apres|après|after)\s+((?:[\p{L}-]+\s*){1,5})\s+(s|sec|seconde|secondes|second|seconds)\b/giu,
+        (full, prepRaw: string, wordsRaw: string, unitRaw: string) => {
+            const value = parseFrenchIntegerWords(wordsRaw);
+            if (value === null) return full;
+            return prepRaw + " " + value + " " + unitRaw;
         },
     );
 
@@ -121,7 +143,7 @@ export function canonicalizeNaturalFrenchCommand(raw: string): string {
     if (!text) return text;
 
     text = text.replace(/^[\s«»“”„‟"‹›]+/u, "").replace(/[\s«»“”„‟"‹›]+$/u, "").trim();
-    text = normalizeSpokenFrenchLevels(text);
+    text = normalizeSpokenFrenchQuantities(text);
     text = normalizeLikelyFrenchSttSetVerb(text);
 
     // "remets" is deliberately contextual: without a value it means reactivate;
