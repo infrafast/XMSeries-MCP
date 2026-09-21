@@ -47,23 +47,24 @@ let qualitativePreviewCalls = [];
 let stale = false;
 
 const adapter = {
-    async resolve(query) {
+    async resolve(query, families) {
         const q = query.toLowerCase();
+        const scoped = (values) => values.filter((target) => !families || families.includes(target.family));
         if (q === "voix") {
-            return stale
+            return scoped(stale
                 ? [{ family: "channel", index: 7, name: "Voix", matchType: "exact" }]
-                : [targets.voix];
+                : [targets.voix]);
         }
-        if (q === "drums") return [targets.drums];
-        if (q === "guitr") return [targets.fuzzy];
-        if (q === "tom") return [targets.amb1, targets.amb2];
-        if (q === "guitare") return [{ ...targets.fuzzy, matchType: "exact" }];
-        if (q === "batterie") return [targets.batterie];
-        if (q === "anthony") return [targets.anthony];
-        if (q === "laurent") return [targets.laurent];
-        if (q === "hall fx") return [targets.hallfx];
-        if (q === "playback") return [targets.playback];
-        if (q === "band") return [targets.band];
+        if (q === "drums") return scoped([targets.drums]);
+        if (q === "guitr") return scoped([targets.fuzzy]);
+        if (q === "tom") return scoped([targets.amb1, targets.amb2]);
+        if (q === "guitare") return scoped([{ ...targets.fuzzy, matchType: "exact" }]);
+        if (q === "batterie") return scoped([targets.batterie]);
+        if (q === "anthony") return scoped([targets.anthony]);
+        if (q === "laurent") return scoped([targets.laurent]);
+        if (q === "hall fx") return scoped([targets.hallfx]);
+        if (q === "playback") return scoped([targets.playback]);
+        if (q === "band") return scoped([targets.band]);
         return [];
     },
     async status() {
@@ -327,6 +328,60 @@ async function ready(text) {
     });
     assert.equal(result.ok, true);
     assert.match(result.responseText, /Voix/);
+}
+
+// Explicit family qualifiers are generic constraints, not part of the mixer label.
+{
+    writes = [];
+    let analyzed = await ready("mets bus Anthony à -10 dB");
+    let result = await gateway.execute({ protocol: GATEWAY_PROTOCOL, planToken: analyzed.planToken });
+    assert.equal(result.ok, true);
+    assert.equal(writes.at(-1).target.family, "bus");
+    assert.equal(writes.at(-1).target.name, "Anthony");
+
+    analyzed = await ready("mets channel Batterie à -12 dB");
+    result = await gateway.execute({ protocol: GATEWAY_PROTOCOL, planToken: analyzed.planToken });
+    assert.equal(result.ok, true);
+    assert.equal(writes.at(-1).target.family, "channel");
+    assert.equal(writes.at(-1).target.name, "Batterie");
+
+    analyzed = await ready("mets fx Hall FX à -18 dB");
+    result = await gateway.execute({ protocol: GATEWAY_PROTOCOL, planToken: analyzed.planToken });
+    assert.equal(result.ok, true);
+    assert.equal(writes.at(-1).target.family, "fxreturn");
+    assert.equal(writes.at(-1).target.name, "Hall FX");
+
+    muteWrites = [];
+    analyzed = await ready("mute dca Band");
+    result = await gateway.execute({ protocol: GATEWAY_PROTOCOL, planToken: analyzed.planToken });
+    assert.equal(result.ok, true);
+    assert.equal(muteWrites.at(-1).target.family, "dca");
+}
+
+// Family qualifiers work on both sides of a route and constrain resolution.
+{
+    sendWrites = [];
+    let analyzed = await ready("mets channel Batterie sur bus Anthony à -20 dB");
+    let result = await gateway.execute({ protocol: GATEWAY_PROTOCOL, planToken: analyzed.planToken });
+    assert.equal(result.ok, true);
+    assert.equal(sendWrites.at(-1).source.family, "channel");
+    assert.equal(sendWrites.at(-1).destination.family, "bus");
+
+    analyzed = await ready("mets fx Hall FX sur bus Anthony à -18 dB");
+    result = await gateway.execute({ protocol: GATEWAY_PROTOCOL, planToken: analyzed.planToken });
+    assert.equal(result.ok, true);
+    assert.equal(sendWrites.at(-1).source.family, "fxreturn");
+    assert.equal(sendWrites.at(-1).destination.family, "bus");
+}
+
+// A contradictory explicit family is fail-closed even if the bare label exists elsewhere.
+{
+    const analyzed = await gateway.analyze({
+        protocol: GATEWAY_PROTOCOL,
+        text: "mets channel Anthony à -10 dB",
+    });
+    assert.equal(analyzed.status, "clarification", JSON.stringify(analyzed));
+    assert.equal(analyzed.effect, "none");
 }
 
 // Main LR is mixer-domain owned, not resolver-owned

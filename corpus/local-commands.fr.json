@@ -1220,6 +1220,66 @@
         "status": "clarification",
         "effect": "none"
       }
+    },
+    {
+      "name": "family-qualified-bus-level",
+      "utterance": "mets bus Anthony à -10 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "family": "bus",
+          "name": "Anthony"
+        }
+      }
+    },
+    {
+      "name": "family-qualified-channel-ownership",
+      "utterance": "mets channel guitare de anto à -12 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "family": "channel",
+          "name": "guitar-anto"
+        }
+      }
+    },
+    {
+      "name": "family-qualified-fx-level",
+      "utterance": "mets fx Hall FX à -18 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "write_level",
+          "family": "fxreturn",
+          "name": "Hall FX"
+        }
+      }
+    },
+    {
+      "name": "family-qualified-route-both-sides",
+      "utterance": "mets channel Batterie sur bus Anthony à -20 dB",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "write_send",
+          "source": "Batterie",
+          "destination": "Anthony"
+        }
+      }
+    },
+    {
+      "name": "family-qualified-contradiction-fail-closed",
+      "utterance": "mets channel Anthony à -10 dB",
+      "expected": {
+        "status": "clarification",
+        "effect": "none"
+      }
     }
   ]
 }
