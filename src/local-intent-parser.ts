@@ -20,6 +20,18 @@ export type NativeLevelValue = { unit: NativeLevelUnit; value: number };
 export type NativeDirection = "up" | "down";
 export type NativeAmount = "little" | "normal" | "much";
 
+export type NativeSendIntent =
+    | { kind: "send_read_level"; sourceQuery: string; destinationQuery: string }
+    | { kind: "send_set_level"; sourceQuery: string; destinationQuery: string; unit: NativeLevelUnit; value: number }
+    | { kind: "send_adjust_level"; sourceQuery: string; destinationQuery: string; unit: NativeLevelUnit; delta: number }
+    | { kind: "send_adjust_level_qualitative"; sourceQuery: string; destinationQuery: string; direction: NativeDirection; amount: NativeAmount }
+    | { kind: "send_mute"; sourceQuery: string; destinationQuery: string; mute: boolean }
+    | { kind: "send_delay_level"; sourceQuery: string; destinationQuery: string; value: NativeLevelValue; delaySeconds: number }
+    | { kind: "send_delay_mute"; sourceQuery: string; destinationQuery: string; mute: boolean; delaySeconds: number }
+    | { kind: "send_ramp_level"; sourceQuery: string; destinationQuery: string; to?: NativeLevelValue; from?: NativeLevelValue; delta?: NativeLevelValue; durationSeconds: number }
+    | { kind: "send_delayed_ramp_level"; sourceQuery: string; destinationQuery: string; to?: NativeLevelValue; from?: NativeLevelValue; delta?: NativeLevelValue; durationSeconds: number; delaySeconds: number }
+    | { kind: "send_ramp_level_qualitative"; sourceQuery: string; destinationQuery: string; direction: NativeDirection; amount: NativeAmount; durationSeconds: number };
+
 export type NativeMixerIntent =
     | { kind: "status" }
     | { kind: "automation_list" }
@@ -32,28 +44,19 @@ export type NativeMixerIntent =
     | { kind: "bulk_channel_mute"; mode: "selected" | "all" | "all_except"; channelQueries: string[]; mute: boolean }
     | { kind: "bulk_bus_mute"; mode: "selected" | "all" | "all_except"; busQueries: string[]; mute: boolean }
     | { kind: "bulk_named_mute"; targetQueries: string[]; rawQuery: string; mute: boolean }
-    | { kind: "bulk_named_send_db"; sourceQuery: string; destinationQueries: string[]; rawDestinationQuery: string; db: number }
     | { kind: "bulk_send_db"; mode: "selected" | "all"; sourceQuery: string; busQueries: string[]; db: number; includeMain: boolean }
+    | { kind: "multi_send"; intent: NativeSendIntent; destinationQueries: string[]; rawDestinationQuery: string }
     | { kind: "read_level"; targetQuery: string }
     | { kind: "set_level"; targetQuery: string; unit: NativeLevelUnit; value: number }
     | { kind: "adjust_level"; targetQuery: string; unit: NativeLevelUnit; delta: number }
     | { kind: "adjust_level_qualitative"; targetQuery: string; direction: NativeDirection; amount: NativeAmount }
-    | { kind: "send_read_level"; sourceQuery: string; destinationQuery: string }
-    | { kind: "send_set_level"; sourceQuery: string; destinationQuery: string; unit: NativeLevelUnit; value: number }
-    | { kind: "send_adjust_level"; sourceQuery: string; destinationQuery: string; unit: NativeLevelUnit; delta: number }
-    | { kind: "send_adjust_level_qualitative"; sourceQuery: string; destinationQuery: string; direction: NativeDirection; amount: NativeAmount }
     | { kind: "mute"; targetQuery: string; mute: boolean }
-    | { kind: "send_mute"; sourceQuery: string; destinationQuery: string; mute: boolean }
     | { kind: "delay_level"; targetQuery: string; value: NativeLevelValue; delaySeconds: number }
-    | { kind: "send_delay_level"; sourceQuery: string; destinationQuery: string; value: NativeLevelValue; delaySeconds: number }
     | { kind: "delay_mute"; targetQuery: string; mute: boolean; delaySeconds: number }
-    | { kind: "send_delay_mute"; sourceQuery: string; destinationQuery: string; mute: boolean; delaySeconds: number }
     | { kind: "ramp_level"; targetQuery: string; to?: NativeLevelValue; from?: NativeLevelValue; delta?: NativeLevelValue; durationSeconds: number }
-    | { kind: "send_ramp_level"; sourceQuery: string; destinationQuery: string; to?: NativeLevelValue; from?: NativeLevelValue; delta?: NativeLevelValue; durationSeconds: number }
     | { kind: "delayed_ramp_level"; targetQuery: string; to?: NativeLevelValue; from?: NativeLevelValue; delta?: NativeLevelValue; durationSeconds: number; delaySeconds: number }
-    | { kind: "send_delayed_ramp_level"; sourceQuery: string; destinationQuery: string; to?: NativeLevelValue; from?: NativeLevelValue; delta?: NativeLevelValue; durationSeconds: number; delaySeconds: number }
     | { kind: "ramp_level_qualitative"; targetQuery: string; direction: NativeDirection; amount: NativeAmount; durationSeconds: number }
-    | { kind: "send_ramp_level_qualitative"; sourceQuery: string; destinationQuery: string; direction: NativeDirection; amount: NativeAmount; durationSeconds: number };
+    | NativeSendIntent;
 
 function simplify(value: string): string {
     return value
@@ -138,6 +141,17 @@ function splitTargetList(value: string): string[] {
         .split(/\s*(?:,|;|\bet\b|\band\b)\s*/iu)
         .map((item) => cleanTarget(item))
         .filter(Boolean);
+}
+
+function withDestinationList(intent: NativeSendIntent): NativeMixerIntent {
+    const destinationQueries = splitTargetList(intent.destinationQuery);
+    if (destinationQueries.length < 2) return intent;
+    return {
+        kind: "multi_send",
+        intent,
+        destinationQueries,
+        rawDestinationQuery: intent.destinationQuery,
+    };
 }
 
 function muteValue(raw: string): boolean {
@@ -286,10 +300,7 @@ function parseBulkSendIntent(text: string): NativeMixerIntent | null {
         sourceQuery = cleanTarget(rest.slice(0, destination.index));
         tail = compact(rest.slice(destination.index + destination[0].length));
     } else {
-        const route = rest.match(/^(.+?)\s+(?:sur|to)\s+(.+)$/iu);
-        if (!route?.[1] || !route[2]) return null;
-        sourceQuery = cleanTarget(route[1]);
-        tail = compact(route[2]);
+        return null;
     }
     if (!sourceQuery) return null;
 
@@ -311,22 +322,7 @@ function parseBulkSendIntent(text: string): NativeMixerIntent | null {
     }
 
     const busQueries = splitTargetList(tail);
-    // Without an explicit family selector, a real list is represented as
-    // generic named destinations. The planner resolves each name first, then
-    // the adapter capability layer decides whether this source -> destination
-    // relation is actually supported. A single destination stays on the
-    // ordinary route path.
-    if (!explicitBusSelector) {
-        if (busQueries.length < 2 || includeMain) return null;
-        return {
-            kind: "bulk_named_send_db",
-            sourceQuery,
-            destinationQueries: busQueries,
-            rawDestinationQuery: cleanTarget(tail),
-            db,
-        };
-    }
-    if (!busQueries.length) return null;
+    if (!explicitBusSelector || !busQueries.length) return null;
     return { kind: "bulk_send_db", mode: "selected", sourceQuery, busQueries, db, includeMain };
 }
 
@@ -550,15 +546,15 @@ export function parseDeterministicMixerIntent(raw: string): NativeMixerIntent | 
     if (mute !== undefined) {
         if (durationSeconds !== undefined) return null;
         if (route) {
-            if (delaySeconds !== undefined) return { kind: "send_delay_mute", ...route, mute, delaySeconds };
-            return { kind: "send_mute", ...route, mute };
+            if (delaySeconds !== undefined) return withDestinationList({ kind: "send_delay_mute", ...route, mute, delaySeconds });
+            return withDestinationList({ kind: "send_mute", ...route, mute });
         }
         if (delaySeconds !== undefined) return { kind: "delay_mute", targetQuery, mute, delaySeconds };
         return { kind: "mute", targetQuery, mute };
     }
 
     if (wantsRead && !absolute && !relative && !from && !to && durationSeconds === undefined && delaySeconds === undefined) {
-        if (route) return { kind: "send_read_level", ...route };
+        if (route) return withDestinationList({ kind: "send_read_level", ...route });
         return { kind: "read_level", targetQuery };
     }
 
@@ -589,7 +585,7 @@ export function parseDeterministicMixerIntent(raw: string): NativeMixerIntent | 
         if (route) {
             if (delaySeconds !== undefined) {
                 if (!to && !from && !signedRelative) return null;
-                return {
+                return withDestinationList({
                     kind: "send_delayed_ramp_level",
                     ...route,
                     ...(from ? { from } : {}),
@@ -597,20 +593,20 @@ export function parseDeterministicMixerIntent(raw: string): NativeMixerIntent | 
                     ...(signedRelative ? { delta: signedRelative } : {}),
                     durationSeconds,
                     delaySeconds,
-                };
+                });
             }
             if (to || from || signedRelative) {
-                return {
+                return withDestinationList({
                     kind: "send_ramp_level",
                     ...route,
                     ...(from ? { from } : {}),
                     ...(to ? { to } : {}),
                     ...(signedRelative ? { delta: signedRelative } : {}),
                     durationSeconds,
-                };
+                });
             }
             if (direction) {
-                return { kind: "send_ramp_level_qualitative", ...route, direction, amount: qualitativeAmount, durationSeconds };
+                return withDestinationList({ kind: "send_ramp_level_qualitative", ...route, direction, amount: qualitativeAmount, durationSeconds });
             }
             return null;
         }
@@ -646,12 +642,12 @@ export function parseDeterministicMixerIntent(raw: string): NativeMixerIntent | 
     if (delaySeconds !== undefined) {
         const value = absolute || to;
         if (!value) return null;
-        if (route) return { kind: "send_delay_level", ...route, value, delaySeconds };
+        if (route) return withDestinationList({ kind: "send_delay_level", ...route, value, delaySeconds });
         return { kind: "delay_level", targetQuery, value, delaySeconds };
     }
 
     if (absolute) {
-        if (route) return { kind: "send_set_level", ...route, unit: absolute.unit, value: absolute.value };
+        if (route) return withDestinationList({ kind: "send_set_level", ...route, unit: absolute.unit, value: absolute.value });
         return { kind: "set_level", targetQuery, unit: absolute.unit, value: absolute.value };
     }
 
@@ -663,12 +659,12 @@ export function parseDeterministicMixerIntent(raw: string): NativeMixerIntent | 
                 : direction === "up"
                   ? Math.abs(relative.value)
                   : relative.value;
-        if (route) return { kind: "send_adjust_level", ...route, unit: relative.unit, delta };
+        if (route) return withDestinationList({ kind: "send_adjust_level", ...route, unit: relative.unit, delta });
         return { kind: "adjust_level", targetQuery, unit: relative.unit, delta };
     }
 
     if (direction && !setVerb) {
-        if (route) return { kind: "send_adjust_level_qualitative", ...route, direction, amount: qualitativeAmount };
+        if (route) return withDestinationList({ kind: "send_adjust_level_qualitative", ...route, direction, amount: qualitativeAmount });
         return { kind: "adjust_level_qualitative", targetQuery, direction, amount: qualitativeAmount };
     }
 
