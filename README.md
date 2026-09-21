@@ -521,7 +521,7 @@ The parser is intentionally bounded and deterministic. Prefer the canonical form
 
 Natural-language variants are normalized before structural parsing. The French Local layer canonicalizes a bounded vocabulary of safe synonyms (for example `couper/désactiver/éteindre -> mute`, `réactiver/rallumer -> unmute`, `augmenter -> monter`, `diminuer/descendre -> baisser`) while the grammar still determines source, destination, value, duration and delay. Context-sensitive words are not blindly replaced: `remets Batterie` means unmute, while `remets Batterie à -10 dB` means set the fader. Natural mixer-status questions such as `quel est le statut du mixeur ?`, `est-ce que le mixeur est connecté ?`, `quelle est la version du mixeur ?`, `quel est le firmware du mixeur ?` and `donne-moi le statut du mixeur` converge to the same read-only status intent. Name resolution and writes remain fail-closed after normalization.
 
-The structural parser itself is native Node/TypeScript and now follows a lexical-slot + constraint-matching design: local regexes recognize primitives such as verbs, dB/percent values, delays and durations, then semantic markers bind those slots before an intent is selected. This keeps constituent order flexible without making meaning fuzzy: `à` remains absolute, `de` relative, `en` a ramp duration and `dans` a delayed execution marker. Target identity, structured-name resolution, fuzzy clarification and write authorization remain in the existing XMSeries resolver and are not delegated to the grammar layer.
+The structural parser itself is native Node/TypeScript and follows a lexical-slot + constraint-matching design: local regexes recognize lexical primitives such as verbs, values, properties, list selectors, destinations, delays and durations, then semantic constraints select one typed intent. All elementary Local commands now enter this same parser, including mixer/automation status, mute/FX-state/name reads, grouped selectors, physical AUX destinations and automation cancellation. Constituent order stays flexible without making meaning fuzzy: `à` remains absolute, `de` relative, `en` a ramp duration and `dans` a delayed execution marker. Only temporal sequence composition/anaphora and recognized-speaker expansion stay outside the elementary parser. Target identity, structured-name resolution, capability checks, fuzzy clarification, protocol guards and write authorization remain specialized XMSeries layers and are deliberately not delegated to grammar.
 
 | Intent | Canonical examples |
 |---|---|
@@ -531,6 +531,7 @@ The structural parser itself is native Node/TypeScript and now follows a lexical
 | DCA level / mute | `mets Band à -6 dB` · `mute Band` · `baisse progressivement Band à -20 dB en 2 secondes` |
 | Matrix level / mute | `mets Matrix Vox à -12 dB` · `mute Matrix Vox` (X32/M32 only; OSCXR must return unsupported) |
 | Read mute / FX state / channel name | `état du mute de Batterie` · `Hall FX est-il actif ?` · `quel est le nom de la voie 6 ?` |
+| Explicit FX engine state | `active l'effet Hall FX` · `désactive l'effet Hall FX` (distinct syntax; `mute Hall FX` keeps the established FX-return mute/on-off behavior) |
 | Normalized level | `mets Batterie au niveau 0.75` · `mets Batterie sur Anthony au niveau 0.5` |
 | Grouped channel mute | `mute les voies Voix et Batterie` · `mute toutes les voies` · `mute toutes les voies sauf Voix` |
 | Channel -> AUX output | `mets Batterie sur sortie aux 2 à 50%` · `mets Batterie sur sortie aux 2 au niveau 0.5` (X32/M32 only) |
@@ -572,7 +573,7 @@ The deterministic Local milestone has an executable acceptance corpus in `corpus
 npm run test:local-recipe
 ```
 
-This recipe covers the user-facing command families documented above and the canonical behaviors required by `PROMPT.md`: reads, absolute/relative/qualitative levels, mutes, source-to-bus routes, grouped operations, normalized values, DCA, X32 matrices, channel-to-AUX output, ramps/fades/delays, automation status/cancel, multi-action sequences, explicit anaphora, speaker context, and fail-closed ambiguity handling. Critical cases also assert the exact planned/executed operation, and safety cases assert that no side effect occurred.
+This recipe covers the user-facing command families documented above and the canonical behaviors required by `PROMPT.md`: reads, absolute/relative/qualitative levels, mutes, explicit FX engine state, source-to-bus routes, grouped operations, normalized values, DCA, X32 matrices, channel-to-AUX output, ramps/fades/delays, automation status/cancel, multi-action sequences, explicit anaphora, speaker context, and fail-closed ambiguity handling. Critical cases also assert the exact planned/executed operation, and safety cases assert that no side effect occurred.
 
 For a Raspberry Pi live recipe, update/build the MCP first:
 
