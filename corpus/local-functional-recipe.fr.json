@@ -2202,6 +2202,68 @@
           "on": false
         }
       }
+    },
+    {
+      "category": "lists",
+      "name": "named-mute-list-without-family-word",
+      "utterance": "unmute Anthony et Laurent",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "mute",
+          "target": {
+            "name": "Anthony",
+            "family": "bus"
+          },
+          "mute": false
+        }
+      }
+    },
+    {
+      "category": "lists",
+      "name": "named-mute-list-mixed-families",
+      "utterance": "mute Batterie et Anthony",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "mute",
+          "target": {
+            "name": "Batterie",
+            "family": "channel"
+          },
+          "mute": true
+        }
+      }
+    },
+    {
+      "category": "lists",
+      "name": "named-send-list-without-family-word",
+      "utterance": "mets Batterie à -20 dB sur Anthony et Laurent",
+      "expected": {
+        "status": "ready",
+        "effect": "write",
+        "operation": {
+          "kind": "write_send",
+          "source": {
+            "name": "Batterie"
+          },
+          "destination": {
+            "name": "Anthony"
+          }
+        }
+      }
+    },
+    {
+      "category": "lists",
+      "name": "named-send-list-capability-reject",
+      "utterance": "mets Batterie à -20 dB sur Anthony et Playback",
+      "expected": {
+        "status": "clarification",
+        "effect": "none",
+        "noOperations": true
+      }
     }
   ]
 }
