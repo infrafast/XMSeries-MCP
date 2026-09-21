@@ -24,6 +24,34 @@ The rule is bidirectional: do not add a Local-only business capability without t
 
 Syntax aliases may differ from MCP schema names, but the underlying semantics, bounds, safety behavior and supported mixer families must remain aligned.
 
+### Mandatory workflow when adding a mixer command/capability
+
+The deterministic parser V1 is an established engine. **Extend it; do not create a second parser path.** A coding agent asked to add a mixer command, tool, alias, target family or automation behavior must follow this order:
+
+1. **Define/reuse the business primitive first.** Prefer the existing resolver, OSC client, dB conversion, protocol guard and `AutomationEngine`. Do not put mixer I/O or protocol rules in the grammar.
+2. **Maintain the typed MCP surface.** Add or extend the normal MCP tool/schema when the capability is end-user-visible to cloud/LLM clients.
+3. **Extend the existing Local intent model.** Add the smallest typed intent/slot needed in `src/local-intent-parser.ts`. Reuse generic route/list/family-qualifier/value/duration composition. Do not add a parallel whole-utterance parser or a specialized fallback in `local-gateway.ts`.
+4. **Plan through the existing gateway.** Resolution, family constraints, capability checks, ambiguity handling, stale-target validation and read/write authorization belong in `src/local-gateway.ts` and the adapter layer, not in regex grammar.
+5. **Execute through the same shared primitive as typed MCP.** Cloud and Local may enter through different contracts, but they must converge before mixer/protocol execution.
+6. **Preserve safety.** Explicit family qualifiers constrain resolution; bare names search permitted families; fuzzy/ambiguous writes fail closed; unsupported XR/X32 operations remain unsupported rather than being approximated.
+7. **Prove symmetry with tests.** Update parser tests, gateway tests, protocol/safety tests when relevant, `corpus/local-commands.fr.json`, `corpus/local-functional-recipe.fr.json`, and capability-symmetry checks when the typed tool inventory changes. Run `npm run test:ci`.
+8. **Update documentation in the same change.** Add canonical Local phrases to `README.md`; update `PROMPT.md` if the cloud agent needs new semantics/tool guidance; update `ROADMAP.md` only for architecture/status changes.
+
+If a request is **only a language alias** for an existing capability, do not create a new business primitive or MCP tool merely to mirror the alias. Extend canonicalization/lexical recognition and add regression cases while keeping the existing semantic intent.
+
+If a capability is intentionally available on only one surface, the exception must be explicit in both the code review/change description and repository documentation. Silent Cloud/Local drift is not acceptable.
+
+### Architecture boundaries agents must preserve
+
+- `src/local-intent-parser.ts`: lexical slots + semantic constraints for elementary Local commands.
+- sequence/anaphora composition: separate temporal/context layer, but every elementary clause still enters the same parser.
+- resolver: identity, exact/contains/structured/fuzzy matching and explicit family constraints.
+- gateway/adapter: capabilities, clarification, plan tokens, stale-target checks and authorization.
+- OSC/automation: protocol-specific execution and timing.
+- LiveStageAssistant: domain-neutral host only; **never add XMSeries mixer grammar or mixer capability logic to LSA to implement a new XMSeries command**.
+- `stage-command-core`: domain-neutral parser/gateway primitives only; never move mixer vocabulary or semantics there.
+
+A change that bypasses these layers by matching a new command directly in `local-gateway.ts`, LSA, or raw OSC dispatch should be treated as an architecture regression unless it is an explicitly documented migration step.
 
 This guide explains how to configure and use the OSC MCP server with different AI agents and platforms.
 

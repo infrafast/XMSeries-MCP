@@ -527,6 +527,24 @@ Explicit family qualifiers are generic constraints too. Prefixes such as `bus An
 
 Named lists are family-agnostic unless the user explicitly names a family. For example, `unmute Anthony et Laurent` is parsed as two target names, each name is resolved against the mixer inventory, and only then is the operation validated. The same composition applies to route destinations: `mets Batterie à -20 dB sur Anthony et Laurent`, `mute Batterie sur Anthony et Laurent`, relative changes, reads, delays and ramps all share the same multi-destination wrapper. A configured target whose own label contains `et/and` is tried as one exact target before the text is treated as a list. The grammar therefore never assumes that an unqualified destination is a bus; the adapter capability layer decides whether the resolved source→destination relation is supported. In the current XMSeries implementation, ordinary send destinations are buses; another resolved family is reported as incompatible rather than as an unknown name.
 
+### Extending the deterministic parser
+
+The deterministic parser V1 is considered **architecture-complete** for the current mixer command surface. New capabilities must extend the existing engine rather than introduce another parsing path.
+
+For a new end-user mixer capability, the intended implementation flow is:
+
+`typed MCP tool/schema` + `NativeMixerIntent`
+→ existing resolver/family/list semantics
+→ gateway capability + safe plan
+→ shared adapter/business primitive
+→ protocol-aware OSC or `AutomationEngine`.
+
+The normal typed MCP surface and the Local deterministic surface must remain semantically symmetric unless an exception is explicitly documented. Both surfaces should converge on the same resolver, dB conversion, capability guards and OSC/automation implementation. The Local parser owns only language structure: verbs, values, source/destination slots, lists, durations, delays and typed intent selection.
+
+Do **not** add a second whole-utterance parser, a command-specific regex fallback in `local-gateway.ts`, mixer grammar in LiveStageAssistant, or raw OSC execution directly from parsing code. If an existing generic construct can express the new command—route, target list, family qualifier, level value, delay, ramp or sequence—reuse that construct and add only the missing semantic intent/capability.
+
+A capability change is complete only when the applicable typed MCP tool, Local intent path, shared execution primitive, regression corpus, functional recipe, protocol/safety tests and documentation are updated together. The coding-agent checklist is maintained in `AGENTS.md`; `npm run test:ci` is the required regression gate.
+
 | Intent | Canonical examples |
 |---|---|
 | Mixer status | `statut mixeur` |
