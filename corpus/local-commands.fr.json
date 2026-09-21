@@ -1119,7 +1119,7 @@
     },
     {
       "name": "fx-engine-enable-explicit",
-      "utterance": "active l'effet Hall",
+      "utterance": "active l'effet Hall FX",
       "expected": {
         "status": "ready",
         "effect": "write",
@@ -1133,7 +1133,7 @@
     },
     {
       "name": "fx-engine-disable-explicit",
-      "utterance": "désactive l'effet Hall",
+      "utterance": "désactive l'effet Hall FX FX",
       "expected": {
         "status": "ready",
         "effect": "write",
