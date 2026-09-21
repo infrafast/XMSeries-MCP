@@ -76,7 +76,7 @@ function cleanTarget(raw: string): string {
         .replace(/[,;:]+/gu, " ")
         .replace(/\s+/gu, " ")
         .trim()
-        .replace(/^(?:le|la|les|l['’]?|un|une)\s+/iu, "")
+        .replace(/^(?:le|la|les|l['’]?|un|une|de|du|de la|de l['’]?|d['’]?)\s+/iu, "")
         .replace(/^(?:niveau|volume|fader|son)\s+(?:(?:de|du|de la|de l['’]?|of)\s+)?/iu, "")
         .replace(/\s+(?:niveau|volume|fader|son)\s*$/iu, "")
         .trim();
