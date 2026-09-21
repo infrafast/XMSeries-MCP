@@ -1524,26 +1524,33 @@ export class LocalMixerCommandGateway {
     private async planSendIntent(
         intent: SendIntent,
     ): Promise<AnalyzeCommandResult> {
-        const sourceMatches = await this.adapter.resolve(intent.sourceQuery, SEND_SOURCE_FAMILIES);
-        const destinationMatches = await this.adapter.resolve(intent.destinationQuery, ["bus"]);
-        const source = safeUnique(sourceMatches);
-        const destination = safeUnique(destinationMatches);
+        const sourceResult = await resolveOneNamedTarget(
+            this.adapter,
+            intent.sourceQuery,
+            SEND_SOURCE_FAMILIES,
+        );
+        const destinationResult = await resolveOneNamedTarget(
+            this.adapter,
+            intent.destinationQuery,
+        );
+        const source = sourceResult.target;
+        const destination = destinationResult.target;
 
         if (!source || !destination) {
             const sourceText = source
                 ? displayName(source)
-                : sourceMatches.length === 1 && sourceMatches[0].matchType === "fuzzy"
-                  ? `correspondance approximative « ${displayName(sourceMatches[0])} » pour « ${intent.sourceQuery} »`
-                  : sourceMatches.length
-                    ? summarizeCandidates(sourceMatches)
+                : sourceResult.matches.length === 1 && sourceResult.matches[0].matchType === "fuzzy"
+                  ? `correspondance approximative « ${displayName(sourceResult.matches[0])} » pour « ${intent.sourceQuery} »`
+                  : sourceResult.matches.length
+                    ? summarizeCandidates(sourceResult.matches)
                     : `aucune source pour « ${intent.sourceQuery} »`;
             const destinationText = destination
                 ? displayName(destination)
-                : destinationMatches.length === 1 && destinationMatches[0].matchType === "fuzzy"
-                  ? `correspondance approximative « ${displayName(destinationMatches[0])} » pour « ${intent.destinationQuery} »`
-                  : destinationMatches.length
-                    ? summarizeCandidates(destinationMatches)
-                    : `aucun bus pour « ${intent.destinationQuery} »`;
+                : destinationResult.matches.length === 1 && destinationResult.matches[0].matchType === "fuzzy"
+                  ? `correspondance approximative « ${displayName(destinationResult.matches[0])} » pour « ${intent.destinationQuery} »`
+                  : destinationResult.matches.length
+                    ? summarizeCandidates(destinationResult.matches)
+                    : `aucune destination pour « ${intent.destinationQuery} »`;
             const stored = this.store.createContinuation({ intent, candidates: [] });
             return {
                 protocol: GATEWAY_PROTOCOL,
@@ -1552,7 +1559,20 @@ export class LocalMixerCommandGateway {
                 effect: "none",
                 continuationToken: stored.token,
                 expiresInMs: stored.expiresInMs,
-                responseText: `Route ambiguë ou introuvable. Source: ${sourceText}. Destination: ${destinationText}. Reformule avec la source et le bus exacts.`,
+                responseText: `Route ambiguë ou introuvable. Source: ${sourceText}. Destination: ${destinationText}. Reformule avec les noms exacts.`,
+            };
+        }
+
+        if (!this.adapter.canUseSend(source, destination)) {
+            const stored = this.store.createContinuation({ intent, candidates: [] });
+            return {
+                protocol: GATEWAY_PROTOCOL,
+                recognized: true,
+                status: "clarification",
+                effect: "none",
+                continuationToken: stored.token,
+                expiresInMs: stored.expiresInMs,
+                responseText: `La destination ${displayName(destination)} (${destination.family}) n'est pas compatible avec cette opération de send depuis ${displayName(source)}.`,
             };
         }
 
