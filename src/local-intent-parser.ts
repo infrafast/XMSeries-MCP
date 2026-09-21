@@ -131,6 +131,7 @@ function stripReadLanguage(text: string): string {
             .replace(/^\s*(?:lis|donne|read|get|affiche|montre(?:-|\s)+moi)\s+/iu, "")
             .replace(/^\s*o[uù]\s+est\s+/iu, "")
             .replace(/^(?:le\s+)?(?:niveau|volume|fader|son)\s+(?:(?:de|du|de la|de l['’]?|of)\s+)?/iu, "")
+            .replace(/^(?:le\s+)?(?:niveau|volume|fader|son)\s*$/iu, "")
             .replace(/\s+(?:niveau|volume|fader|son)\s*$/iu, ""),
     );
 }
