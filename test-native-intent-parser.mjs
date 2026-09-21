@@ -45,6 +45,15 @@ const cases = [
   ["où est le fader de Batterie", {
     kind: "read_level", targetQuery: "Batterie"
   }],
+  ["donne-moi le volume", {
+    kind: "read_level", targetQuery: "main"
+  }],
+  ["c'est quoi le volume", {
+    kind: "read_level", targetQuery: "main"
+  }],
+  ["peux-tu me dire quel est le niveau", {
+    kind: "read_level", targetQuery: "main"
+  }],
   ["fade out en 5 secondes", {
     kind: "ramp_level", targetQuery: "main", to: { unit: "db", value: -120 }, durationSeconds: 5
   }],
