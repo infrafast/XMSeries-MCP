@@ -130,8 +130,9 @@ function readRequested(text: string): boolean {
     }
     return (
         /^\s*(?:quel(?:le)?\s+est\s+)?(?:le\s+)?(?:niveau|volume|fader|son)\b/iu.test(text) ||
-        /^\s*(?:lis|donne|read|get|affiche|montre(?:-|\s)+moi)\b/iu.test(text) ||
-        /^\s*o[uù]\s+est\s+(?:le\s+)?(?:niveau|volume|fader|son)\b/iu.test(text) ||
+        /^\s*(?:lis|donne(?:-|\s)+moi|donne|read|get|affiche|montre(?:-|\s)+moi)\b/iu.test(text) ||
+        /^\s*(?:c['’]?est\s+quoi|combien\s+vaut|o[uù]\s+est)\s+(?:le\s+)?(?:niveau|volume|fader|son)\b/iu.test(text) ||
+        /^\s*(?:peux[-\s]+tu|pourrais[-\s]+tu|tu\s+peux)(?:\s+me)?(?:\s+dire)?\s+(?:quel(?:le)?\s+est\s+)?(?:le\s+)?(?:niveau|volume|fader|son)\b/iu.test(text) ||
         /\b(?:niveau|volume|fader|son)\s*\??\s*$/iu.test(text)
     );
 }
@@ -139,9 +140,11 @@ function readRequested(text: string): boolean {
 function stripReadLanguage(text: string): string {
     return compact(
         text
+            .replace(/^\s*(?:peux[-\s]+tu|pourrais[-\s]+tu|tu\s+peux)(?:\s+me)?(?:\s+dire)?\s+/iu, "")
+            .replace(/^\s*(?:c['’]?est\s+quoi|combien\s+vaut|o[uù]\s+est)\s+/iu, "")
             .replace(/^\s*(?:quel(?:le)?\s+est\s+)?/iu, "")
-            .replace(/^\s*(?:lis|donne|read|get|affiche|montre(?:-|\s)+moi)\s+/iu, "")
-            .replace(/^\s*o[uù]\s+est\s+/iu, "")
+            .replace(/^\s*(?:lis|donne(?:-|\s)+moi|donne|read|get|affiche|montre(?:-|\s)+moi)\s+/iu, "")
+            .replace(/^\s*(?:quel(?:le)?\s+est\s+)?/iu, "")
             .replace(/^(?:le\s+)?(?:niveau|volume|fader|son)\s+(?:(?:de|du|de la|de l['’]?|of)\s+)?/iu, "")
             .replace(/^(?:le\s+)?(?:niveau|volume|fader|son)\s*$/iu, "")
             .replace(/\s+(?:niveau|volume|fader|son)\s*$/iu, ""),
