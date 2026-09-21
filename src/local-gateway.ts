@@ -1218,10 +1218,11 @@ export class LocalMixerCommandGateway {
     private async planAuxOutputIntent(
         intent: Extract<Intent, { kind: "send_to_aux_output" }>,
     ): Promise<AnalyzeCommandResult> {
-        const sourceMatches = await this.adapter.resolve(intent.sourceQuery, ["channel"]);
-        const source = safeUnique(sourceMatches);
+        const sourceResult = await resolveOneNamedTarget(this.adapter, intent.sourceQuery, ["channel"]);
+        const sourceMatches = sourceResult.matches;
+        const source = sourceResult.target;
         if (!source || source.matchType === "fuzzy") {
-            const stored = this.store.createContinuation({ intent, candidates: sourceMatches.slice(0, 8) });
+            const stored = this.store.createContinuation({ intent, candidates: sourceMatches.slice(0, 8), families: ["channel"] });
             return {
                 protocol: GATEWAY_PROTOCOL,
                 recognized: true,
@@ -1960,10 +1961,11 @@ export class LocalMixerCommandGateway {
             };
         }
 
-        const sourceMatches = await this.adapter.resolve(intent.sourceQuery, ["channel"]);
-        const source = safeUnique(sourceMatches);
+        const sourceResult = await resolveOneNamedTarget(this.adapter, intent.sourceQuery, ["channel"]);
+        const sourceMatches = sourceResult.matches;
+        const source = sourceResult.target;
         if (!source || source.matchType === "fuzzy") {
-            const stored = this.store.createContinuation({ intent, candidates: [] });
+            const stored = this.store.createContinuation({ intent, candidates: [], families: ["channel"] });
             return {
                 protocol: GATEWAY_PROTOCOL,
                 recognized: true,
