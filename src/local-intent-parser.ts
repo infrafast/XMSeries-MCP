@@ -32,6 +32,7 @@ export type NativeMixerIntent =
     | { kind: "bulk_channel_mute"; mode: "selected" | "all" | "all_except"; channelQueries: string[]; mute: boolean }
     | { kind: "bulk_bus_mute"; mode: "selected" | "all" | "all_except"; busQueries: string[]; mute: boolean }
     | { kind: "bulk_named_mute"; targetQueries: string[]; rawQuery: string; mute: boolean }
+    | { kind: "bulk_named_send_db"; sourceQuery: string; destinationQueries: string[]; rawDestinationQuery: string; db: number }
     | { kind: "bulk_send_db"; mode: "selected" | "all"; sourceQuery: string; busQueries: string[]; db: number; includeMain: boolean }
     | { kind: "read_level"; targetQuery: string }
     | { kind: "set_level"; targetQuery: string; unit: NativeLevelUnit; value: number }
@@ -310,10 +311,21 @@ function parseBulkSendIntent(text: string): NativeMixerIntent | null {
     }
 
     const busQueries = splitTargetList(tail);
-    // Without an explicit "bus" selector, only promote a route to a bulk send
-    // when the language contains a real list. A single destination remains on
-    // the ordinary source -> bus route path.
-    if (!explicitBusSelector && busQueries.length < 2) return null;
+    // Without an explicit family selector, a real list is represented as
+    // generic named destinations. The planner resolves each name first, then
+    // the adapter capability layer decides whether this source -> destination
+    // relation is actually supported. A single destination stays on the
+    // ordinary route path.
+    if (!explicitBusSelector) {
+        if (busQueries.length < 2 || includeMain) return null;
+        return {
+            kind: "bulk_named_send_db",
+            sourceQuery,
+            destinationQueries: busQueries,
+            rawDestinationQuery: cleanTarget(tail),
+            db,
+        };
+    }
     if (!busQueries.length) return null;
     return { kind: "bulk_send_db", mode: "selected", sourceQuery, busQueries, db, includeMain };
 }
