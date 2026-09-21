@@ -2085,6 +2085,14 @@ async function ready(text) {
         "Mets Batterie à +3 dB",
     );
     assert.equal(
+        canonicalizeNaturalFrenchCommand("mets Batterie à moins 5 dB"),
+        "mets Batterie à -5 dB",
+    );
+    assert.equal(
+        canonicalizeNaturalFrenchCommand("mets Batterie à plus 7 dB"),
+        "mets Batterie à +7 dB",
+    );
+    assert.equal(
         canonicalizeNaturalFrenchCommand("monte guitar-anto de trois dB"),
         "monte guitar-anto de 3 dB",
     );
@@ -2117,6 +2125,22 @@ async function ready(text) {
     assert.equal(result.ok, true);
     assert.equal(sendWrites.at(-1).source.name, "Batterie");
     assert.equal(sendWrites.at(-1).destination.name, "Anthony");
+}
+
+// Whisper may emit spoken signs with numeric digits; these hybrids must
+// normalize before parsing without changing the numeric value.
+{
+    const negativeHybrid = await gateway.analyze({
+        protocol: GATEWAY_PROTOCOL,
+        text: "mets Batterie à moins 5 dB",
+    });
+    assert.equal(negativeHybrid.status, "ready", JSON.stringify(negativeHybrid));
+
+    const positiveHybrid = await gateway.analyze({
+        protocol: GATEWAY_PROTOCOL,
+        text: "mets Batterie à plus 7 dB",
+    });
+    assert.equal(positiveHybrid.status, "ready", JSON.stringify(positiveHybrid));
 }
 
 // Spoken unsigned relative values and ramp durations must reach the real parser.
