@@ -96,6 +96,59 @@ const cases = [
   ["mute les voies Voix et Batterie", {
     kind: "bulk_channel_mute", mode: "selected", channelQueries: ["Voix", "Batterie"], mute: true
   }],
+  ["unmute Anthony et Laurent", {
+    kind: "bulk_named_mute", targetQueries: ["Anthony", "Laurent"],
+    rawQuery: "Anthony et Laurent", mute: false
+  }],
+  ["mute Batterie et Anthony", {
+    kind: "bulk_named_mute", targetQueries: ["Batterie", "Anthony"],
+    rawQuery: "Batterie et Anthony", mute: true
+  }],
+  ["mets Batterie à -20 dB sur Anthony et Laurent", {
+    kind: "multi_send",
+    intent: {
+      kind: "send_set_level", sourceQuery: "Batterie",
+      destinationQuery: "Anthony et Laurent", unit: "db", value: -20
+    },
+    destinationQueries: ["Anthony", "Laurent"],
+    rawDestinationQuery: "Anthony et Laurent"
+  }],
+  ["mute Batterie sur Anthony et Laurent", {
+    kind: "multi_send",
+    intent: {
+      kind: "send_mute", sourceQuery: "Batterie",
+      destinationQuery: "Anthony et Laurent", mute: true
+    },
+    destinationQueries: ["Anthony", "Laurent"],
+    rawDestinationQuery: "Anthony et Laurent"
+  }],
+  ["monte Batterie sur Anthony et Laurent de 3 dB", {
+    kind: "multi_send",
+    intent: {
+      kind: "send_adjust_level", sourceQuery: "Batterie",
+      destinationQuery: "Anthony et Laurent", unit: "db", delta: 3
+    },
+    destinationQueries: ["Anthony", "Laurent"],
+    rawDestinationQuery: "Anthony et Laurent"
+  }],
+  ["baisse progressivement Batterie sur Anthony et Laurent à -30 dB en 2 secondes", {
+    kind: "multi_send",
+    intent: {
+      kind: "send_ramp_level", sourceQuery: "Batterie",
+      destinationQuery: "Anthony et Laurent", to: { unit: "db", value: -30 }, durationSeconds: 2
+    },
+    destinationQueries: ["Anthony", "Laurent"],
+    rawDestinationQuery: "Anthony et Laurent"
+  }],
+  ["niveau de Batterie sur Anthony et Laurent", {
+    kind: "multi_send",
+    intent: {
+      kind: "send_read_level", sourceQuery: "Batterie",
+      destinationQuery: "Anthony et Laurent"
+    },
+    destinationQueries: ["Anthony", "Laurent"],
+    rawDestinationQuery: "Anthony et Laurent"
+  }],
   ["mets Batterie à -20 dB sur les bus Anthony et Laurent", {
     kind: "bulk_send_db", mode: "selected", sourceQuery: "Batterie",
     busQueries: ["Anthony", "Laurent"], db: -20, includeMain: false
