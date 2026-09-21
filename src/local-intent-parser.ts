@@ -240,6 +240,9 @@ function parseBulkMuteIntent(text: string): NativeMixerIntent | null {
 
     const marker = allChannels || allBuses || selectedChannels || selectedBuses;
     if (!marker) {
+        // A route owns its destination list. Do not reinterpret
+        // "mute Source sur A et B" as the flat targets "Source sur A" + "B".
+        if (/\b(?:sur|dans|vers|chez|to|in)\b/iu.test(rest)) return null;
         const targetQueries = splitTargetList(rest);
         if (targetQueries.length < 2) return null;
         return {
