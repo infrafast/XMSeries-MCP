@@ -282,7 +282,7 @@ async function ready(text) {
     assert.equal(effectWriteCalls[0].target.name, "Hall FX");
     assert.equal(effectWriteCalls[0].on, true);
 
-    analyzed = await ready("désactive l'effet Hall FX FX");
+    analyzed = await ready("désactive l'effet Hall FX");
     result = await gateway.execute({
         protocol: GATEWAY_PROTOCOL,
         planToken: analyzed.planToken,
