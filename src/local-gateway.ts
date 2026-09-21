@@ -627,7 +627,7 @@ export class LocalMixerCommandGateway {
             };
         }
 
-        if (intent.kind === "bulk_channel_mute" || intent.kind === "bulk_bus_mute" || intent.kind === "bulk_named_mute" || intent.kind === "bulk_send_db") {
+        if (intent.kind === "bulk_channel_mute" || intent.kind === "bulk_bus_mute" || intent.kind === "bulk_named_mute" || intent.kind === "bulk_named_send_db" || intent.kind === "bulk_send_db") {
             return await this.planBulkIntent(intent);
         }
 
@@ -746,6 +746,37 @@ export class LocalMixerCommandGateway {
                     protocol: GATEWAY_PROTOCOL,
                     ok: true,
                     responseText: `Automation ${jobId} démarrée : séquence de ${plan.steps.length} ${plan.steps.length === 1 ? "action" : "actions"}.`,
+                };
+            }
+
+            if (plan.kind === "bulk_named_mute") {
+                const targets = await this.revalidateNamedTargets(plan.targetQueries, plan.targets);
+                // Revalidate the complete list before the first side effect.
+                for (const target of targets) {
+                    await this.adapter.setMute(target, plan.mute);
+                }
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    ok: true,
+                    responseText: `${targets.map(displayName).join(", ")} : ${plan.mute ? "coupés" : "réactivés"}.`,
+                };
+            }
+
+            if (plan.kind === "bulk_named_send_db") {
+                const source = await this.revalidateScopedTarget(plan.sourceQuery, plan.source, SEND_SOURCE_FAMILIES);
+                const destinations = await this.revalidateNamedTargets(plan.destinationQueries, plan.destinations);
+                const unsupported = destinations.filter((target) => !this.adapter.canWriteSendLevel(source, target));
+                if (unsupported.length > 0) {
+                    throw new Error(`Destination de send devenue incompatible : ${unsupported.map(displayName).join(", ")}`);
+                }
+                const converted = levelToNormalized("db", plan.db);
+                for (const destination of destinations) {
+                    await this.adapter.writeSendLevel(source, destination, converted.level);
+                }
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    ok: true,
+                    responseText: `${displayName(source)} réglé à ${converted.label} sur ${destinations.map(displayName).join(", ")}.`,
                 };
             }
 
@@ -1211,7 +1242,7 @@ export class LocalMixerCommandGateway {
         }
 
         let result: AnalyzeCommandResult;
-        if (intent.kind === "bulk_channel_mute" || intent.kind === "bulk_bus_mute" || intent.kind === "bulk_named_mute" || intent.kind === "bulk_send_db") {
+        if (intent.kind === "bulk_channel_mute" || intent.kind === "bulk_bus_mute" || intent.kind === "bulk_named_mute" || intent.kind === "bulk_named_send_db" || intent.kind === "bulk_send_db") {
             result = await this.planBulkIntent(intent);
         } else if (intent.kind === "send_to_aux_output") {
             result = await this.planAuxOutputIntent(intent);
@@ -1300,6 +1331,28 @@ export class LocalMixerCommandGateway {
 
             if (plan.kind === "sequence" || plan.kind === "status" || plan.kind === "automation_list" || plan.kind === "automation_cancel" || plan.kind === "read_level" || plan.kind === "read_mute" || plan.kind === "read_effect_on" || plan.kind === "read_channel_name" || plan.kind === "send_read_level") {
                 throw new Error("Une macro contient une étape non exécutable.");
+            }
+
+            if (plan.kind === "bulk_named_mute") {
+                const targets = await this.revalidateNamedTargets(plan.targetQueries, plan.targets);
+                for (const target of targets) {
+                    run(`${plan.mute ? "mute" : "unmute"} ${displayName(target)}`, () => this.adapter.setMute(target, plan.mute));
+                }
+                continue;
+            }
+
+            if (plan.kind === "bulk_named_send_db") {
+                const source = await this.revalidateScopedTarget(plan.sourceQuery, plan.source, SEND_SOURCE_FAMILIES);
+                const destinations = await this.revalidateNamedTargets(plan.destinationQueries, plan.destinations);
+                const unsupported = destinations.filter((target) => !this.adapter.canWriteSendLevel(source, target));
+                if (unsupported.length > 0) {
+                    throw new Error(`Destination de send devenue incompatible : ${unsupported.map(displayName).join(", ")}`);
+                }
+                const converted = levelToNormalized("db", plan.db);
+                for (const destination of destinations) {
+                    run(`${displayName(source)} vers ${displayName(destination)}`, () => this.adapter.writeSendLevel(source, destination, converted.level));
+                }
+                continue;
             }
 
             if (plan.kind === "bulk_channel_mute") {
@@ -1568,15 +1621,52 @@ export class LocalMixerCommandGateway {
         return { targets };
     }
 
+    private async resolveExactNamedQueries(
+        queries: string[],
+        families?: LocalMixerTargetFamily[],
+    ): Promise<{ targets: LocalMixerTarget[]; errorText?: string }> {
+        const targets: LocalMixerTarget[] = [];
+        for (const query of queries) {
+            const { target, matches } = await resolveOneNamedTarget(this.adapter, query, families);
+            if (!target || target.matchType === "fuzzy") {
+                const candidates = matches.length > 0 ? summarizeCandidates(matches) : "aucune";
+                return {
+                    targets: [],
+                    errorText: `Cible « ${query} » ambiguë ou introuvable. Correspondances: ${candidates}. Reformule avec les noms exacts.`,
+                };
+            }
+            if (!targets.some((existing) => sameIdentity(existing, target))) {
+                targets.push(target);
+            }
+        }
+        return { targets };
+    }
+
+    private async revalidateNamedTargets(
+        queries: string[],
+        expected: LocalMixerTarget[],
+        families?: LocalMixerTargetFamily[],
+    ): Promise<LocalMixerTarget[]> {
+        const resolved = await this.resolveExactNamedQueries(queries, families);
+        if (resolved.errorText || resolved.targets.length !== expected.length) {
+            throw new Error("STALE_TARGET: named target list changed");
+        }
+        for (let index = 0; index < expected.length; index += 1) {
+            if (!sameIdentity(resolved.targets[index], expected[index])) {
+                throw new Error("STALE_TARGET: named target list changed");
+            }
+        }
+        return resolved.targets;
+    }
+
     private async planBulkIntent(intent: BulkIntent): Promise<AnalyzeCommandResult> {
         if (intent.kind === "bulk_named_mute") {
-            // Preserve a legitimate single target whose configured name itself
-            // contains a conjunction before interpreting the utterance as a list.
-            const wholeMatches = await this.adapter.resolve(intent.rawQuery);
-            const whole = safeUnique(wholeMatches);
-            if (whole && whole.matchType !== "fuzzy") {
+            // First preserve a legitimate configured target whose own name contains
+            // a conjunction (for example "Rock and Roll") before treating it as a list.
+            const whole = await resolveOneNamedTarget(this.adapter, intent.rawQuery);
+            if (whole.target && whole.target.matchType !== "fuzzy") {
                 const stored = this.store.createPlan(
-                    { kind: "mute", targetQuery: intent.rawQuery, target: whole, mute: intent.mute },
+                    { kind: "mute", targetQuery: intent.rawQuery, target: whole.target, mute: intent.mute },
                     "write",
                 );
                 return {
@@ -1590,74 +1680,125 @@ export class LocalMixerCommandGateway {
                 };
             }
 
-            const targets: LocalMixerTarget[] = [];
-            for (const query of intent.targetQueries) {
-                const matches = await this.adapter.resolve(query);
-                const resolved = safeUnique(matches);
-                if (!resolved || resolved.matchType === "fuzzy") {
-                    const candidates = matches.length > 0 ? summarizeCandidates(matches) : "aucune";
-                    const stored = this.store.createContinuation({ intent, candidates: [] });
-                    return {
-                        protocol: GATEWAY_PROTOCOL,
-                        recognized: true,
-                        status: "clarification",
-                        effect: "none",
-                        continuationToken: stored.token,
-                        expiresInMs: stored.expiresInMs,
-                        responseText: `Cible « ${query} » ambiguë ou introuvable. Correspondances: ${candidates}. Reformule avec les noms exacts.`,
-                    };
-                }
-                targets.push(resolved);
-            }
-
-            const families = new Set(targets.map((target) => target.family));
-            if (families.size === 1 && targets[0]?.family === "channel") {
-                const specialized: Extract<Intent, { kind: "bulk_channel_mute" }> = {
-                    kind: "bulk_channel_mute",
-                    mode: "selected",
-                    channelQueries: intent.targetQueries,
-                    mute: intent.mute,
-                };
-                const stored = this.store.createPlan({ ...specialized, channels: targets }, "write");
+            const resolved = await this.resolveExactNamedQueries(intent.targetQueries);
+            if (resolved.errorText) {
+                const stored = this.store.createContinuation({ intent, candidates: [] });
                 return {
                     protocol: GATEWAY_PROTOCOL,
                     recognized: true,
-                    status: "ready",
-                    effect: "write",
-                    planToken: stored.token,
+                    status: "clarification",
+                    effect: "none",
+                    continuationToken: stored.token,
                     expiresInMs: stored.expiresInMs,
-                    responseText: null,
+                    responseText: resolved.errorText,
                 };
             }
 
-            if (families.size === 1 && targets[0]?.family === "bus") {
-                const specialized: Extract<Intent, { kind: "bulk_bus_mute" }> = {
-                    kind: "bulk_bus_mute",
-                    mode: "selected",
-                    busQueries: intent.targetQueries,
-                    mute: intent.mute,
-                };
-                const stored = this.store.createPlan({ ...specialized, buses: targets }, "write");
-                return {
-                    protocol: GATEWAY_PROTOCOL,
-                    recognized: true,
-                    status: "ready",
-                    effect: "write",
-                    planToken: stored.token,
-                    expiresInMs: stored.expiresInMs,
-                    responseText: null,
-                };
-            }
-
-            const stored = this.store.createContinuation({ intent, candidates: [] });
+            const stored = this.store.createPlan(
+                { kind: "bulk_named_mute", targetQueries: intent.targetQueries, targets: resolved.targets, mute: intent.mute },
+                "write",
+            );
             return {
                 protocol: GATEWAY_PROTOCOL,
                 recognized: true,
-                status: "clarification",
-                effect: "none",
-                continuationToken: stored.token,
+                status: "ready",
+                effect: "write",
+                planToken: stored.token,
                 expiresInMs: stored.expiresInMs,
-                responseText: "La liste résolue mélange des familles de cibles, ou utilise une famille sans opération bulk sûre. Précise les voies ou les bus.",
+                responseText: null,
+            };
+        }
+
+        if (intent.kind === "bulk_named_send_db") {
+            const sourceResult = await resolveOneNamedTarget(this.adapter, intent.sourceQuery, SEND_SOURCE_FAMILIES);
+            const source = sourceResult.target;
+            if (!source || source.matchType === "fuzzy") {
+                const stored = this.store.createContinuation({ intent, candidates: [] });
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    recognized: true,
+                    status: "clarification",
+                    effect: "none",
+                    continuationToken: stored.token,
+                    expiresInMs: stored.expiresInMs,
+                    responseText: `Source « ${intent.sourceQuery} » ambiguë ou introuvable. Reformule avec le nom exact de la source.`,
+                };
+            }
+
+            // As for target lists, a configured destination may itself contain
+            // a conjunction. Prefer that exact target if it is a valid send destination.
+            const whole = await resolveOneNamedTarget(this.adapter, intent.rawDestinationQuery);
+            if (whole.target && whole.target.matchType !== "fuzzy" && this.adapter.canWriteSendLevel(source, whole.target)) {
+                const stored = this.store.createPlan(
+                    {
+                        kind: "send_set_level",
+                        sourceQuery: intent.sourceQuery,
+                        destinationQuery: intent.rawDestinationQuery,
+                        source,
+                        destination: whole.target,
+                        unit: "db",
+                        value: intent.db,
+                    },
+                    "write",
+                );
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    recognized: true,
+                    status: "ready",
+                    effect: "write",
+                    planToken: stored.token,
+                    expiresInMs: stored.expiresInMs,
+                    responseText: null,
+                };
+            }
+
+            const resolved = await this.resolveExactNamedQueries(intent.destinationQueries);
+            if (resolved.errorText) {
+                const stored = this.store.createContinuation({ intent, candidates: [] });
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    recognized: true,
+                    status: "clarification",
+                    effect: "none",
+                    continuationToken: stored.token,
+                    expiresInMs: stored.expiresInMs,
+                    responseText: resolved.errorText,
+                };
+            }
+
+            const unsupported = resolved.targets.filter((target) => !this.adapter.canWriteSendLevel(source, target));
+            if (unsupported.length > 0) {
+                const stored = this.store.createContinuation({ intent, candidates: [] });
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    recognized: true,
+                    status: "clarification",
+                    effect: "none",
+                    continuationToken: stored.token,
+                    expiresInMs: stored.expiresInMs,
+                    responseText: `Destination(s) non compatible(s) avec un envoi depuis ${displayName(source)} : ${unsupported.map((target) => `${displayName(target)} (${target.family})`).join(", ")}. Précise une destination supportée.`,
+                };
+            }
+
+            const stored = this.store.createPlan(
+                {
+                    kind: "bulk_named_send_db",
+                    sourceQuery: intent.sourceQuery,
+                    source,
+                    destinationQueries: intent.destinationQueries,
+                    destinations: resolved.targets,
+                    db: intent.db,
+                },
+                "write",
+            );
+            return {
+                protocol: GATEWAY_PROTOCOL,
+                recognized: true,
+                status: "ready",
+                effect: "write",
+                planToken: stored.token,
+                expiresInMs: stored.expiresInMs,
+                responseText: null,
             };
         }
 
@@ -1910,7 +2051,7 @@ export class LocalMixerCommandGateway {
         }
 
         const active = continuation.value;
-        if ("channelQueries" in active.intent || "busQueries" in active.intent || "targetQueries" in active.intent || "sourceQuery" in active.intent) {
+        if ("channelQueries" in active.intent || "busQueries" in active.intent || "targetQueries" in active.intent || "destinationQueries" in active.intent || "sourceQuery" in active.intent) {
             const stored = this.store.createContinuation({
                 intent: active.intent,
                 candidates: [],
