@@ -222,7 +222,7 @@ function cleanTarget(value: string): string {
         .trim();
 }
 
-function qualifiedTargetQuery(
+export function qualifiedTargetQuery(
     rawQuery: string,
     allowedFamilies?: LocalMixerTargetFamily[],
 ): { query: string; families?: LocalMixerTargetFamily[] } {
