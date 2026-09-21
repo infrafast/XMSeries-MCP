@@ -85,8 +85,8 @@ const cases = [
   ["quel est le nom de la voie 6 ?", { kind: "read_channel_name", channel: 6 }],
   ["état du mute de Batterie", { kind: "read_mute", targetQuery: "Batterie" }],
   ["Hall FX est-il actif ?", { kind: "read_effect_on", targetQuery: "Hall FX" }],
-  ["active l'effet Hall", { kind: "set_effect_on", targetQuery: "Hall", on: true }],
-  ["désactive l'effet Hall", { kind: "set_effect_on", targetQuery: "Hall", on: false }],
+  ["active l'effet Hall FX", { kind: "set_effect_on", targetQuery: "Hall FX", on: true }],
+  ["désactive l'effet Hall FX FX", { kind: "set_effect_on", targetQuery: "Hall FX", on: false }],
   ["mute les bus Anthony et Laurent", {
     kind: "bulk_bus_mute", mode: "selected", busQueries: ["Anthony", "Laurent"], mute: true
   }],
