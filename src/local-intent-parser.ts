@@ -275,8 +275,8 @@ export function parseDeterministicMixerIntent(raw: string): NativeMixerIntent | 
     }
 
     let mute: boolean | undefined;
-    const muteOn = text.match(/\b(?:mute|coupe|couper|desactive|désactive|eteins|éteins)\b/iu);
-    const muteOff = text.match(/\b(?:unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\b/iu);
+    const muteOn = text.match(/(?:^|\s)(mute|coupe|couper|desactive|désactive|eteins|éteins)(?=\s|$)/iu);
+    const muteOff = text.match(/(?:^|\s)(unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)(?=\s|$)/iu);
     if (muteOn?.[0]) {
         mute = true;
         text = compact(text.replace(muteOn[0], " "));

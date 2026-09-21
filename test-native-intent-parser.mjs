@@ -33,6 +33,15 @@ const cases = [
   ["Batterie moins fort", {
     kind: "adjust_level_qualitative", targetQuery: "Batterie", direction: "down", amount: "normal"
   }],
+  ["éteins Voix", {
+    kind: "mute", targetQuery: "Voix", mute: true
+  }],
+  ["rallume Voix", {
+    kind: "mute", targetQuery: "Voix", mute: false
+  }],
+  ["éteins Batterie sur Anthony", {
+    kind: "send_mute", sourceQuery: "Batterie", destinationQuery: "Anthony", mute: true
+  }],
   ["monte le son", {
     kind: "adjust_level_qualitative", targetQuery: "main", direction: "up", amount: "normal"
   }],

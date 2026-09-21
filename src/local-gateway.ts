@@ -721,7 +721,10 @@ function parseIntent(raw: string, allowSequence = true): Intent | null {
         return { kind: "automation_list" };
     }
 
-    const cancelLastAutomation = /^(?:annule|annuler|cancel|stop|arrete|arrête)\s+(?:(?:la|le)\s+)?(?:derniere|dernière|dernier|last)\s+(?:automation|automatisation|fade|rampe|ramp)$/iu.test(text);
+    const cancelLastAutomation =
+        /^(?:annule|annuler|cancel|stop|arrete|arrête)\s+(?:(?:la|le)\s+)?(?:derniere|dernière|dernier|last)\s+(?:automation|automatisation|fade|rampe|ramp)$/iu.test(
+            text,
+        );
     if (cancelLastAutomation) {
         return { kind: "automation_cancel", lastRunning: true };
     }
@@ -733,87 +736,7 @@ function parseIntent(raw: string, allowSequence = true): Intent | null {
         return { kind: "automation_cancel", id: cancelAutomation[1].toLowerCase(), lastRunning: false };
     }
 
-    const parseLevelValue = (rawValue: string, rawUnit: string): LevelValue | null =>
-        parseTemporalLevelValue(rawValue, rawUnit);
-
-    const normalizedSendRamp = text.match(
-        /^\s*(?:monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+progressivement\s+(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:(?:a|à|to)\s+)?(?:au\s+)?(?:niveau|level)\s+(0(?:[.,]\d+)?|1(?:[.,]0+)?)\s+en\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
-    );
-    if (normalizedSendRamp?.[1] && normalizedSendRamp[2] && normalizedSendRamp[3] && normalizedSendRamp[4]) {
-        const value = parseNormalizedLevel(normalizedSendRamp[3]);
-        const durationSeconds = Number(normalizedSendRamp[4].replace(",", "."));
-        if (value !== null && Number.isFinite(durationSeconds) && durationSeconds > 0) {
-            return {
-                kind: "send_ramp_level",
-                sourceQuery: cleanTarget(normalizedSendRamp[1]),
-                destinationQuery: cleanTarget(normalizedSendRamp[2]),
-                to: { unit: "level", value },
-                durationSeconds,
-            };
-        }
-    }
-
-    const normalizedTargetRamp = text.match(
-        /^\s*(?:monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+progressivement\s+(.+?)\s+(?:(?:a|à|to)\s+)?(?:au\s+)?(?:niveau|level)\s+(0(?:[.,]\d+)?|1(?:[.,]0+)?)\s+en\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
-    );
-    if (normalizedTargetRamp?.[1] && normalizedTargetRamp[2] && normalizedTargetRamp[3]) {
-        const value = parseNormalizedLevel(normalizedTargetRamp[2]);
-        const durationSeconds = Number(normalizedTargetRamp[3].replace(",", "."));
-        if (value !== null && Number.isFinite(durationSeconds) && durationSeconds > 0) {
-            return {
-                kind: "ramp_level",
-                targetQuery: cleanTarget(normalizedTargetRamp[1]),
-                to: { unit: "level", value },
-                durationSeconds,
-            };
-        }
-    }
-
-    const earlyChannelToAuxNormalized = text.match(
-        /^\s*(?:mets|met|regle|règle|fixe|set)\s+(.+?)\s+(?:sur|vers|to)\s+(?:la\s+)?(?:sortie\s+aux|aux\s+output)\s+(\d+)\s+(?:(?:a|à|to)\s+)?(?:au\s+)?(?:niveau|level)\s+(0(?:[.,]\d+)?|1(?:[.,]0+)?)\s*$/iu,
-    );
-    if (earlyChannelToAuxNormalized?.[1] && earlyChannelToAuxNormalized[2] && earlyChannelToAuxNormalized[3]) {
-        const aux = Number(earlyChannelToAuxNormalized[2]);
-        const value = parseNormalizedLevel(earlyChannelToAuxNormalized[3]);
-        if (Number.isInteger(aux) && aux > 0 && value !== null) {
-            return {
-                kind: "send_to_aux_output",
-                sourceQuery: cleanTarget(earlyChannelToAuxNormalized[1]),
-                aux,
-                unit: "level",
-                value,
-            };
-        }
-    }
-
-    const normalizedSend = text.match(
-        /^\s*(?:mets|met|regle|règle|fixe|set|monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:(?:a|à|to)\s+)?(?:au\s+)?(?:niveau|level)\s+(0(?:[.,]\d+)?|1(?:[.,]0+)?)\s*$/iu,
-    );
-    if (normalizedSend?.[1] && normalizedSend[2] && normalizedSend[3]) {
-        const destinationQuery = cleanTarget(normalizedSend[2]);
-        const typedAuxOutput = /^(?:la\s+)?(?:sortie\s+aux|aux\s+output)\s+\d+$/iu.test(destinationQuery);
-        const value = parseNormalizedLevel(normalizedSend[3]);
-        if (!typedAuxOutput && value !== null) {
-            return {
-                kind: "send_set_level",
-                sourceQuery: cleanTarget(normalizedSend[1]),
-                destinationQuery,
-                unit: "level",
-                value,
-            };
-        }
-    }
-
-    const normalizedTarget = text.match(
-        /^\s*(?:mets|met|regle|règle|fixe|set|monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:(?:le\s+)?(?:niveau|volume|fader|son)\s+(?:de\s+)?)?(.+?)\s+(?:(?:a|à|to)\s+)?(?:au\s+)?(?:niveau|level)\s+(0(?:[.,]\d+)?|1(?:[.,]0+)?)\s*$/iu,
-    );
-    if (normalizedTarget?.[1] && normalizedTarget[2]) {
-        const value = parseNormalizedLevel(normalizedTarget[2]);
-        if (value !== null) {
-            return { kind: "set_level", targetQuery: cleanTarget(normalizedTarget[1]), unit: "level", value };
-        }
-    }
-
+    // Specialized read-only mixer metadata stays outside the generic level/routing grammar.
     const channelNameMatch = text.match(
         /^\s*(?:(?:quel(?:le)?\s+est\s+)?(?:le\s+)?nom\s+(?:de\s+)?(?:la\s+)?(?:voie|tranche|canal|channel)\s+(\d+)|(?:channel|voie|tranche|canal)\s+(\d+)\s+(?:name|nom))\s*\??\s*$/iu,
     );
@@ -846,16 +769,12 @@ function parseIntent(raw: string, allowSequence = true): Intent | null {
         if (targetQuery) return { kind: "read_effect_on", targetQuery };
     }
 
+    // Targetless natural Main-level questions have an established safe normalizer.
     if (isMainLevelReadUtterance(text)) {
         return { kind: "read_level", targetQuery: "main" };
     }
 
-    const nativeDeterministicIntent = parseDeterministicMixerIntent(text);
-    if (nativeDeterministicIntent) return nativeDeterministicIntent as Intent;
-
-    const flexibleTemporalIntent = parseFlexibleTemporalIntent(text);
-    if (flexibleTemporalIntent) return flexibleTemporalIntent;
-
+    // Physical AUX output is a distinct mixer capability with protocol-specific guards.
     const channelToAuxNormalized = text.match(
         /^\s*(?:mets|met|regle|règle|fixe|set)\s+(.+?)\s+(?:sur|vers|to)\s+(?:la\s+)?(?:sortie\s+aux|aux\s+output)\s+(\d+)\s+(?:(?:a|à|to)\s+)?(?:au\s+)?(?:niveau|level)\s+(0(?:[.,]\d+)?|1(?:[.,]0+)?)\s*$/iu,
     );
@@ -878,7 +797,7 @@ function parseIntent(raw: string, allowSequence = true): Intent | null {
     );
     if (channelToAuxOutput?.[1] && channelToAuxOutput[2] && channelToAuxOutput[3] && channelToAuxOutput[4]) {
         const aux = Number(channelToAuxOutput[2]);
-        const value = parseLevelValue(channelToAuxOutput[3], channelToAuxOutput[4]);
+        const value = parseTemporalLevelValue(channelToAuxOutput[3], channelToAuxOutput[4]);
         if (Number.isInteger(aux) && aux > 0 && value) {
             return {
                 kind: "send_to_aux_output",
@@ -890,81 +809,15 @@ function parseIntent(raw: string, allowSequence = true): Intent | null {
         }
     }
 
-    const delayedSendMuteMatch = text.match(
-        /^\s*(?:(?:dans\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*[,;:]?\s*)(mute|coupe|couper|desactive|désactive|eteins|éteins|unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\s+(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)|(mute|coupe|couper|desactive|désactive|eteins|éteins|unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\s+(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+dans\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?))\s*$/iu,
-    );
-    if (delayedSendMuteMatch) {
-        const delayRaw = delayedSendMuteMatch[1] || delayedSendMuteMatch[8];
-        const verbRaw = delayedSendMuteMatch[2] || delayedSendMuteMatch[5];
-        const sourceRaw = delayedSendMuteMatch[3] || delayedSendMuteMatch[6];
-        const destinationRaw = delayedSendMuteMatch[4] || delayedSendMuteMatch[7];
-        if (delayRaw && verbRaw && sourceRaw && destinationRaw) {
-            const delaySeconds = Number(delayRaw.replace(",", "."));
-            if (Number.isFinite(delaySeconds) && delaySeconds >= 0) {
-                const verb = simplify(verbRaw);
-                const mute = ["mute", "coupe", "couper", "desactive", "eteins"].includes(verb);
-                const sourceQuery = cleanTarget(sourceRaw);
-                const destinationQuery = cleanTarget(destinationRaw);
-                if (sourceQuery && destinationQuery) {
-                    return { kind: "send_delay_mute", sourceQuery, destinationQuery, mute, delaySeconds };
-                }
-            }
-        }
-    }
-
-    const delayedMuteMatch = text.match(
-        /^\s*(?:(?:dans\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*[,;:]?\s*)(mute|coupe|couper|desactive|désactive|eteins|éteins|unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\s+(.+?)|(mute|coupe|couper|desactive|désactive|eteins|éteins|unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\s+(.+?)\s+dans\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?))\s*$/iu,
-    );
-    if (delayedMuteMatch) {
-        const delayRaw = delayedMuteMatch[1] || delayedMuteMatch[6];
-        const verbRaw = delayedMuteMatch[2] || delayedMuteMatch[4];
-        const targetRaw = delayedMuteMatch[3] || delayedMuteMatch[5];
-        if (delayRaw && verbRaw && targetRaw) {
-            const delaySeconds = Number(delayRaw.replace(",", "."));
-            if (Number.isFinite(delaySeconds) && delaySeconds >= 0) {
-                const verb = simplify(verbRaw);
-                const mute = ["mute", "coupe", "couper", "desactive", "eteins"].includes(verb);
-                const targetQuery = cleanTarget(targetRaw);
-                if (targetQuery) {
-                    return { kind: "delay_mute", targetQuery, mute, delaySeconds };
-                }
-            }
-        }
-    }
-
-    // Main LR shorthand: when volume/level/fader is named without another target,
-    // the mixer domain owns the default and routes it to Main LR.
-    const mainRelative = text.match(
-        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:volume|niveau|fader|son)\s+(?:de|by)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
-    );
-    if (mainRelative?.[1] && mainRelative[2] && mainRelative[3]) {
-        const value = parseLevelValue(mainRelative[2], mainRelative[3]);
-        if (value) {
-            const down = ["baisse", "diminue", "lower", "decrease"].includes(simplify(mainRelative[1]));
-            return {
-                kind: "adjust_level",
-                targetQuery: "main",
-                unit: value.unit,
-                delta: down ? -Math.abs(value.value) : Math.abs(value.value),
-            };
-        }
-    }
-
-    const mainAbsolute = text.match(
-        /^\s*(?:mets|met|regle|règle|fixe|set|monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:volume|niveau|fader|son)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
-    );
-    if (mainAbsolute?.[1] && mainAbsolute[2]) {
-        const value = parseLevelValue(mainAbsolute[1], mainAbsolute[2]);
-        if (value) {
-            return { kind: "set_level", targetQuery: "main", unit: value.unit, value: value.value };
-        }
-    }
-
+    // Group/bulk operations deliberately retain their dedicated grammar because their
+    // semantics and execution safety differ from a single source -> destination route.
     const bulkAllChannelMute = text.match(
         /^\s*(mute|coupe|couper|desactive|désactive|eteins|éteins|unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\s+(?:(?:toutes\s+les\s+(?:voies|tranches))|(?:tous\s+les\s+(?:canaux|channels))|all\s+channels)(?:\s+(?:sauf|except)\s+(.+))?\s*$/iu,
     );
     if (bulkAllChannelMute?.[1]) {
-        const mute = !["unmute", "demute", "démute", "reactive", "réactive", "remets"].includes(bulkAllChannelMute[1].toLocaleLowerCase("fr-FR"));
+        const mute = !["unmute", "demute", "démute", "reactive", "réactive", "remets"].includes(
+            bulkAllChannelMute[1].toLocaleLowerCase("fr-FR"),
+        );
         const channelQueries = bulkAllChannelMute[2] ? splitTargetList(bulkAllChannelMute[2]) : [];
         return {
             kind: "bulk_channel_mute",
@@ -980,7 +833,9 @@ function parseIntent(raw: string, allowSequence = true): Intent | null {
     if (bulkSelectedChannelMute?.[1] && bulkSelectedChannelMute[2]) {
         const channelQueries = splitTargetList(bulkSelectedChannelMute[2]);
         if (channelQueries.length > 0) {
-            const mute = !["unmute", "demute", "démute", "reactive", "réactive", "remets"].includes(bulkSelectedChannelMute[1].toLocaleLowerCase("fr-FR"));
+            const mute = !["unmute", "demute", "démute", "reactive", "réactive", "remets"].includes(
+                bulkSelectedChannelMute[1].toLocaleLowerCase("fr-FR"),
+            );
             return { kind: "bulk_channel_mute", mode: "selected", channelQueries, mute };
         }
     }
@@ -989,7 +844,9 @@ function parseIntent(raw: string, allowSequence = true): Intent | null {
         /^\s*(mute|coupe|couper|desactive|désactive|eteins|éteins|unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\s+tous\s+les\s+bus(?:\s+sauf\s+(.+))?\s*$/iu,
     );
     if (bulkAllBusMute?.[1]) {
-        const mute = !["unmute", "demute", "démute", "reactive", "réactive", "remets"].includes(bulkAllBusMute[1].toLocaleLowerCase("fr-FR"));
+        const mute = !["unmute", "demute", "démute", "reactive", "réactive", "remets"].includes(
+            bulkAllBusMute[1].toLocaleLowerCase("fr-FR"),
+        );
         const busQueries = bulkAllBusMute[2] ? splitTargetList(bulkAllBusMute[2]) : [];
         return {
             kind: "bulk_bus_mute",
@@ -1005,7 +862,9 @@ function parseIntent(raw: string, allowSequence = true): Intent | null {
     if (bulkSelectedBusMute?.[1] && bulkSelectedBusMute[2]) {
         const busQueries = splitTargetList(bulkSelectedBusMute[2]);
         if (busQueries.length > 0) {
-            const mute = !["unmute", "demute", "démute", "reactive", "réactive", "remets"].includes(bulkSelectedBusMute[1].toLocaleLowerCase("fr-FR"));
+            const mute = !["unmute", "demute", "démute", "reactive", "réactive", "remets"].includes(
+                bulkSelectedBusMute[1].toLocaleLowerCase("fr-FR"),
+            );
             return { kind: "bulk_bus_mute", mode: "selected", busQueries, mute };
         }
     }
@@ -1035,7 +894,9 @@ function parseIntent(raw: string, allowSequence = true): Intent | null {
         const db = parseDb(bulkSendSelected[2]);
         let destinationText = bulkSendSelected[3].trim();
         let includeMain = false;
-        const mainSuffix = destinationText.match(/^(.*?)(?:\s+et\s+(?:la\s+)?(?:facade|façade|main(?:\s+lr)?|lr))\s*$/iu);
+        const mainSuffix = destinationText.match(
+            /^(.*?)(?:\s+et\s+(?:la\s+)?(?:facade|façade|main(?:\s+lr)?|lr))\s*$/iu,
+        );
         if (mainSuffix?.[1]) {
             destinationText = mainSuffix[1].trim();
             includeMain = true;
@@ -1053,477 +914,11 @@ function parseIntent(raw: string, allowSequence = true): Intent | null {
         }
     }
 
-    // "dans N secondes" means delay before the write, never ramp duration.
-    const sendDelayed = text.match(
-        /^\s*(?:mets|met|regle|règle|fixe|set)\s+(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s+dans\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
-    );
-    if (sendDelayed?.[1] && sendDelayed[2] && sendDelayed[3] && sendDelayed[4] && sendDelayed[5]) {
-        const value = parseLevelValue(sendDelayed[3], sendDelayed[4]);
-        const delaySeconds = Number(sendDelayed[5].replace(",", "."));
-        if (value && Number.isFinite(delaySeconds) && delaySeconds >= 0) {
-            return {
-                kind: "send_delay_level",
-                sourceQuery: cleanTarget(sendDelayed[1]),
-                destinationQuery: cleanTarget(sendDelayed[2]),
-                value,
-                delaySeconds,
-            };
-        }
-    }
-
-    const delayed = text.match(
-        /^\s*(?:mets|met|regle|règle|fixe|set)\s+(?:(?:le\s+)?(?:niveau|volume|fader|son)\s*(?:de\s+|du\s+|de la\s+|of\s+)?)?(.+?)?\s*(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s+dans\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
-    );
-    if (delayed?.[2] && delayed[3] && delayed[4]) {
-        const value = parseLevelValue(delayed[2], delayed[3]);
-        const delaySeconds = Number(delayed[4].replace(",", "."));
-        if (value && Number.isFinite(delaySeconds) && delaySeconds >= 0) {
-            return {
-                kind: "delay_level",
-                targetQuery: cleanTarget(delayed[1] || "main"),
-                value,
-                delaySeconds,
-            };
-        }
-    }
-
-    // Explicit source -> bus ramp, e.g. "monte progressivement batterie sur Anthony à -10 dB en 5 secondes".
-    const sendRampAbsolute = text.match(
-        /^\s*(?:monte|augmente|raise|increase|baisse|diminue|lower|decrease|fade)\s+(?:progressivement\s+)?(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s+en\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
-    );
-    if (sendRampAbsolute?.[1] && sendRampAbsolute[2] && sendRampAbsolute[3] && sendRampAbsolute[4] && sendRampAbsolute[5]) {
-        const to = parseLevelValue(sendRampAbsolute[3], sendRampAbsolute[4]);
-        const durationSeconds = Number(sendRampAbsolute[5].replace(",", "."));
-        if (to && Number.isFinite(durationSeconds) && durationSeconds > 0) {
-            return {
-                kind: "send_ramp_level",
-                sourceQuery: cleanTarget(sendRampAbsolute[1]),
-                destinationQuery: cleanTarget(sendRampAbsolute[2]),
-                to,
-                durationSeconds,
-            };
-        }
-    }
-
-    const sendRampRelative = text.match(
-        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:progressivement\s+)?(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:de|by)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s+en\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
-    );
-    if (sendRampRelative?.[1] && sendRampRelative[2] && sendRampRelative[3] && sendRampRelative[4] && sendRampRelative[5] && sendRampRelative[6]) {
-        const delta = parseLevelValue(sendRampRelative[4], sendRampRelative[5]);
-        const durationSeconds = Number(sendRampRelative[6].replace(",", "."));
-        if (delta && Number.isFinite(durationSeconds) && durationSeconds > 0) {
-            const down = ["baisse", "diminue", "lower", "decrease"].includes(simplify(sendRampRelative[1]));
-            return {
-                kind: "send_ramp_level",
-                sourceQuery: cleanTarget(sendRampRelative[2]),
-                destinationQuery: cleanTarget(sendRampRelative[3]),
-                delta: { ...delta, value: down ? -Math.abs(delta.value) : Math.abs(delta.value) },
-                durationSeconds,
-            };
-        }
-    }
-
-    // Fade-in/out defaults to Main LR when the target is omitted.
-    const fade = text.match(
-        /^\s*(?:fais\s+(?:un\s+)?)?fade[ -]?(in|out)(?:\s+(?:de\s+|du\s+|sur\s+)?(.+?))?\s+en\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
-    );
-    if (fade?.[1] && fade[3]) {
-        const durationSeconds = Number(fade[3].replace(",", "."));
-        if (Number.isFinite(durationSeconds) && durationSeconds > 0) {
-            return {
-                kind: "ramp_level",
-                targetQuery: cleanTarget(fade[2] || "main"),
-                to: { unit: "db", value: simplify(fade[1]) === "out" ? -120 : 0 },
-                durationSeconds,
-            };
-        }
-    }
-
-    const explicitRangeRamp = text.match(
-        /^\s*(?:fais\s+(?:un\s+)?)?(?:fade|rampe|ramp)\s+(?:(?:de|du|sur)\s+)?(.+?)\s+de\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s+en\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
-    );
-    if (explicitRangeRamp?.[1] && explicitRangeRamp[2] && explicitRangeRamp[3] && explicitRangeRamp[4] && explicitRangeRamp[5] && explicitRangeRamp[6]) {
-        const from = parseLevelValue(explicitRangeRamp[2], explicitRangeRamp[3]);
-        const to = parseLevelValue(explicitRangeRamp[4], explicitRangeRamp[5]);
-        const durationSeconds = Number(explicitRangeRamp[6].replace(",", "."));
-        if (from && to && Number.isFinite(durationSeconds) && durationSeconds > 0) {
-            return {
-                kind: "ramp_level",
-                targetQuery: cleanTarget(explicitRangeRamp[1]),
-                from,
-                to,
-                durationSeconds,
-            };
-        }
-    }
-
-    const targetRampAbsolute = text.match(
-        /^\s*(?:monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+progressivement\s*(?:(?:le\s+)?(?:niveau|volume|fader|son)\s*(?:de\s+|du\s+|de la\s+|of\s+)?)?(.+?)?\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s+en\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
-    );
-    if (targetRampAbsolute?.[2] && targetRampAbsolute[3] && targetRampAbsolute[4]) {
-        const to = parseLevelValue(targetRampAbsolute[2], targetRampAbsolute[3]);
-        const durationSeconds = Number(targetRampAbsolute[4].replace(",", "."));
-        if (to && Number.isFinite(durationSeconds) && durationSeconds > 0) {
-            return {
-                kind: "ramp_level",
-                targetQuery: cleanTarget(targetRampAbsolute[1] || "main"),
-                to,
-                durationSeconds,
-            };
-        }
-    }
-
-    const targetRampRelative = text.match(
-        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+progressivement\s*(?:(?:le\s+)?(?:niveau|volume|fader|son)\s*(?:de\s+|du\s+|de la\s+|of\s+)?)?(.+?)?\s+(?:de|by)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s+en\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
-    );
-    if (targetRampRelative?.[1] && targetRampRelative[3] && targetRampRelative[4] && targetRampRelative[5]) {
-        const delta = parseLevelValue(targetRampRelative[3], targetRampRelative[4]);
-        const durationSeconds = Number(targetRampRelative[5].replace(",", "."));
-        if (delta && Number.isFinite(durationSeconds) && durationSeconds > 0) {
-            const down = ["baisse", "diminue", "lower", "decrease"].includes(simplify(targetRampRelative[1]));
-            return {
-                kind: "ramp_level",
-                targetQuery: cleanTarget(targetRampRelative[2] || "main"),
-                delta: { ...delta, value: down ? -Math.abs(delta.value) : Math.abs(delta.value) },
-                durationSeconds,
-            };
-        }
-    }
-
-    const qualitativeRamp = text.match(
-        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+progressivement\s*(?:(?:le\s+)?(?:niveau|volume|fader|son)\s*(?:de\s+|du\s+|de la\s+|of\s+)?)?(.+?)?\s+en\s+(\d+(?:[.,]\d+)?)\s*(?:s|sec|seconde|secondes|seconds?)\s*$/iu,
-    );
-    if (qualitativeRamp?.[1] && qualitativeRamp[3]) {
-        const durationSeconds = Number(qualitativeRamp[3].replace(",", "."));
-        if (Number.isFinite(durationSeconds) && durationSeconds > 0) {
-            const down = ["baisse", "diminue", "lower", "decrease"].includes(simplify(qualitativeRamp[1]));
-            return {
-                kind: "ramp_level",
-                targetQuery: cleanTarget(qualitativeRamp[2] || "main"),
-                delta: { unit: "db", value: down ? -3 : 3 },
-                durationSeconds,
-            };
-        }
-    }
-
-    const sendReadPatterns = [
-        /^\s*(?:quel(?:le)?\s+est\s+)?(?:le\s+)?(?:niveau|volume|fader|son)\s+(?:de\s+|du\s+|de la\s+|of\s+)(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s*\??\s*$/iu,
-        /^\s*(?:lis|donne|read|get|affiche|montre(?:-|\s)+moi)\s+(?:le\s+)?(?:niveau|volume|fader|son)\s+(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s*\??\s*$/iu,
-    ];
-    for (const re of sendReadPatterns) {
-        const match = text.match(re);
-        if (match?.[1] && match[2]) {
-            const sourceQuery = cleanTarget(match[1]);
-            const destinationQuery = cleanTarget(match[2]);
-            if (sourceQuery && destinationQuery) {
-                return { kind: "send_read_level", sourceQuery, destinationQuery };
-            }
-        }
-    }
-
-    // "sur <value>" is a value form when no destination name follows.
-    // PROMPT example: "mets guitare sur -5 dB" means the source/main fader,
-    // not a source -> destination send.
-    const targetAbsoluteSurValue = text.match(
-        /^\s*(?:mets|met|regle|règle|fixe|set|monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:(?:le\s+)?(?:niveau|volume|fader|son)\s*(?:de\s+|du\s+|de la\s+|of\s+)?)?(.+?)\s+sur\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
-    );
-    if (targetAbsoluteSurValue?.[1] && targetAbsoluteSurValue[2] && targetAbsoluteSurValue[3]) {
-        const unit: LevelUnit = targetAbsoluteSurValue[3] === "%" ? "percent" : "db";
-        const value = unit === "percent"
-            ? parsePercent(targetAbsoluteSurValue[2])
-            : parseDb(targetAbsoluteSurValue[2]);
-        const targetQuery = cleanTarget(targetAbsoluteSurValue[1]);
-        if (value !== null && targetQuery) {
-            return { kind: "set_level", targetQuery, unit, value };
-        }
-    }
-
-    const sendAbsolutePatterns = [
-        /^\s*(?:mets|met|regle|règle|fixe|set|monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:niveau|volume|fader|son)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
-        /^\s*(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
-    ];
-    for (const re of sendAbsolutePatterns) {
-        const match = text.match(re);
-        if (match?.[1] && match[2] && match[3] && match[4]) {
-            const unit: LevelUnit = match[4] === "%" ? "percent" : "db";
-            const value = unit === "percent" ? parsePercent(match[3]) : parseDb(match[3]);
-            if (value !== null) {
-                return {
-                    kind: "send_set_level",
-                    sourceQuery: cleanTarget(match[1]),
-                    destinationQuery: cleanTarget(match[2]),
-                    unit,
-                    value,
-                };
-            }
-        }
-    }
-
-    const sendRelative = text.match(
-        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s+(?:de|by)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
-    );
-    if (sendRelative?.[1] && sendRelative[2] && sendRelative[3] && sendRelative[4] && sendRelative[5]) {
-        const unit: LevelUnit = sendRelative[5] === "%" ? "percent" : "db";
-        const base = unit === "percent" ? parsePercent(sendRelative[4]) : parseDb(sendRelative[4]);
-        if (base !== null) {
-            const down = ["baisse", "diminue", "lower", "decrease"].includes(simplify(sendRelative[1]));
-            return {
-                kind: "send_adjust_level",
-                sourceQuery: cleanTarget(sendRelative[2]),
-                destinationQuery: cleanTarget(sendRelative[3]),
-                unit,
-                delta: down ? -Math.abs(base) : Math.abs(base),
-            };
-        }
-    }
-
-    const sendQualitative = text.match(
-        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:(un\s+peu|beaucoup|a\s+little|a\s+lot|slightly)\s+)?(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s*$/iu,
-    );
-    if (sendQualitative?.[1] && sendQualitative[3] && sendQualitative[4]) {
-        const verb = simplify(sendQualitative[1]);
-        const amountText = simplify(sendQualitative[2] || "");
-        const amount: LocalRelativeAmount =
-            amountText === "un peu" || amountText === "a little" || amountText === "slightly"
-                ? "little"
-                : amountText === "beaucoup" || amountText === "a lot"
-                  ? "much"
-                  : "normal";
-        const direction: LocalRelativeDirection =
-            ["baisse", "diminue", "lower", "decrease"].includes(verb) ? "down" : "up";
-        return {
-            kind: "send_adjust_level_qualitative",
-            sourceQuery: cleanTarget(sendQualitative[3]),
-            destinationQuery: cleanTarget(sendQualitative[4]),
-            direction,
-            amount,
-        };
-    }
-
-    const directionalAbsoluteTarget = text.match(
-        /^\s*(?:monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:niveau|volume|fader|son)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
-    );
-    if (directionalAbsoluteTarget?.[1] && directionalAbsoluteTarget[2] && directionalAbsoluteTarget[3]) {
-        const unit: LevelUnit = directionalAbsoluteTarget[3] === "%" ? "percent" : "db";
-        const value = unit === "percent"
-            ? parsePercent(directionalAbsoluteTarget[2])
-            : parseDb(directionalAbsoluteTarget[2]);
-        const targetQuery = cleanTarget(directionalAbsoluteTarget[1]);
-        if (value !== null && targetQuery) {
-            return { kind: "set_level", targetQuery, unit, value };
-        }
-    }
-
-    const sendMutePatterns: Array<{ re: RegExp; mute: boolean }> = [
-        {
-            re: /^\s*(?:mute|coupe|couper|desactive|désactive|eteins|éteins)\s+(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s*$/iu,
-            mute: true,
-        },
-        {
-            re: /^\s*(?:unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\s+(.+?)\s+(?:sur|dans|vers|chez|to|in)\s+(.+?)\s*$/iu,
-            mute: false,
-        },
-    ];
-    for (const pattern of sendMutePatterns) {
-        const match = text.match(pattern.re);
-        if (match?.[1] && match[2]) {
-            const sourceQuery = cleanTarget(match[1]);
-            const destinationQuery = cleanTarget(match[2]);
-            if (sourceQuery && destinationQuery) {
-                return {
-                    kind: "send_mute",
-                    sourceQuery,
-                    destinationQuery,
-                    mute: pattern.mute,
-                };
-            }
-        }
-    }
-
-    const mutePatterns: Array<{ re: RegExp; mute: boolean }> = [
-        { re: /^\s*(?:mute|coupe|couper|desactive|désactive|eteins|éteins)\s+(?:le\s+son\s+de\s+)?(.+?)\s*$/iu, mute: true },
-        { re: /^\s*(?:unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\s+(?:le\s+son\s+de\s+)?(.+?)\s*$/iu, mute: false },
-    ];
-    for (const pattern of mutePatterns) {
-        const match = text.match(pattern.re);
-        if (match?.[1]) {
-            const targetQuery = cleanTarget(match[1]);
-            if (targetQuery) return { kind: "mute", targetQuery, mute: pattern.mute };
-        }
-    }
-
-    const explicitRelative = text.match(
-        /^\s*(?:monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:niveau|volume|fader|son)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:de|by)\s+([+-]?\d+(?:[.,]\d+)?)\s*d[bB]\s*$/iu,
-    );
-    if (explicitRelative?.[1] && explicitRelative[2]) {
-        const base = parseDb(explicitRelative[2]);
-        if (base !== null) {
-            const directionWord = simplify(text.split(/\s+/u)[0] || "");
-            const down = ["baisse", "diminue", "lower", "decrease"].includes(directionWord);
-            const deltaDb = down ? -Math.abs(base) : Math.abs(base);
-            return {
-                kind: "adjust_level",
-                targetQuery: cleanTarget(explicitRelative[1]),
-                unit: "db",
-                delta: deltaDb,
-            };
-        }
-    }
-
-    const signedRelative = text.match(
-        /^\s*(?:ajuste|adjust|change)\s+(?:le\s+)?(?:niveau|volume|fader|son)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:de|by)\s+([+-]\d+(?:[.,]\d+)?)\s*d[bB]\s*$/iu,
-    );
-    if (signedRelative?.[1] && signedRelative[2]) {
-        const deltaDb = parseDb(signedRelative[2]);
-        if (deltaDb !== null) {
-            return {
-                kind: "adjust_level",
-                targetQuery: cleanTarget(signedRelative[1]),
-                unit: "db",
-                delta: deltaDb,
-            };
-        }
-    }
-
-    const relativePercent = text.match(
-        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:niveau|volume|fader|son)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:de|by)\s+([+-]?\d+(?:[.,]\d+)?)\s*%\s*$/iu,
-    );
-    if (relativePercent?.[1] && relativePercent[2] && relativePercent[3]) {
-        const base = parsePercent(relativePercent[3]);
-        if (base !== null) {
-            const down = ["baisse", "diminue", "lower", "decrease"].includes(simplify(relativePercent[1]));
-            return {
-                kind: "adjust_level",
-                targetQuery: cleanTarget(relativePercent[2]),
-                unit: "percent",
-                delta: down ? -Math.abs(base) : Math.abs(base),
-            };
-        }
-    }
-
-    const naturalRouteDirection = text.match(
-        /^\s*(?:(un\s+peu|beaucoup)\s+)?(plus|moins)\s+fort\s+(.+?)\s+(?:sur|dans|vers|chez)\s+(.+?)\s*$/iu,
-    );
-    if (naturalRouteDirection?.[2] && naturalRouteDirection[3] && naturalRouteDirection[4]) {
-        const amountText = simplify(naturalRouteDirection[1] || "");
-        const amount: LocalRelativeAmount =
-            amountText === "un peu" ? "little" : amountText === "beaucoup" ? "much" : "normal";
-        return {
-            kind: "send_adjust_level_qualitative",
-            sourceQuery: cleanTarget(naturalRouteDirection[3]),
-            destinationQuery: cleanTarget(naturalRouteDirection[4]),
-            direction: simplify(naturalRouteDirection[2]) === "moins" ? "down" : "up",
-            amount,
-        };
-    }
-
-    const naturalPrefixDirection = text.match(
-        /^\s*(?:(un\s+peu|beaucoup)\s+)?(plus|moins)\s+fort(?:\s+(?:le\s+)?(?:niveau|volume|fader|son)(?:\s+(?:de|du|de la))?)?\s*(.*?)\s*$/iu,
-    );
-    if (naturalPrefixDirection?.[2]) {
-        const amountText = simplify(naturalPrefixDirection[1] || "");
-        const amount: LocalRelativeAmount =
-            amountText === "un peu" ? "little" : amountText === "beaucoup" ? "much" : "normal";
-        return {
-            kind: "adjust_level_qualitative",
-            targetQuery: cleanTarget(naturalPrefixDirection[3] || "main") || "main",
-            direction: simplify(naturalPrefixDirection[2]) === "moins" ? "down" : "up",
-            amount,
-        };
-    }
-
-    const naturalSuffixDirection = text.match(
-        /^\s*(.+?)\s+(?:(un\s+peu|beaucoup)\s+)?(plus|moins)\s+fort\s*$/iu,
-    );
-    if (naturalSuffixDirection?.[1] && naturalSuffixDirection[3]) {
-        const amountText = simplify(naturalSuffixDirection[2] || "");
-        const amount: LocalRelativeAmount =
-            amountText === "un peu" ? "little" : amountText === "beaucoup" ? "much" : "normal";
-        return {
-            kind: "adjust_level_qualitative",
-            targetQuery: cleanTarget(naturalSuffixDirection[1]),
-            direction: simplify(naturalSuffixDirection[3]) === "moins" ? "down" : "up",
-            amount,
-        };
-    }
-
-    const mainQualitativeRelative = text.match(
-        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:(un\s+peu|beaucoup|a\s+little|a\s+lot|slightly)\s+)?(?:le\s+)?(?:niveau|volume|fader|son)\s*$/iu,
-    );
-    if (mainQualitativeRelative?.[1]) {
-        const verb = simplify(mainQualitativeRelative[1]);
-        const amountText = simplify(mainQualitativeRelative[2] || "");
-        const amount: LocalRelativeAmount =
-            amountText === "un peu" || amountText === "a little" || amountText === "slightly"
-                ? "little"
-                : amountText === "beaucoup" || amountText === "a lot"
-                  ? "much"
-                  : "normal";
-        const direction: LocalRelativeDirection =
-            ["baisse", "diminue", "lower", "decrease"].includes(verb) ? "down" : "up";
-        return {
-            kind: "adjust_level_qualitative",
-            targetQuery: "main",
-            direction,
-            amount,
-        };
-    }
-
-    const qualitativeRelative = text.match(
-        /^\s*(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:(un\s+peu|beaucoup|a\s+little|a\s+lot|slightly)\s+)?(?:le\s+)?(?:niveau|volume|fader|son)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s*$/iu,
-    );
-    if (qualitativeRelative?.[1] && qualitativeRelative[3]) {
-        const verb = simplify(qualitativeRelative[1]);
-        const amountText = simplify(qualitativeRelative[2] || "");
-        const amount: LocalRelativeAmount =
-            amountText === "un peu" || amountText === "a little" || amountText === "slightly"
-                ? "little"
-                : amountText === "beaucoup" || amountText === "a lot"
-                  ? "much"
-                  : "normal";
-        const direction: LocalRelativeDirection =
-            ["baisse", "diminue", "lower", "decrease"].includes(verb) ? "down" : "up";
-        return {
-            kind: "adjust_level_qualitative",
-            targetQuery: cleanTarget(qualitativeRelative[3]),
-            direction,
-            amount,
-        };
-    }
-
-    const setPatterns = [
-        /^\s*(?:mets|met|regle|règle|fixe|set|monte|augmente|raise|increase|baisse|diminue|lower|decrease)\s+(?:le\s+)?(?:niveau|volume|fader|son)?\s*(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
-        /^\s*(.+?)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s*$/iu,
-    ];
-    for (const re of setPatterns) {
-        const match = text.match(re);
-        if (match?.[1] && match[2] && match[3]) {
-            const unit: LevelUnit = match[3] === "%" ? "percent" : "db";
-            const value = unit === "percent" ? parsePercent(match[2]) : parseDb(match[2]);
-            const targetQuery = cleanTarget(match[1]);
-            if (value !== null && targetQuery) {
-                return { kind: "set_level", targetQuery, unit, value };
-            }
-        }
-    }
-
-    if (isMainLevelReadUtterance(text)) {
-        return { kind: "read_level", targetQuery: "main" };
-    }
-
-    const readPatterns = [
-        /^\s*(?:quel(?:le)?\s+est\s+)?(?:le\s+)?(?:niveau|volume|fader|son)\s+(?:de\s+|du\s+|de la\s+|of\s+)(.+?)\s*\??\s*$/iu,
-        /^\s*(?:lis|donne|read|get|affiche|montre(?:-|\s)+moi)\s+(?:le\s+)?(?:niveau|volume|fader|son)\s+(?:de\s+|du\s+|de la\s+|of\s+)?(.+?)\s*\??\s*$/iu,
-        /^\s*o[uù]\s+est\s+(?:le\s+)?(?:niveau|volume|fader|son)\s+(?:de\s+|du\s+|de la\s+)?(.+?)\s*\??\s*$/iu,
-        /^\s*(.+?)\s+(?:niveau|volume|fader|son)\s*\??\s*$/iu,
-    ];
-    for (const re of readPatterns) {
-        const match = text.match(re);
-        if (match?.[1]) {
-            const targetQuery = cleanTarget(match[1]);
-            if (targetQuery) return { kind: "read_level", targetQuery };
-        }
-    }
+    // All ordinary level/routing/ramp/delay/mute language now goes through the
+    // native lexical-slot + constraint matcher. There is no whole-utterance regex
+    // fallback after this point.
+    const nativeDeterministicIntent = parseDeterministicMixerIntent(text);
+    if (nativeDeterministicIntent) return nativeDeterministicIntent as Intent;
 
     return null;
 }
