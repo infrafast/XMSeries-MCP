@@ -115,7 +115,7 @@ type LevelValue = { unit: LevelUnit; value: number };
 type Intent = NativeMixerIntent | { kind: "sequence"; clauses: Array<{ text: string; waitBeforeSeconds: number }> };
 type TargetIntent = Extract<Intent, { targetQuery: string }>;
 type SendIntent = Extract<Intent, { sourceQuery: string; destinationQuery: string }>;
-type BulkIntent = Extract<Intent, { kind: "bulk_channel_mute" | "bulk_bus_mute" | "bulk_send_db" }>;
+type BulkIntent = Extract<Intent, { kind: "bulk_channel_mute" | "bulk_bus_mute" | "bulk_named_mute" | "bulk_send_db" }>;
 
 type LocalPlan =
     | { kind: "status" }
@@ -611,7 +611,7 @@ export class LocalMixerCommandGateway {
             };
         }
 
-        if (intent.kind === "bulk_channel_mute" || intent.kind === "bulk_bus_mute" || intent.kind === "bulk_send_db") {
+        if (intent.kind === "bulk_channel_mute" || intent.kind === "bulk_bus_mute" || intent.kind === "bulk_named_mute" || intent.kind === "bulk_send_db") {
             return await this.planBulkIntent(intent);
         }
 
@@ -1195,7 +1195,7 @@ export class LocalMixerCommandGateway {
         }
 
         let result: AnalyzeCommandResult;
-        if (intent.kind === "bulk_channel_mute" || intent.kind === "bulk_bus_mute" || intent.kind === "bulk_send_db") {
+        if (intent.kind === "bulk_channel_mute" || intent.kind === "bulk_bus_mute" || intent.kind === "bulk_named_mute" || intent.kind === "bulk_send_db") {
             result = await this.planBulkIntent(intent);
         } else if (intent.kind === "send_to_aux_output") {
             result = await this.planAuxOutputIntent(intent);
@@ -1553,6 +1553,98 @@ export class LocalMixerCommandGateway {
     }
 
     private async planBulkIntent(intent: BulkIntent): Promise<AnalyzeCommandResult> {
+        if (intent.kind === "bulk_named_mute") {
+            // Preserve a legitimate single target whose configured name itself
+            // contains a conjunction before interpreting the utterance as a list.
+            const wholeMatches = await this.adapter.resolve(intent.rawQuery);
+            const whole = safeUnique(wholeMatches);
+            if (whole && whole.matchType !== "fuzzy") {
+                const stored = this.store.createPlan(
+                    { kind: "mute", targetQuery: intent.rawQuery, target: whole, mute: intent.mute },
+                    "write",
+                );
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    recognized: true,
+                    status: "ready",
+                    effect: "write",
+                    planToken: stored.token,
+                    expiresInMs: stored.expiresInMs,
+                    responseText: null,
+                };
+            }
+
+            const targets: LocalMixerTarget[] = [];
+            for (const query of intent.targetQueries) {
+                const matches = await this.adapter.resolve(query);
+                const resolved = safeUnique(matches);
+                if (!resolved || resolved.matchType === "fuzzy") {
+                    const candidates = matches.length > 0 ? summarizeCandidates(matches) : "aucune";
+                    const stored = this.store.createContinuation({ intent, candidates: [] });
+                    return {
+                        protocol: GATEWAY_PROTOCOL,
+                        recognized: true,
+                        status: "clarification",
+                        effect: "none",
+                        continuationToken: stored.token,
+                        expiresInMs: stored.expiresInMs,
+                        responseText: `Cible « ${query} » ambiguë ou introuvable. Correspondances: ${candidates}. Reformule avec les noms exacts.`,
+                    };
+                }
+                targets.push(resolved);
+            }
+
+            const families = new Set(targets.map((target) => target.family));
+            if (families.size === 1 && targets[0]?.family === "channel") {
+                const specialized: Extract<Intent, { kind: "bulk_channel_mute" }> = {
+                    kind: "bulk_channel_mute",
+                    mode: "selected",
+                    channelQueries: intent.targetQueries,
+                    mute: intent.mute,
+                };
+                const stored = this.store.createPlan({ ...specialized, channels: targets }, "write");
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    recognized: true,
+                    status: "ready",
+                    effect: "write",
+                    planToken: stored.token,
+                    expiresInMs: stored.expiresInMs,
+                    responseText: null,
+                };
+            }
+
+            if (families.size === 1 && targets[0]?.family === "bus") {
+                const specialized: Extract<Intent, { kind: "bulk_bus_mute" }> = {
+                    kind: "bulk_bus_mute",
+                    mode: "selected",
+                    busQueries: intent.targetQueries,
+                    mute: intent.mute,
+                };
+                const stored = this.store.createPlan({ ...specialized, buses: targets }, "write");
+                return {
+                    protocol: GATEWAY_PROTOCOL,
+                    recognized: true,
+                    status: "ready",
+                    effect: "write",
+                    planToken: stored.token,
+                    expiresInMs: stored.expiresInMs,
+                    responseText: null,
+                };
+            }
+
+            const stored = this.store.createContinuation({ intent, candidates: [] });
+            return {
+                protocol: GATEWAY_PROTOCOL,
+                recognized: true,
+                status: "clarification",
+                effect: "none",
+                continuationToken: stored.token,
+                expiresInMs: stored.expiresInMs,
+                responseText: "La liste résolue mélange des familles de cibles, ou utilise une famille sans opération bulk sûre. Précise les voies ou les bus.",
+            };
+        }
+
         if (intent.kind === "bulk_channel_mute") {
             if (intent.mode === "all") {
                 const stored = this.store.createPlan({ ...intent, channels: [] }, "write");
@@ -1802,7 +1894,7 @@ export class LocalMixerCommandGateway {
         }
 
         const active = continuation.value;
-        if ("channelQueries" in active.intent || "busQueries" in active.intent || "sourceQuery" in active.intent) {
+        if ("channelQueries" in active.intent || "busQueries" in active.intent || "targetQueries" in active.intent || "sourceQuery" in active.intent) {
             const stored = this.store.createContinuation({
                 intent: active.intent,
                 candidates: [],
