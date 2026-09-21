@@ -248,10 +248,12 @@ Only treat directions as contradictory when the utterance contains two actual di
 Use exposed MCP tools only. Never send raw OSC manually.
 
 Use factorized fader tools with `unit:"db"` for faders:
-`osc_channel_fader`, `osc_bus_fader`, `osc_aux_fader`, `osc_main_fader`. For simple user questions such as "quel est le volume ?", "quel est le niveau de la façade ?", or "où est le fader ?", use the dedicated fader read tool (`osc_main_fader` for main LR). For every `action:"set"` on a fader or send tool, always include an explicit `unit`. Prefer direct dB writes such as `{ "action":"set", "unit":"db", "value": -7 }`; do not call `osc_db_to_fader_level` and then set the converted level unless you also set `unit:"level"`.
+`osc_channel_fader`, `osc_bus_fader`, `osc_fx_return_fader`, `osc_aux_fader`, `osc_main_fader`. For simple user questions such as "quel est le volume ?", "quel est le niveau de la façade ?", or "où est le fader ?", use the dedicated fader read tool (`osc_main_fader` for main LR). For every `action:"set"` on a fader or send tool, always include an explicit `unit`. Prefer direct dB writes such as `{ "action":"set", "unit":"db", "value": -7 }`; do not call `osc_db_to_fader_level` and then set the converted level unless you also set `unit:"level"`.
 
 Use factorized send tools with `unit:"db"` for sends:
 `osc_channel_send_to_bus`, `osc_fx_send_to_bus`, `osc_aux_send_to_bus`. Never omit `unit` on `action:"set"`.
+
+For explicit FX-engine state wording such as `active l'effet Hall FX` / `désactive l'effet Hall FX`, resolve the FX return and use `osc_set_effect_on`. `Hall FX est-il actif ?` uses `osc_get_effect_on`. The established shorthand `mute Hall FX` / `unmute Hall FX` remains an FX-return on/off request; do not reinterpret a source-to-bus mute as a whole FX-return state change.
 
 For selected bus lists, use bulk tools. Canonical examples include `mute les bus Anthony et Laurent`, `coupe tous les bus sauf Anthony`, `mets batterie à -20 dB sur les bus Anthony et Laurent`, and `mets batterie à -25 dB sur tous les bus et façade`:
 
@@ -273,18 +275,18 @@ Progressive changes, fades, delayed level changes, and level sequences are suppo
 whenever the underlying level target is supported. Never refuse an automation only because the
 active protocol is OSCXR. Resolve the target and use the appropriate automation tool.
 
-OSCXR supports mainly:
+At the currently exposed MCP tool surface, OSCXR supports mainly:
 
 * channel fader/mute/name/send-to-bus level
 * bus fader/mute/name
-* main LR fader/mute/name
-* FX return fader/mute/name and FX parameter 1
-* aux singleton via aux 1
-* DCA fader/mute/name
-* headamp gain
+* main LR fader/mute
+* FX return fader/on-off and FX-return send level
+* aux singleton fader/mute/send via aux 1
+* DCA fader/mute
 
-Unsupported OSCXR areas include:
-routing, matrices, overview, pan, colors/icons, links, gate/compressor, EQ, bus-specific source mutes.
+The OSC client contains additional low-level protocol helpers, but an agent must treat a capability as available only when an MCP tool exposes it. Do not infer tool availability from protocol internals.
+
+Unsupported or intentionally unexposed OSCXR areas include routing, matrices, overview, pan, colors/icons, links, gate/compressor, EQ and bus-specific source mutes.
 
 For OSCXR, supported structured automation targets include:
 
