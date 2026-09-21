@@ -394,6 +394,16 @@ function parseIntent(raw: string, allowSequence = true): Intent | null {
     return parseDeterministicMixerIntent(text);
 }
 
+/**
+ * Pure parser entry point for offline diagnostics/benchmarks.
+ *
+ * This deliberately reuses the exact Local gateway normalization + native parser
+ * path. It performs no resolution, planning, mixer I/O or execution.
+ */
+export function parseLocalMixerIntent(raw: string): Intent | null {
+    return parseIntent(raw);
+}
+
 function sameIdentity(a: LocalMixerTarget, b: LocalMixerTarget): boolean {
     return a.family === b.family && a.index === b.index && a.name === b.name;
 }
