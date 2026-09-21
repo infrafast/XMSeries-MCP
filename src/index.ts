@@ -543,6 +543,10 @@ const localCommandGateway = new LocalMixerCommandGateway({
         if (target.family !== "fxreturn") throw new Error("Local FX state read requires an FX return target.");
         return osc.getEffectOn(target.index);
     },
+    setEffectOn: async (target, on) => {
+        if (target.family !== "fxreturn") throw new Error("Local FX state write requires an FX return target.");
+        await osc.setEffectOn(target.index, on);
+    },
     readChannelName: async (channel) => {
         if (!Number.isInteger(channel) || channel < 1 || channel > oscRuntimeConfig.channelCount) {
             throw new Error(`Invalid channel number ${channel}. Configured channel range is 1 to ${oscRuntimeConfig.channelCount}.`);
