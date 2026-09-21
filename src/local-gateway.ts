@@ -222,6 +222,32 @@ function cleanTarget(value: string): string {
         .trim();
 }
 
+function qualifiedTargetQuery(
+    rawQuery: string,
+    allowedFamilies?: LocalMixerTargetFamily[],
+): { query: string; families?: LocalMixerTargetFamily[] } {
+    const query = cleanTarget(rawQuery);
+    const qualifiers: Array<{ pattern: RegExp; family: LocalMixerTargetFamily }> = [
+        { pattern: /^(?:channel|channels|voie|voies|canal|canaux|tranche|tranches|source)\s+(.+)$/iu, family: "channel" },
+        { pattern: /^(?:bus|retour|retours|monitor|moniteur|moniteurs)\s+(.+)$/iu, family: "bus" },
+        { pattern: /^(?:fx(?:\s+return)?|effet|effets|effect|effects|retour\s+fx)\s+(.+)$/iu, family: "fxreturn" },
+        { pattern: /^(?:aux|auxiliaire|auxiliaires|aux\s+return)\s+(.+)$/iu, family: "aux" },
+        { pattern: /^(?:dca)\s+(.+)$/iu, family: "dca" },
+        { pattern: /^(?:matrix|matrice|matrices)\s+(.+)$/iu, family: "matrix" },
+    ];
+
+    for (const { pattern, family } of qualifiers) {
+        const match = query.match(pattern);
+        if (!match?.[1]) continue;
+        const families = allowedFamilies
+            ? allowedFamilies.filter((candidate) => candidate === family)
+            : [family];
+        return { query: cleanTarget(match[1]), families };
+    }
+
+    return { query, families: allowedFamilies };
+}
+
 function levelToNormalized(unit: LevelUnit, value: number): { level: number; label: string } {
     if (unit === "level") {
         const level = Math.min(1, Math.max(0, value));
@@ -381,11 +407,15 @@ async function resolveOneNamedTarget(
     query: string,
     families?: LocalMixerTargetFamily[],
 ): Promise<{ target: LocalMixerTarget | null; matches: LocalMixerTarget[] }> {
-    if (!families || families.includes("main")) {
-        const main = mainTarget(query);
+    const qualified = qualifiedTargetQuery(query, families);
+    if (qualified.families && qualified.families.length === 0) {
+        return { target: null, matches: [] };
+    }
+    if (!qualified.families || qualified.families.includes("main")) {
+        const main = mainTarget(qualified.query);
         if (main) return { target: main, matches: [main] };
     }
-    const matches = await adapter.resolve(query, families);
+    const matches = await adapter.resolve(qualified.query, qualified.families);
     return { target: safeUnique(matches), matches };
 }
 
@@ -1619,8 +1649,7 @@ export class LocalMixerCommandGateway {
     ): Promise<{ targets: LocalMixerTarget[]; errorText?: string }> {
         const targets: LocalMixerTarget[] = [];
         for (const query of queries) {
-            const matches = await this.adapter.resolve(query, ["channel"]);
-            const resolved = safeUnique(matches);
+            const { target: resolved, matches } = await resolveOneNamedTarget(this.adapter, query, ["channel"]);
             if (!resolved || resolved.matchType === "fuzzy") {
                 const candidates = matches.length > 0 ? summarizeCandidates(matches) : "aucune";
                 return {
@@ -1656,8 +1685,7 @@ export class LocalMixerCommandGateway {
     ): Promise<{ targets: LocalMixerTarget[]; errorText?: string }> {
         const targets: LocalMixerTarget[] = [];
         for (const query of queries) {
-            const matches = await this.adapter.resolve(query, ["bus"]);
-            const resolved = safeUnique(matches);
+            const { target: resolved, matches } = await resolveOneNamedTarget(this.adapter, query, ["bus"]);
             if (!resolved || resolved.matchType === "fuzzy") {
                 const candidates = matches.length > 0 ? summarizeCandidates(matches) : "aucun";
                 return {
@@ -1990,7 +2018,10 @@ export class LocalMixerCommandGateway {
         intent: Extract<Intent, { kind: "read_mute" | "read_effect_on" | "set_effect_on" }>,
         families: LocalMixerTargetFamily[],
     ): Promise<AnalyzeCommandResult> {
-        const matches = await this.adapter.resolve(intent.targetQuery, families);
+        const qualified = qualifiedTargetQuery(intent.targetQuery, families);
+        const matches = qualified.families?.length === 0
+            ? []
+            : await this.adapter.resolve(qualified.query, qualified.families);
         const resolved = safeUnique(matches);
         if (resolved && resolved.matchType !== "fuzzy") {
             const effect = intent.kind === "set_effect_on" ? "write" : "read";
@@ -2023,10 +2054,10 @@ export class LocalMixerCommandGateway {
     private async planTargetIntent(
         intent: TargetIntent,
     ): Promise<AnalyzeCommandResult> {
-        const main = mainTarget(intent.targetQuery);
-        if (main) return this.readyTargetPlan(intent, main);
+        const resolvedQuery = await resolveOneNamedTarget(this.adapter, intent.targetQuery);
+        if (resolvedQuery.target) return this.readyTargetPlan(intent, resolvedQuery.target);
 
-        const matches = await this.adapter.resolve(intent.targetQuery);
+        const matches = resolvedQuery.matches;
         const resolved = safeUnique(matches);
         if (resolved) return this.readyTargetPlan(intent, resolved);
 
@@ -2125,13 +2156,9 @@ export class LocalMixerCommandGateway {
             };
         }
 
-        if (!active.families) {
-            const main = mainTarget(reply);
-            if (main) return this.readyTargetPlan(active.intent, main);
-        }
-
-        const matches = await this.adapter.resolve(reply, active.families);
-        const resolved = safeUnique(matches);
+        const replyResult = await resolveOneNamedTarget(this.adapter, reply, active.families);
+        const matches = replyResult.matches;
+        const resolved = replyResult.target;
         if (!resolved) {
             return {
                 protocol: GATEWAY_PROTOCOL,
@@ -2177,7 +2204,10 @@ export class LocalMixerCommandGateway {
         expected: LocalMixerTarget,
         families: LocalMixerTargetFamily[],
     ): Promise<LocalMixerTarget> {
-        const matches = await this.adapter.resolve(query, families);
+        const qualified = qualifiedTargetQuery(query, families);
+        const matches = qualified.families?.length === 0
+            ? []
+            : await this.adapter.resolve(qualified.query, qualified.families);
         const live = safeUnique(matches);
         if (!live || !sameIdentity(live, expected) || live.matchType === "fuzzy") {
             throw new Error("STALE_TARGET: resolver identity changed");
@@ -2192,7 +2222,8 @@ export class LocalMixerCommandGateway {
     ): Promise<LocalMixerTarget> {
         if (expected.family === "main") return expected;
 
-        const matches = await this.adapter.resolve(query);
+        const qualified = qualifiedTargetQuery(query);
+        const matches = await this.adapter.resolve(qualified.query, qualified.families);
         const live = safeUnique(matches);
         if (!live || !sameIdentity(live, expected)) {
             throw new Error("STALE_TARGET: resolver identity changed");
