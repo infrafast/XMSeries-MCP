@@ -846,6 +846,10 @@ function parseIntent(raw: string, allowSequence = true): Intent | null {
         if (targetQuery) return { kind: "read_effect_on", targetQuery };
     }
 
+    if (isMainLevelReadUtterance(text)) {
+        return { kind: "read_level", targetQuery: "main" };
+    }
+
     const nativeDeterministicIntent = parseDeterministicMixerIntent(text);
     if (nativeDeterministicIntent) return nativeDeterministicIntent as Intent;
 
