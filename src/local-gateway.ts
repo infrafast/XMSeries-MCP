@@ -65,6 +65,7 @@ export interface LocalMixerGatewayAdapter {
     setMute(target: LocalMixerTarget, mute: boolean): Promise<void>;
     readSendLevel(source: LocalMixerTarget, destination: LocalMixerTarget): Promise<number>;
     writeSendLevel(source: LocalMixerTarget, destination: LocalMixerTarget, level: number): Promise<void>;
+    canWriteSendLevel(source: LocalMixerTarget, destination: LocalMixerTarget): boolean;
     writeChannelToAux(source: LocalMixerTarget, aux: number, level: number): Promise<void>;
     setSendMute(source: LocalMixerTarget, destination: LocalMixerTarget, mute: boolean): Promise<void>;
     startLevelRamp(target: LocalMixerTarget, toLevel: number, durationSeconds: number, fromLevel?: number): Promise<string>;
@@ -115,7 +116,7 @@ type LevelValue = { unit: LevelUnit; value: number };
 type Intent = NativeMixerIntent | { kind: "sequence"; clauses: Array<{ text: string; waitBeforeSeconds: number }> };
 type TargetIntent = Extract<Intent, { targetQuery: string }>;
 type SendIntent = Extract<Intent, { sourceQuery: string; destinationQuery: string }>;
-type BulkIntent = Extract<Intent, { kind: "bulk_channel_mute" | "bulk_bus_mute" | "bulk_named_mute" | "bulk_send_db" }>;
+type BulkIntent = Extract<Intent, { kind: "bulk_channel_mute" | "bulk_bus_mute" | "bulk_named_mute" | "bulk_named_send_db" | "bulk_send_db" }>;
 
 type LocalPlan =
     | { kind: "status" }
@@ -147,6 +148,8 @@ type LocalPlan =
     | { kind: "automation_cancel"; id: string }
     | { kind: "bulk_channel_mute"; mode: "selected" | "all" | "all_except"; channelQueries: string[]; channels: LocalMixerTarget[]; mute: boolean }
     | { kind: "bulk_bus_mute"; mode: "selected" | "all" | "all_except"; busQueries: string[]; buses: LocalMixerTarget[]; mute: boolean }
+    | { kind: "bulk_named_mute"; targetQueries: string[]; targets: LocalMixerTarget[]; mute: boolean }
+    | { kind: "bulk_named_send_db"; sourceQuery: string; source: LocalMixerTarget; destinationQueries: string[]; destinations: LocalMixerTarget[]; db: number }
     | { kind: "bulk_send_db"; mode: "selected" | "all"; sourceQuery: string; source: LocalMixerTarget; busQueries: string[]; buses: LocalMixerTarget[]; db: number; includeMain: boolean }
     | { kind: "mute"; targetQuery: string; target: LocalMixerTarget; mute: boolean }
     | { kind: "sequence"; steps: Array<{ waitBeforeSeconds: number; plan: LocalPlan }> };
@@ -370,6 +373,19 @@ function sameIdentity(a: LocalMixerTarget, b: LocalMixerTarget): boolean {
 
 function safeUnique(matches: LocalMixerTarget[]): LocalMixerTarget | null {
     return matches.length === 1 && matches[0].matchType !== "fuzzy" ? matches[0] : null;
+}
+
+async function resolveOneNamedTarget(
+    adapter: LocalMixerGatewayAdapter,
+    query: string,
+    families?: LocalMixerTargetFamily[],
+): Promise<{ target: LocalMixerTarget | null; matches: LocalMixerTarget[] }> {
+    if (!families || families.includes("main")) {
+        const main = mainTarget(query);
+        if (main) return { target: main, matches: [main] };
+    }
+    const matches = await adapter.resolve(query, families);
+    return { target: safeUnique(matches), matches };
 }
 
 function summarizeCandidates(matches: LocalMixerTarget[]): string {
