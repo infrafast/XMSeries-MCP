@@ -27,6 +27,12 @@ const cases = [
   ["Batterie moins fort", {
     kind: "adjust_level_qualitative", targetQuery: "Batterie", direction: "down", amount: "normal"
   }],
+  ["monte le son", {
+    kind: "adjust_level_qualitative", targetQuery: "main", direction: "up", amount: "normal"
+  }],
+  ["baisse le volume", {
+    kind: "adjust_level_qualitative", targetQuery: "main", direction: "down", amount: "normal"
+  }],
   ["fade out en 5 secondes", {
     kind: "ramp_level", targetQuery: "main", to: { unit: "db", value: -120 }, durationSeconds: 5
   }],
