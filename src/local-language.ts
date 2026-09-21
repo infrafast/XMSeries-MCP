@@ -37,6 +37,11 @@ const FRENCH_NUMBER_TENS: Record<string, number> = {
     vingt: 20, trente: 30, quarante: 40, cinquante: 50, soixante: 60,
 };
 
+const FRENCH_NUMBER_TOKEN_PATTERN =
+    "(?:z[ée]ro|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|quatorze|quinze|seize|vingt|trente|quarante|cinquante|soixante|et)";
+const SPOKEN_NUMBER_SEQUENCE_PATTERN =
+    `(?:${FRENCH_NUMBER_TOKEN_PATTERN}(?:[-\\s]+)?){1,5}`;
+
 function parseFrenchIntegerWords(raw: string): number | null {
     const normalized = simplifyForMatch(raw)
         .replace(/-/gu, " ")
@@ -97,7 +102,10 @@ function normalizeSpokenFrenchQuantities(raw: string): string {
     // Unsigned relative/absolute values remain bounded by a mixer unit and
     // structural preposition, so ordinary target names are never rewritten.
     text = text.replace(
-        /\b(de|a|à|to)\s+((?:[\p{L}-]+\s*){1,5})\s+(dB|%)\b/giu,
+        new RegExp(
+            `\\b(de|a|à|to)\\s+(${SPOKEN_NUMBER_SEQUENCE_PATTERN})\\s+(dB|%)\\b`,
+            "giu",
+        ),
         (full, prepRaw: string, wordsRaw: string, unitRaw: string) => {
             const value = parseFrenchIntegerWords(wordsRaw);
             if (value === null) return full;
@@ -107,7 +115,10 @@ function normalizeSpokenFrenchQuantities(raw: string): string {
 
     // Timings used by ramps/delays: "en deux secondes", "dans cinq secondes".
     text = text.replace(
-        /\b(en|dans|apres|après|after)\s+((?:[\p{L}-]+\s*){1,5})\s+(s|sec|seconde|secondes|second|seconds)\b/giu,
+        new RegExp(
+            `\\b(en|dans|apres|après|after)\\s+(${SPOKEN_NUMBER_SEQUENCE_PATTERN})\\s+(s|sec|seconde|secondes|second|seconds)\\b`,
+            "giu",
+        ),
         (full, prepRaw: string, wordsRaw: string, unitRaw: string) => {
             const value = parseFrenchIntegerWords(wordsRaw);
             if (value === null) return full;
