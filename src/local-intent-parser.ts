@@ -165,7 +165,7 @@ export function parseDeterministicMixerIntent(raw: string): NativeMixerIntent | 
     {
         const result = take(
             text,
-            /\bde\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\b/iu,
+            /\bde\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\s+(?:a|à|to)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)(?=\s|$)/iu,
         );
         text = result.text;
         if (result.match?.[1] && result.match[2] && result.match[3] && result.match[4]) {
@@ -203,13 +203,13 @@ export function parseDeterministicMixerIntent(raw: string): NativeMixerIntent | 
     }
 
     if (!from && !to && !absolute) {
-        const result = take(text, /(?:^|\s)(?:a|à|to|sur)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\b/iu);
+        const result = take(text, /(?:^|\s)(?:a|à|to|sur)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)(?=\s|$)/iu);
         text = result.text;
         if (result.match?.[1] && result.match[2]) absolute = level(result.match[1], result.match[2]) || undefined;
     }
 
     if (!from && !to) {
-        const result = take(text, /\b(?:de|by)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)\b/iu);
+        const result = take(text, /\b(?:de|by)\s+([+-]?\d+(?:[.,]\d+)?)\s*(d[bB]|%)(?=\s|$)/iu);
         text = result.text;
         if (result.match?.[1] && result.match[2]) relative = level(result.match[1], result.match[2]) || undefined;
     }
