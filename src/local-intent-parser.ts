@@ -105,7 +105,7 @@ function directionFrom(raw: string | undefined): NativeDirection | null {
 function isBulkLike(text: string): boolean {
     return (
         /\b(?:tous|toutes|all)\s+(?:les\s+)?(?:bus|voies|tranches|canaux|channels)\b/iu.test(text) ||
-        /\b(?:les\s+)?(?:bus|voies|tranches|canaux|channels)\s+.+\s+(?:et|,)\s+.+/iu.test(text) ||
+        /^\s*(?:mute|coupe|couper|desactive|désactive|eteins|éteins|unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)\s+(?:les\s+)?(?:bus|voies|tranches|canaux|channels)\b/iu.test(text) ||
         /\bsur\s+(?:les\s+)?bus\b/iu.test(text)
     );
 }
