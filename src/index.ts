@@ -2189,6 +2189,35 @@ export const TOOLS: Tool[] = [
             required: ["matrix", "mute"],
         },
     },
+    // ========== FX Return Controls ==========
+    {
+        name: "osc_fx_return_fader",
+        description: "Get or set an FX return fader. Use unit='db' for dB requests; default unit='db' for reads; set actions require explicit unit.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                action: { type: "string", enum: ["get", "set"] },
+                effect: {
+                    type: "number",
+                    description: "FX return/effect number within the current runtime fxCount.",
+                    minimum: 1,
+                },
+                unit: {
+                    type: "string",
+                    enum: ["level", "percent", "db"],
+                    description: "level = normalized 0.0..1.0; percent = 0..100%; db = fader dB table. Defaults to db for reads; required for set.",
+                },
+                value: {
+                    type: "number",
+                    description: "Required for action='set', together with explicit unit.",
+                    minimum: -120,
+                    maximum: 100,
+                },
+            },
+            required: ["action", "effect"],
+        },
+    },
+
     // ========== Aux Controls ==========
     {
         name: "osc_aux_fader",
@@ -3109,6 +3138,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 }
                 await osc.muteMatrix(matrix, mute);
                 return { content: [{ type: "text", text: `Matrix ${matrix} ${mute ? "muted" : "unmuted"}` }] };
+            }
+
+            // ========== FX Return Controls ==========
+            case "osc_fx_return_fader": {
+                const { effect, ...levelInput } = args as unknown as { effect: number } & LevelToolInput;
+                if (!Number.isInteger(effect) || effect < 1 || effect > oscRuntimeConfig.fxCount) {
+                    throw new Error(`Invalid FX return number ${effect}. Configured FX range is 1 to ${oscRuntimeConfig.fxCount}.`);
+                }
+                const operation = parseLevelOperation(levelInput);
+                const label = `FX return ${effect} fader`;
+                if (operation.action === "get") {
+                    const level = await osc.getFxReturnFader(effect);
+                    return { content: [{ type: "text", text: formatLevelRead(label, level, operation.unit) }] };
+                }
+
+                const target = levelValueToNormalized(operation);
+                await osc.setFxReturnFader(effect, target.level);
+                return { content: [{ type: "text", text: `Set ${label.toLowerCase()} to ${target.text}` }] };
             }
 
             // ========== Aux Controls ==========
