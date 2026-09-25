@@ -102,6 +102,7 @@ Temporal grammar in this slice is explicit: `en N secondes` is ramp duration; `d
 - [x] every current corpus item asserts status/effect and, for executable plans, the concrete fake-adapter operation/target produced by execution;
 - [x] review `PROMPT.md` semantics against the same corpus whenever command semantics change: this is now part of the repository capability-symmetry rule in `AGENTS.md`;
 - [x] keep gateway-disabled tool inventory identical to the pre-OR4 cloud/ordinary MCP behavior.
+- [~] maintain an isolated STT replay scorer for cross-repo engine benchmarks: scripts/stt_resolver_benchmark.mjs consumes transcription JSON only, imports the current production parser/resolver, compares the real XR16 registry plus a 60-name stress registry, records phonetic recoveries and wrong_accepted, and performs no OSC/MCP/mixer I/O. Validation remains pending until the regenerated Pi audio corpus is replayed through the new candidate STT engines.
 
 ### XDG4 — Pi acceptance
 
