@@ -200,7 +200,7 @@ function appendOscTrace(toolResult: any, commands: string[], toolName?: string):
 }
 
 type NamedTargetFamily = "channel" | "bus" | "fxreturn" | "aux" | "dca" | "matrix";
-export type NamedTargetMatchType = "exact" | "contains" | "structured" | "fuzzy";
+export type NamedTargetMatchType = "exact" | "contains" | "structured" | "phonetic" | "fuzzy";
 
 interface NamedTargetMatch {
     family: NamedTargetFamily;
@@ -233,12 +233,43 @@ export function normalizeOwnershipMixerName(value: string): string {
         .join(" ");
 }
 
+const PHONETIC_FILLER_TOKENS = new Set(["a", "d", "de", "des", "du", "la", "le", "les"]);
+
 function normalizeFrenchPhoneticToken(value: string): string {
-    return value
+    let token = normalizeMixerName(value).replace(/\s+/g, "");
+    if (!token) return "";
+
+    token = token
+        .replace(/guitares?$/g, "guitar")
+        .replace(/ph/g, "f")
+        .replace(/th/g, "t")
+        .replace(/eaux/g, "o")
         .replace(/eau/g, "o")
         .replace(/au/g, "o")
-        .replace(/ent$/g, "an")
-        .replace(/guitares?$/g, "guitar");
+        .replace(/ou/g, "u")
+        .replace(/qu/g, "k")
+        .replace(/ck/g, "k")
+        .replace(/gu(?=[eiy])/g, "g")
+        .replace(/c(?=[aou])/g, "k")
+        .replace(/c(?=[eiy])/g, "s")
+        .replace(/q/g, "k")
+        .replace(/y/g, "i")
+        .replace(/(?:an|en)/g, "an")
+        .replace(/(?:ain|ein)/g, "in")
+        .replace(/x$/g, "")
+        .replace(/e$/g, "")
+        .replace(/(.)\1+/g, "$1");
+
+    return token;
+}
+
+export function frenchPhoneticMixerKey(value: string): string {
+    return normalizeMixerName(value)
+        .split(" ")
+        .filter((token) => token && !PHONETIC_FILLER_TOKENS.has(token))
+        .map(normalizeFrenchPhoneticToken)
+        .filter(Boolean)
+        .join("");
 }
 
 export function isStructuredOwnershipMatch(query: string, candidate: string): boolean {
@@ -365,6 +396,18 @@ export function rankNamedTargetCandidates(
         .filter((candidate) => isStructuredOwnershipMatch(query, candidate.name))
         .map(({ normalizedName: _normalizedName, ...candidate }) => ({ ...candidate, matchType: "structured" as const }));
     if (structuredMatches.length > 0) return structuredMatches;
+
+    // STT frequently emits a different spelling for the same spoken name
+    // ("Anto" -> "en taux", "Mika" -> "Mica"/"Micka"). Compare a conservative
+    // French-oriented phonetic signature only after exact/contains/structured
+    // resolution has failed. A phonetic result is safe only when unique.
+    const queryPhoneticKey = frenchPhoneticMixerKey(query);
+    if (queryPhoneticKey.length >= 3) {
+        const phoneticMatches = normalizedCandidates
+            .filter((candidate) => frenchPhoneticMixerKey(candidate.name) === queryPhoneticKey)
+            .map(({ normalizedName: _normalizedName, ...candidate }) => ({ ...candidate, matchType: "phonetic" as const }));
+        if (phoneticMatches.length > 0) return phoneticMatches;
+    }
 
     return normalizedCandidates
         .map((candidate) => ({ ...candidate, fuzzyDistance: fuzzyNameDistance(normalizedQuery, candidate.normalizedName) }))
