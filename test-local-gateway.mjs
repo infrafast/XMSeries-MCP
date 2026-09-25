@@ -14,6 +14,7 @@ const targets = {
     amb2: { family: "bus", index: 5, name: "Tom retour", matchType: "contains" },
     batterie: { family: "channel", index: 6, name: "Batterie", matchType: "exact" },
     anthony: { family: "bus", index: 7, name: "Anthony", matchType: "exact" },
+    anto: { family: "bus", index: 9, name: "ANTO", matchType: "phonetic" },
     laurent: { family: "bus", index: 8, name: "Laurent", matchType: "exact" },
     hallfx: { family: "fxreturn", index: 2, name: "Hall FX", matchType: "exact" },
     playback: { family: "aux", index: 1, name: "Playback", matchType: "exact" },
@@ -61,6 +62,7 @@ const adapter = {
         if (q === "guitare") return scoped([{ ...targets.fuzzy, matchType: "exact" }]);
         if (q === "batterie") return scoped([targets.batterie]);
         if (q === "anthony") return scoped([targets.anthony]);
+        if (q === "en taux" || q === "ento") return scoped([targets.anto]);
         if (q === "laurent") return scoped([targets.laurent]);
         if (q === "hall fx") return scoped([targets.hallfx]);
         if (q === "playback") return scoped([targets.playback]);
@@ -2037,6 +2039,17 @@ async function ready(text) {
     assert.equal(continued.status, "unrecognized");
     assert.equal(continued.effect, "none");
     assert.equal(writes.length, 0);
+}
+
+// A unique family-scoped phonetic target is safe, while the parser remains
+// unaware of the target's alternate STT spelling.
+{
+    const analyzed = await gateway.analyze({
+        protocol: GATEWAY_PROTOCOL,
+        text: "niveau de Batterie sur en taux",
+    });
+    assert.equal(analyzed.status, "ready", JSON.stringify(analyzed));
+    assert.equal(analyzed.effect, "read");
 }
 
 // Whisper may wrap an otherwise correct command in French quotation marks.
