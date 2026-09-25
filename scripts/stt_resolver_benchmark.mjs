@@ -123,10 +123,67 @@ function scoped(reg, families) {
   return families ? reg.filter((item) => families.includes(item.family)) : reg;
 }
 
+function cleanTarget(value) {
+  return String(value || "")
+    .replace(/^\s*(?:le|la|les|de|du|de la|de l|d|the)\s+/iu, "")
+    .replace(/\s*(?:fader|niveau|volume|son)\s*$/iu, "")
+    .trim();
+}
+
+function qualifiedTargetQuery(rawQuery, allowedFamilies) {
+  const query = cleanTarget(rawQuery);
+  const qualifiers = [
+    { pattern: /^(?:channel|channels|voie|voies|canal|canaux|tranche|tranches|source)\s+(.+)$/iu, family: "channel" },
+    { pattern: /^(?:retour\s+fx|fx(?:\s+return)?|effet|effets|effect|effects)\s+(.+)$/iu, family: "fxreturn" },
+    { pattern: /^(?:aux\s+return|aux|auxiliaire|auxiliaires)\s+(.+)$/iu, family: "aux" },
+    { pattern: /^(?:bus|retour|retours|monitor|moniteur|moniteurs)\s+(.+)$/iu, family: "bus" },
+    { pattern: /^(?:dca)\s+(.+)$/iu, family: "dca" },
+    { pattern: /^(?:matrix|matrice|matrices)\s+(.+)$/iu, family: "matrix" },
+  ];
+
+  for (const { pattern, family } of qualifiers) {
+    const match = query.match(pattern);
+    if (!match?.[1]) continue;
+    const families = allowedFamilies
+      ? allowedFamilies.filter((candidate) => candidate === family)
+      : [family];
+    return { query: cleanTarget(match[1]), families };
+  }
+
+  return { query, families: allowedFamilies };
+}
+
+function safeUnique(matches) {
+  return matches.length === 1 && matches[0].matchType !== "fuzzy" ? matches[0] : null;
+}
+
 function resolve(query, reg, families) {
-  const matches = rankNamedTargetCandidates(query, scoped(reg, families));
-  const accepted = matches.length === 1 && matches[0].matchType !== "fuzzy" ? matches[0] : null;
-  return { accepted, matches };
+  const originalQuery = cleanTarget(query);
+  const qualified = qualifiedTargetQuery(query, families);
+  if (qualified.families && qualified.families.length === 0) {
+    return { accepted: null, matches: [] };
+  }
+
+  // Mirror LocalMixerCommandGateway.resolveOneNamedTarget(): if a query starts
+  // with an explicit family qualifier ("retour Claude", "bus Anto", ...), first
+  // preserve the possibility that the complete phrase is a real label, then
+  // resolve the qualifier-stripped query inside the qualified family.
+  if (qualified.query !== originalQuery) {
+    const fullMatches = rankNamedTargetCandidates(
+      originalQuery,
+      scoped(reg, qualified.families),
+    );
+    const full = safeUnique(fullMatches);
+    if (full && full.matchType !== "fuzzy") {
+      return { accepted: full, matches: fullMatches };
+    }
+  }
+
+  const matches = rankNamedTargetCandidates(
+    qualified.query,
+    scoped(reg, qualified.families),
+  );
+  return { accepted: safeUnique(matches), matches };
 }
 
 function targetId(value) {
