@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import {
     TOOLS,
+    frenchPhoneticMixerKey,
     hasSafeUniqueTarget,
     isStructuredOwnershipMatch,
     normalizeOwnershipMixerName,
@@ -15,6 +16,7 @@ assert.deepEqual(routeResolver.inputSchema.required, ["source", "destination"]);
 assert.equal(hasSafeUniqueTarget([{ matchType: "exact" }]), true);
 assert.equal(hasSafeUniqueTarget([{ matchType: "contains" }]), true);
 assert.equal(hasSafeUniqueTarget([{ matchType: "structured" }]), true);
+assert.equal(hasSafeUniqueTarget([{ matchType: "phonetic" }]), true);
 assert.equal(hasSafeUniqueTarget([{ matchType: "fuzzy" }]), false);
 assert.equal(hasSafeUniqueTarget([]), false);
 assert.equal(hasSafeUniqueTarget([{ matchType: "exact" }, { matchType: "exact" }]), false);
@@ -55,4 +57,49 @@ assert.equal(isStructuredOwnershipMatch("guitare de Claude", "guitar-loran"), fa
 assert.equal(isStructuredOwnershipMatch("guitare de Claude", "basse-clode"), false);
 assert.equal(isStructuredOwnershipMatch("saxophone de Luc", "saxophone-paul"), false);
 
-console.log("Structured ownership name-resolution tests passed.");
+const phoneticEquivalences = [
+    ["Anto", "en taux"],
+    ["Anto", "ento"],
+    ["Mika", "Mica"],
+    ["Mika", "Micka"],
+    ["Laurent", "l'orant"],
+    ["guitar-anto", "guitare de ento"],
+    ["guitar-anto", "guitare à en taux"],
+];
+
+for (const [canonical, heard] of phoneticEquivalences) {
+    assert.equal(
+        frenchPhoneticMixerKey(canonical),
+        frenchPhoneticMixerKey(heard),
+        `${heard} should sound like ${canonical}`,
+    );
+}
+
+const antoPhonetic = rankNamedTargetCandidates("en taux", [
+    { family: "bus", index: 1, name: "ANTO" },
+    { family: "bus", index: 2, name: "CLAUDE" },
+]);
+assert.equal(antoPhonetic.length, 1);
+assert.equal(antoPhonetic[0].name, "ANTO");
+assert.equal(antoPhonetic[0].matchType, "phonetic");
+assert.equal(hasSafeUniqueTarget(antoPhonetic), true);
+
+for (const heard of ["Mica", "Micka"]) {
+    const mikaPhonetic = rankNamedTargetCandidates(heard, [
+        { family: "bus", index: 1, name: "MIKA" },
+        { family: "bus", index: 2, name: "CLAUDE" },
+    ]);
+    assert.equal(mikaPhonetic.length, 1, heard);
+    assert.equal(mikaPhonetic[0].name, "MIKA", heard);
+    assert.equal(mikaPhonetic[0].matchType, "phonetic", heard);
+}
+
+const ambiguousPhonetic = rankNamedTargetCandidates("en taux", [
+    { family: "bus", index: 1, name: "ANTO" },
+    { family: "channel", index: 2, name: "ENTO" },
+]);
+assert.equal(ambiguousPhonetic.length, 2);
+assert.deepEqual(ambiguousPhonetic.map((entry) => entry.matchType), ["phonetic", "phonetic"]);
+assert.equal(hasSafeUniqueTarget(ambiguousPhonetic), false);
+
+console.log("Structured and phonetic name-resolution tests passed.");
