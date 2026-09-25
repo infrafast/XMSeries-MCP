@@ -62,6 +62,8 @@ const phoneticEquivalences = [
     ["Anto", "ento"],
     ["Mika", "Mica"],
     ["Mika", "Micka"],
+    ["Mike", "mic"],
+    ["basse-mike", "baisse mic"],
     ["Laurent", "l'orant"],
     ["guitar-anto", "guitare de ento"],
     ["guitar-anto", "guitare à en taux"],
@@ -101,5 +103,25 @@ const ambiguousPhonetic = rankNamedTargetCandidates("en taux", [
 assert.equal(ambiguousPhonetic.length, 2);
 assert.deepEqual(ambiguousPhonetic.map((entry) => entry.matchType), ["phonetic", "phonetic"]);
 assert.equal(hasSafeUniqueTarget(ambiguousPhonetic), false);
+
+const typedExactKeepsExactPriority = rankNamedTargetCandidates("guitar Laurent", [
+    { family: "channel", index: 1, name: "guitar-loran" },
+    { family: "channel", index: 2, name: "guitar-laurent" },
+]);
+assert.equal(typedExactKeepsExactPriority.length, 1);
+assert.equal(typedExactKeepsExactPriority[0].name, "guitar-laurent");
+assert.equal(typedExactKeepsExactPriority[0].matchType, "exact");
+
+const guardedExactCollision = rankNamedTargetCandidates(
+    "guitar Laurent",
+    [
+        { family: "channel", index: 1, name: "guitar-loran" },
+        { family: "channel", index: 2, name: "guitar-laurent" },
+    ],
+    { guardPhoneticExactCollisions: true },
+);
+assert.equal(guardedExactCollision.length, 2);
+assert.deepEqual(guardedExactCollision.map((entry) => entry.matchType), ["exact", "phonetic"]);
+assert.equal(hasSafeUniqueTarget(guardedExactCollision), false);
 
 console.log("Structured and phonetic name-resolution tests passed.");
