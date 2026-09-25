@@ -273,11 +273,13 @@ This server supports grouped operations so the agent can execute one intent acro
 
 These grouped tools are preferred over issuing many per-bus tool calls because they keep intent explicit, reduce round-trips, and avoid inconsistent partial execution.
 
-### Generic instrument-owner name resolution
+### Generic instrument-owner and phonetic name resolution
 
-`osc_find_named_target` recognizes channel labels that follow an `<instrument>-<owner>` convention from natural French ownership phrases. It removes articles and ownership connectors, maps `guitare` to the common mixer label prefix `guitar`, and uses limited French phonetic normalization only for the owner token. Examples include `guitare de Claude` -> `guitar-clode`, `basse de Mike` -> `basse-mike`, and `saxophone de Luc` -> `saxophone-luc`.
+`osc_find_named_target` recognizes channel labels that follow an `<instrument>-<owner>` convention from natural French ownership phrases. It removes articles and ownership connectors, maps common spoken/label spellings such as `guitare` -> `guitar`, and applies conservative French-oriented phonetic normalization to target names.
 
-The resolver returns these as `structured` matches. Only a unique structured match is safe to use; multiple structured matches require clarification, and ordinary fuzzy matches still require confirmation. In a phrase such as `monte la guitare de Claude sur Laurent`, resolve the complete ownership phrase in the `channel` family and resolve `Laurent` separately in the `bus` family.
+Resolver order is **exact -> contains -> structured ownership -> phonetic -> fuzzy**. The phonetic stage exists specifically for STT spelling drift where the spoken identity is preserved but the transcript spelling changes, for example `Anto` -> `ento` / `en taux`, `Mika` -> `Mica` / `Micka`, or `guitare de ento` -> `guitar-anto`. It compares deterministic phonetic signatures of the already-extracted target name; it never rewrites actions, signs, numeric values or units.
+
+A phonetic match is authorized only when it is unique inside the resolver's current family scope. Multiple phonetic matches fail closed and require clarification, exactly like other ambiguous identity cases. Ordinary edit-distance `fuzzy` matches remain advisory only and cannot authorize a write. In a phrase such as `monte la guitare de Anto sur Laurent`, resolve the complete ownership phrase in the `channel` family and resolve `Laurent` separately in the `bus` family.
 
 For source-to-return commands, prefer `osc_resolve_channel_to_bus`. It accepts separate `source` and `destination` strings, resolves the source only among channels and the destination only among buses, and returns `safeToWrite:true` only when both sides are unique non-fuzzy matches. For example, `monte la batterie sur Anthony` becomes `{ "source": "batterie", "destination": "Anthony" }`; never merge it into a channel lookup for `batterie de Anthony`.
 
