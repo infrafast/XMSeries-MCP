@@ -140,13 +140,13 @@ function normalizeSpokenFrenchQuantities(raw: string): string {
 }
 
 function normalizeLikelyFrenchSttSetVerb(raw: string): string {
-    // Whisper can transcribe imperative "mets" as discourse "mais". Only repair
-    // it when the rest of the utterance already has an explicit mixer-route
-    // structure and an absolute numeric level, so ordinary "mais ..." speech is
-    // never promoted to a write.
+    // Whisper can transcribe imperative "mets" as discourse "mais". Repair it
+    // only when the same utterance already contains an explicit absolute mixer
+    // level (dB/%). This covers both direct targets and source->destination
+    // routes while ordinary "mais ..." speech remains non-command text.
     if (
         /^\s*mais[,;:]?\s+/iu.test(raw) &&
-        /\s+(?:sur|vers|dans|chez|to|in)\s+.+?\s+(?:a|à|to)\s+[+-]?\d+(?:[.,]\d+)?\s*(?:d[bB]|%)\b/iu.test(raw)
+        /(?:^|\s)(?:a|à|to)\s+[+-]?\d+(?:[.,]\d+)?\s*(?:d[bB]|%)\b/iu.test(raw)
     ) {
         return raw.replace(/^\s*mais[,;:]?\s+/iu, "mets ");
     }
@@ -166,6 +166,10 @@ export function canonicalizeNaturalFrenchCommand(raw: string): string {
     text = text.replace(/^[\s«»“”„‟"‹›]+/u, "").replace(/[\s«»“”„‟"‹›]+$/u, "").trim();
     text = normalizeSpokenFrenchQuantities(text);
     text = normalizeLikelyFrenchSttSetVerb(text);
+
+    // Common STT segmentation of spoken "démute" as "de mute". Keep this
+    // repair prefix-only so an ordinary internal "de mute" phrase is untouched.
+    text = text.replace(/^\s*de\s+mute\b/iu, "demute");
 
     // "remets" is deliberately contextual: without a value it means reactivate;
     // with an explicit level it means set the level again.
