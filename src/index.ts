@@ -240,6 +240,7 @@ function normalizeFrenchPhoneticToken(value: string): string {
     if (!token) return "";
 
     token = token
+        .replace(/^baisse$/g, "basse")
         .replace(/guitares?$/g, "guitar")
         .replace(/ph/g, "f")
         .replace(/th/g, "t")
@@ -253,6 +254,7 @@ function normalizeFrenchPhoneticToken(value: string): string {
         .replace(/c(?=[aou])/g, "k")
         .replace(/c(?=[eiy])/g, "s")
         .replace(/q/g, "k")
+        .replace(/c$/g, "k")
         .replace(/y/g, "i")
         .replace(/(?:an|en)/g, "an")
         .replace(/(?:ain|ein)/g, "in")
@@ -371,9 +373,14 @@ function namedTargetRange(family: NamedTargetFamily): number[] {
     return Array.from({ length: maxByFamily[family] }, (_, i) => i + 1);
 }
 
+export interface NamedTargetRankOptions {
+    guardPhoneticExactCollisions?: boolean;
+}
+
 export function rankNamedTargetCandidates(
     query: string,
     candidates: Array<{ family: NamedTargetFamily; index: number; name: string }>,
+    options: NamedTargetRankOptions = {},
 ): NamedTargetMatch[] {
     const normalizedQuery = normalizeMixerName(query);
     if (!normalizedQuery) return [];
@@ -386,7 +393,28 @@ export function rankNamedTargetCandidates(
     const exactMatches = normalizedCandidates
         .filter((candidate) => candidate.normalizedName === normalizedQuery)
         .map(({ normalizedName: _normalizedName, ...candidate }) => ({ ...candidate, matchType: "exact" as const }));
-    if (exactMatches.length > 0) return exactMatches;
+    if (exactMatches.length > 0) {
+        if (options.guardPhoneticExactCollisions && exactMatches.length === 1) {
+            const queryPhoneticKey = frenchPhoneticMixerKey(query);
+            if (queryPhoneticKey.length >= 3) {
+                const exact = exactMatches[0];
+                const phoneticPeers = normalizedCandidates
+                    .filter(
+                        (candidate) =>
+                            !(candidate.family === exact.family && candidate.index === exact.index) &&
+                            frenchPhoneticMixerKey(candidate.name) === queryPhoneticKey,
+                    )
+                    .map(({ normalizedName: _normalizedName, ...candidate }) => ({
+                        ...candidate,
+                        matchType: "phonetic" as const,
+                    }));
+                if (phoneticPeers.length > 0) {
+                    return [exact, ...phoneticPeers];
+                }
+            }
+        }
+        return exactMatches;
+    }
 
     const containsMatches = normalizedCandidates
         .filter((candidate) => candidate.normalizedName.includes(normalizedQuery))
@@ -422,7 +450,8 @@ export function rankNamedTargetCandidates(
 
 async function findNamedTargets(
     query: string,
-    families: NamedTargetFamily[] = NAMED_TARGET_FAMILIES
+    families: NamedTargetFamily[] = NAMED_TARGET_FAMILIES,
+    options: NamedTargetRankOptions = {},
 ): Promise<NamedTargetMatch[]> {
     const candidates: Array<{ family: NamedTargetFamily; index: number; name: string }> = [];
 
@@ -434,7 +463,7 @@ async function findNamedTargets(
         }
     }
 
-    return rankNamedTargetCandidates(query, candidates);
+    return rankNamedTargetCandidates(query, candidates, options);
 }
 
 async function localGatewayReadLevel(target: LocalMixerTarget): Promise<number> {
@@ -575,7 +604,11 @@ const localCommandGateway = new LocalMixerCommandGateway({
     resolve: async (query, families) => {
         const scoped = families
             ?.filter((family): family is NamedTargetFamily => family !== "main" && NAMED_TARGET_FAMILIES.includes(family as NamedTargetFamily));
-        return await findNamedTargets(query, scoped && scoped.length > 0 ? scoped : NAMED_TARGET_FAMILIES);
+        return await findNamedTargets(
+            query,
+            scoped && scoped.length > 0 ? scoped : NAMED_TARGET_FAMILIES,
+            { guardPhoneticExactCollisions: true },
+        );
     },
     status: async () => await osc.getMixerStatus(),
     readLevel: localGatewayReadLevel,
