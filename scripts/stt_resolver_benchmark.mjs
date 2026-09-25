@@ -157,7 +157,7 @@ function safeUnique(matches) {
   return matches.length === 1 && matches[0].matchType !== "fuzzy" ? matches[0] : null;
 }
 
-function resolve(query, reg, families) {
+function resolve(query, reg, families, guardPhoneticExactCollisions = true) {
   const originalQuery = cleanTarget(query);
   const qualified = qualifiedTargetQuery(query, families);
   if (qualified.families && qualified.families.length === 0) {
@@ -172,7 +172,7 @@ function resolve(query, reg, families) {
     const fullMatches = rankNamedTargetCandidates(
       originalQuery,
       scoped(reg, qualified.families),
-      { guardPhoneticExactCollisions: true },
+      { guardPhoneticExactCollisions },
     );
     const full = safeUnique(fullMatches);
     if (full && full.matchType !== "fuzzy") {
@@ -183,7 +183,7 @@ function resolve(query, reg, families) {
   const matches = rankNamedTargetCandidates(
     qualified.query,
     scoped(reg, qualified.families),
-    { guardPhoneticExactCollisions: true },
+    { guardPhoneticExactCollisions },
   );
   return { accepted: safeUnique(matches), matches };
 }
@@ -236,7 +236,7 @@ function score(sample, registryName) {
   if (!reference) throw new Error("Référence non parsable: " + sample.reference);
 
   const expectedSlots = slots(reference).map((slot) => {
-    const resolved = resolve(slot.query, reg, slot.families);
+    const resolved = resolve(slot.query, reg, slot.families, false);
     if (!resolved.accepted) {
       throw new Error("Référence non résolue: " + slot.query + " / " + sample.reference);
     }
