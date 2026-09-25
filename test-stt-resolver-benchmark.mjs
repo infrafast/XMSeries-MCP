@@ -120,7 +120,7 @@ const muteMic = xr16.find((row) => row.file === "mute-mic.wav");
 assert.equal(muteMic.full_command_correct, true);
 assert.equal(muteMic.wrong_accepted, 0);
 assert.equal(muteMic.resolved_slots[0].resolved, "channel:basse-mike");
-assert.equal(muteMic.resolved_slots[0].method, "phonetic");
+assert.equal(muteMic.resolved_slots[0].method, "structured");
 
 const collisionXr16 = xr16.find((row) => row.file === "phonetic-collision.wav");
 assert.equal(collisionXr16.full_command_correct, true);
