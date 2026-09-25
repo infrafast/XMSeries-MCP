@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { parseDeterministicMixerIntent } from "./dist/local-intent-parser.js";
+import { canonicalizeNaturalFrenchCommand } from "./dist/local-language.js";
 
 const cases = [
   ["baisse progressivement en 2 secondes Batterie à -30 dB", {
@@ -171,5 +172,16 @@ for (const [utterance, expected] of cases) {
 
 assert.equal(parseDeterministicMixerIntent("Batterie -20 dB"), null);
 assert.deepEqual(parseDeterministicMixerIntent("active Hall FX"), { kind: "mute", targetQuery: "Hall FX", mute: false }, "historical FX-return unmute shorthand must stay compatible");
+
+assert.deepEqual(
+  parseDeterministicMixerIntent(canonicalizeNaturalFrenchCommand("Mais guitar Claude à moins cinq dB.")),
+  { kind: "set_level", targetQuery: "guitar Claude", unit: "db", value: -5 },
+  "bounded STT 'mais' repair must not leak the repaired action into targetQuery",
+);
+assert.deepEqual(
+  parseDeterministicMixerIntent(canonicalizeNaturalFrenchCommand("de mute, baisse, Mike.")),
+  { kind: "mute", targetQuery: "baisse Mike", mute: false },
+  "mute parsing must preserve a target token that sounds like a direction verb",
+);
 
 console.log("native deterministic intent parser tests: OK");
