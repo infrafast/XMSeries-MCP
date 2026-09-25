@@ -19,7 +19,7 @@ export type LocalMixerTargetFamily =
     | "matrix"
     | "main";
 
-export type LocalMixerMatchType = "exact" | "contains" | "structured" | "fuzzy";
+export type LocalMixerMatchType = "exact" | "contains" | "structured" | "phonetic" | "fuzzy";
 
 export interface LocalMixerTarget {
     family: LocalMixerTargetFamily;
