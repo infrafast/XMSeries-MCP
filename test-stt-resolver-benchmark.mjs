@@ -44,6 +44,16 @@ fs.writeFileSync(input, JSON.stringify({
     {
       engine: "fixture",
       phrase_id: 4,
+      domain: "mixer",
+      take: 1,
+      file: "qualified-route.wav",
+      reference: "mets guitar-anto sur le retour Claude à moins douze dB",
+      transcription: "mets guitare en taux sur le retour Claude à moins 12 dB",
+      error: null
+    },
+    {
+      engine: "fixture",
+      phrase_id: 5,
       domain: "qlc",
       take: 1,
       file: "qlc.wav",
@@ -80,6 +90,11 @@ assert.equal(phonetic.wrong_accepted, 0);
 const wrong = xr16.find((row) => row.file === "wrong.wav");
 assert.equal(wrong.full_command_correct, false);
 assert.equal(wrong.wrong_accepted, 1);
+
+const qualifiedRoute = xr16.find((row) => row.file === "qualified-route.wav");
+assert.equal(qualifiedRoute.full_command_correct, true);
+assert.equal(qualifiedRoute.wrong_accepted, 0);
+assert.equal(qualifiedRoute.resolved_slots.find((slot) => slot.role === "destination")?.resolved, "bus:claude");
 
 const qlc = xr16.find((row) => row.file === "qlc.wav");
 assert.equal(qlc.skipped, true);
