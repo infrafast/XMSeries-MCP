@@ -258,6 +258,7 @@ function normalizeFrenchPhoneticToken(value: string): string {
         .replace(/(?:ain|ein)/g, "in")
         .replace(/x$/g, "")
         .replace(/e$/g, "")
+        .replace(/t$/g, "")
         .replace(/(.)\1+/g, "$1");
 
     return token;
