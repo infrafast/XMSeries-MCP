@@ -172,6 +172,7 @@ function resolve(query, reg, families) {
     const fullMatches = rankNamedTargetCandidates(
       originalQuery,
       scoped(reg, qualified.families),
+      { guardPhoneticExactCollisions: true },
     );
     const full = safeUnique(fullMatches);
     if (full && full.matchType !== "fuzzy") {
@@ -182,6 +183,7 @@ function resolve(query, reg, families) {
   const matches = rankNamedTargetCandidates(
     qualified.query,
     scoped(reg, qualified.families),
+    { guardPhoneticExactCollisions: true },
   );
   return { accepted: safeUnique(matches), matches };
 }
