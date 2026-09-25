@@ -54,6 +54,26 @@ fs.writeFileSync(input, JSON.stringify({
     {
       engine: "fixture",
       phrase_id: 5,
+      domain: "mixer",
+      take: 1,
+      file: "mute-mic.wav",
+      reference: "démute basse-mike",
+      transcription: "de mute, baisse, Mike.",
+      error: null
+    },
+    {
+      engine: "fixture",
+      phrase_id: 6,
+      domain: "mixer",
+      take: 1,
+      file: "phonetic-collision.wav",
+      reference: "mute guitar-loran",
+      transcription: "mute guitar Laurent",
+      error: null
+    },
+    {
+      engine: "fixture",
+      phrase_id: 7,
       domain: "qlc",
       take: 1,
       file: "qlc.wav",
@@ -95,6 +115,22 @@ const qualifiedRoute = xr16.find((row) => row.file === "qualified-route.wav");
 assert.equal(qualifiedRoute.full_command_correct, true);
 assert.equal(qualifiedRoute.wrong_accepted, 0);
 assert.equal(qualifiedRoute.resolved_slots.find((slot) => slot.role === "destination")?.resolved, "bus:claude");
+
+const muteMic = xr16.find((row) => row.file === "mute-mic.wav");
+assert.equal(muteMic.full_command_correct, true);
+assert.equal(muteMic.wrong_accepted, 0);
+assert.equal(muteMic.resolved_slots[0].resolved, "channel:basse-mike");
+assert.equal(muteMic.resolved_slots[0].method, "phonetic");
+
+const collisionXr16 = xr16.find((row) => row.file === "phonetic-collision.wav");
+assert.equal(collisionXr16.full_command_correct, true);
+assert.equal(collisionXr16.wrong_accepted, 0);
+
+const stress60 = result.results.filter((row) => row.registry === "stress60");
+const collisionStress = stress60.find((row) => row.file === "phonetic-collision.wav");
+assert.equal(collisionStress.full_command_correct, false);
+assert.equal(collisionStress.wrong_accepted, 0);
+assert.equal(collisionStress.entities_all_resolved, false);
 
 const qlc = xr16.find((row) => row.file === "qlc.wav");
 assert.equal(qlc.skipped, true);
