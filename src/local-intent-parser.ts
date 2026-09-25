@@ -508,9 +508,24 @@ export function parseDeterministicMixerIntent(raw: string): NativeMixerIntent | 
         }
     }
 
+    // Mute/unmute is an action on a named target, so extract it before
+    // directional level verbs. Otherwise an STT target such as "baisse Mike"
+    // (heard for "basse-mike") loses "baisse" as if it were a second action and
+    // can incorrectly collapse to the unrelated exact bus "Mike".
+    let mute: boolean | undefined;
+    const muteOn = text.match(/(?:^|\s)(mute|coupe|couper|desactive|désactive|eteins|éteins)(?=\s|$)/iu);
+    const muteOff = text.match(/(?:^|\s)(unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)(?=\s|$)/iu);
+    if (muteOn?.[0]) {
+        mute = true;
+        text = compact(text.replace(muteOn[0], " "));
+    } else if (muteOff?.[0]) {
+        mute = false;
+        text = compact(text.replace(muteOff[0], " "));
+    }
+
     let setVerb = false;
     let adjustVerb = false;
-    if (!direction) {
+    if (!direction && mute === undefined) {
         const action = text.match(/\b(monte|augmente|raise|increase|baisse|diminue|lower|decrease)\b/iu);
         if (action?.[1]) {
             direction = directionFrom(action[1]);
@@ -525,17 +540,6 @@ export function parseDeterministicMixerIntent(raw: string): NativeMixerIntent | 
     if (/\b(?:ajuste|adjust|change)\b/iu.test(text)) {
         adjustVerb = true;
         text = compact(text.replace(/\b(?:ajuste|adjust|change)\b/giu, " "));
-    }
-
-    let mute: boolean | undefined;
-    const muteOn = text.match(/(?:^|\s)(mute|coupe|couper|desactive|désactive|eteins|éteins)(?=\s|$)/iu);
-    const muteOff = text.match(/(?:^|\s)(unmute|demute|démute|reactive|réactive|active|rallume|ouvre|remet|remets)(?=\s|$)/iu);
-    if (muteOn?.[0]) {
-        mute = true;
-        text = compact(text.replace(muteOn[0], " "));
-    } else if (muteOff?.[0]) {
-        mute = false;
-        text = compact(text.replace(muteOff[0], " "));
     }
 
     text = compact(
